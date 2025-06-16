@@ -1,0 +1,13 @@
+{
+  "id": "mci_mc_001",
+  "type": "trigger_module",
+  "module": "mind_clearing",
+  "args": {
+    "test_param": "mci_value",
+    "command_id": "mci_mc_001",
+    "command_type": "trigger_module"
+  },
+  "executed_at": "2025-06-16T17:06:06.619502",
+  "status": "done",
+  "execution_summary": "MC default run"
+}
