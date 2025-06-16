@@ -1,202 +1,134 @@
 import json
-import datetime
 import os
-import subprocess
+import datetime
+# import time # Not used
+import uuid # For generating command IDs if needed
+# import traceback # Not used
 
-# --- File Path Constants ---
+# --- File Paths ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 COMMANDS_FILE = os.path.join(SCRIPT_DIR, "katana.commands.json")
-LOG_FILE = os.path.join(SCRIPT_DIR, "katana_events.log")
-NEURO_REFUELING_LOG_FILE = os.path.join(SCRIPT_DIR, "neuro_refueling", "alternatives_log.json")
-MIND_CLEARING_LOG_FILE = os.path.join(SCRIPT_DIR, "mind_clearing", "thought_patterns.json")
+MEMORY_FILE = os.path.join(SCRIPT_DIR, "katana_memory.json")
+HISTORY_FILE = os.path.join(SCRIPT_DIR, "katana.history.json")
+EVENTS_LOG_FILE = os.path.join(SCRIPT_DIR, "katana_events.log")
+SYNC_STATUS_FILE = os.path.join(SCRIPT_DIR, "sync_status.json")
+AGENT_LOG_PREFIX = "[KatanaAgent_MCP_v1]"
 
-AGENT_LOG_PREFIX = "[Katana Agent SDK]"
+# --- Global State ---
+agent_memory_state = {} # In-memory representation of katana_memory.json
 
-# --- Logging Function ---
-def log_message(level, message):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_dir = os.path.dirname(LOG_FILE)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(f"[{timestamp}] {level.upper()}: {AGENT_LOG_PREFIX} {message}\n")
+# --- Logging ---
+def log_event(event_message, level="info"):
+    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    log_entry_line = f"[{timestamp}] {level.upper()}: {AGENT_LOG_PREFIX} {event_message}\n"
+    try:
+        log_dir = os.path.dirname(EVENTS_LOG_FILE)
+        if log_dir and not os.path.exists(log_dir): # Ensure directory exists for the log file
+            os.makedirs(log_dir, exist_ok=True)
+        with open(EVENTS_LOG_FILE, "a") as f:
+            f.write(log_entry_line)
+    except Exception as e:
+        print(f"CRITICAL_LOG_FAILURE: {log_entry_line} (Error: {e})") # Fallback to stdout
 
-# --- Generic JSON File Handling Functions ---
-def load_json_file(file_path, log_prefix="JSONLoad"):
+# --- JSON File I/O Utilities ---
+def load_json_file(file_path, default_value, log_prefix="JSONLoad"):
+    # Reduced verbosity for normal loads, will log if issue found.
+    # log_event(f"Attempting to load JSON from {file_path}", "debug")
     if not os.path.exists(file_path):
-        log_message("error", f"[{log_prefix}] File not found: {file_path}")
-        return None
+        log_event(f"[{log_prefix}] File not found: {file_path}. Returning default.", "info")
+        return default_value
     try:
         with open(file_path, "r") as f:
-            data = json.load(f)
-        log_message("info", f"[{log_prefix}] Successfully loaded data from {file_path}.")
+            content = f.read()
+            if not content.strip(): # File is empty
+                log_event(f"[{log_prefix}] File is empty: {file_path}. Returning default.", "info")
+                return default_value
+            data = json.loads(content)
+        # log_event(f"[{log_prefix}] Loaded successfully from {file_path}.", "debug")
         return data
     except json.JSONDecodeError:
-        log_message("error", f"[{log_prefix}] Error decoding JSON from {file_path}.")
-        return None
-    except Exception as e:
-        log_message("error", f"[{log_prefix}] Error reading file {file_path}: {e}")
-        return None
+        log_event(f"[{log_prefix}] Error decoding JSON from {file_path}. Returning default.", "error")
+        return default_value
+    except Exception as e: # Catch any other read errors
+        log_event(f"[{log_prefix}] Unexpected error loading {file_path}: {e}. Returning default.", "error")
+        return default_value
 
-def save_json_file(data, file_path, log_prefix="JSONSave"):
+def save_json_file(file_path, data, log_prefix="JSONSave", indent=2):
+    # log_event(f"Attempting to save JSON to {file_path}", "debug")
     try:
-        dir_path = os.path.dirname(file_path)
-        if dir_path:
-             os.makedirs(dir_path, exist_ok=True)
+        dir_name = os.path.dirname(file_path)
+        if dir_name and not os.path.exists(dir_name): # Create directory if it doesn't exist
+            os.makedirs(dir_name, exist_ok=True)
         with open(file_path, "w") as f:
-            json.dump(data, f, indent=2)
-        log_message("info", f"[{log_prefix}] Successfully saved updates to {file_path}.")
+            json.dump(data, f, indent=indent)
+        log_event(f"[{log_prefix}] Successfully saved JSON to {file_path}.", "info")
         return True
     except Exception as e:
-        log_message("error", f"[{log_prefix}] Error saving data to {file_path}: {e}")
+        log_event(f"[{log_prefix}] Error saving JSON to {file_path}: {e}", "error")
         return False
 
-# --- Command-Specific File Handling ---
-def load_commands():
-    return load_json_file(COMMANDS_FILE, "CommandsLoad")
+# --- Katana Data File Specific Functions ---
+def load_memory():
+    global agent_memory_state
+    loaded_data = load_json_file(MEMORY_FILE, {}, "MemoryLoad")
+    # Ensure agent_memory_state is always a dict, even if file was corrupted and load_json_file returned None then {}
+    agent_memory_state = loaded_data if isinstance(loaded_data, dict) else {}
+    if not isinstance(loaded_data, dict):
+         log_event(f"Memory file {MEMORY_FILE} content was not a dictionary. Resetting memory state.", "warning")
+    return agent_memory_state
 
-def save_commands(data):
-    return save_json_file(data, COMMANDS_FILE, "CommandsSave")
+def save_memory():
+    global agent_memory_state
+    return save_json_file(MEMORY_FILE, agent_memory_state, "MemorySave")
 
-# --- Neuro-Refueling Module Functions ---
-def handle_log_ethanol_alternative(params):
-    log_message("info", f"[NeuroRefueling] Attempting to log ethanol alternative: {params}")
-    alternative_name = params.get("alternative_name"); effect = params.get("effect")
-    event_date = params.get("date", datetime.datetime.now().isoformat())
-    craving_event = params.get("craving_event", "N/A")
-    if not alternative_name or not effect:
-        log_message("warning", "[NeuroRefueling] Missing 'alternative_name' or 'effect'."); return {"status": "failed", "message": "Missing 'alternative_name' or 'effect'."}
-    neuro_dir = os.path.dirname(NEURO_REFUELING_LOG_FILE)
-    if not os.path.exists(neuro_dir): os.makedirs(neuro_dir, exist_ok=True); log_message("info", f"[NeuroRefueling] Created directory {neuro_dir}.")
-    data = load_json_file(NEURO_REFUELING_LOG_FILE, "NeuroRefuelingLoad")
-    if data is None:
-        log_message("info", f"[NeuroRefueling] Initializing {NEURO_REFUELING_LOG_FILE}.")
-        data = {"user_id": "default", "log_entries": [], "alternative_strategies": []}
-    new_log_entry = {"timestamp": event_date, "craving_event": craving_event, "chosen_alternative": alternative_name, "effect": effect, "notes": params.get("notes", "")}
-    if "log_entries" not in data or not isinstance(data["log_entries"], list): data["log_entries"] = []
-    data["log_entries"].append(new_log_entry)
-    if save_json_file(data, NEURO_REFUELING_LOG_FILE, "NeuroRefuelingSave"):
-        log_message("info", f"[NeuroRefueling] Logged: {alternative_name}"); return {"status": "success", "message": "Ethanol alternative logged."}
-    else:
-        log_message("error", "[NeuroRefueling] Failed to save log."); return {"status": "error", "message": "Failed to save neuro-refueling data."}
+def load_commands(): return load_json_file(COMMANDS_FILE, [], "CommandsLoad")
+def save_commands(commands_list): return save_json_file(COMMANDS_FILE, commands_list, "CommandsSave")
 
-# --- Mind Clearing Module Functions ---
-def handle_clear_background_thought(params):
-    log_message("info", f"[MindClearing] Attempting to clear background thought: {params}")
-    thought_id_to_clear = params.get("thought_id")
-    thought_description_to_clear = params.get("thought_description")
-
-    if not thought_id_to_clear and not thought_description_to_clear:
-        log_message("warning", "[MindClearing] Missing 'thought_id' or 'thought_description' in parameters.")
-        return {"status": "failed", "message": "Missing 'thought_id' or 'thought_description'."}
-
-    # Ensure the directory for MIND_CLEARING_LOG_FILE exists
-    mind_dir = os.path.dirname(MIND_CLEARING_LOG_FILE)
-    if not os.path.exists(mind_dir):
-        os.makedirs(mind_dir, exist_ok=True)
-        log_message("info", f"[MindClearing] Created directory {mind_dir} for thought patterns log.")
-
-    data = load_json_file(MIND_CLEARING_LOG_FILE, "MindClearingLoad")
-    if data is None : # If file truly doesn't exist or is totally unreadable
-        log_message("info", f"[MindClearing] Initializing {MIND_CLEARING_LOG_FILE} due to load failure.")
-        data = {"user_id": "default", "background_thoughts": [], "mind_silence_log": []}
-
-    # Ensure background_thoughts list exists and is a list
-    if "background_thoughts" not in data or not isinstance(data["background_thoughts"], list):
-        log_message("warning", "[MindClearing] 'background_thoughts' missing or not a list. Initializing.")
-        data["background_thoughts"] = []
+def load_history(): return load_json_file(HISTORY_FILE, [], "HistoryLoad")
+def save_history(history_list): return save_json_file(HISTORY_FILE, history_list, "HistorySave")
 
 
-    initial_thought_count = len(data["background_thoughts"])
-    thoughts_after_removal = []
-    cleared_at_least_one = False
+# --- File Initialization (for MCP_v1) ---
+def initialize_katana_files():
+    log_event("Initializing/Verifying Katana data files for MCP_v1...", "info")
 
-    for thought in data["background_thoughts"]:
-        matches_id = thought_id_to_clear and thought.get("thought_id") == thought_id_to_clear
-        matches_description = thought_description_to_clear and thought.get("description") == thought_description_to_clear
+    files_to_initialize_or_verify = {
+        COMMANDS_FILE: ([], list, "InitCommands"),
+        HISTORY_FILE: ([], list, "InitHistory"),
+        MEMORY_FILE: ({}, dict, "InitMemory"),
+        SYNC_STATUS_FILE: ({"auto_sync_enabled": False, "last_successful_sync_timestamp": None, "auto_sync_interval_hours": 24}, dict, "InitSyncStatus")
+    }
 
-        if matches_id or matches_description:
-            log_message("info", f"[MindClearing] Clearing thought: ID '{thought.get('thought_id')}', Desc: '{thought.get('description')}'")
-            cleared_at_least_one = True
-            continue
-        thoughts_after_removal.append(thought)
-
-    data["background_thoughts"] = thoughts_after_removal
-
-    if not cleared_at_least_one:
-        log_message("info", f"[MindClearing] No thought found matching ID '{thought_id_to_clear}' or Desc '{thought_description_to_clear}'.")
-        return {"status": "success", "message": "No matching thought found to clear."} # Still a success, nothing to do
-
-    if save_json_file(data, MIND_CLEARING_LOG_FILE, "MindClearingSave"):
-        cleared_count = initial_thought_count - len(data["background_thoughts"])
-        log_message("info", f"[MindClearing] Successfully cleared {cleared_count} thought(s).")
-        return {"status": "success", "message": f"Successfully cleared {cleared_count} thought(s)."}
-    else:
-        log_message("error", "[MindClearing] Failed to save updated mind-clearing log.")
-        return {"status": "error", "message": "Failed to save mind-clearing data after attempting removal."}
-
-# --- Cloud Sync Function ---
-def sync_logs_to_cloud():
-    log_message("info", "Attempting to synchronize logs to cloud...")
-    script_path = os.path.join(SCRIPT_DIR, "sync_to_cloud.sh")
-    if not os.path.exists(script_path):
-        log_message("error", f"sync_to_cloud.sh not found at {script_path}"); return {"status": "error", "message": f"sync_to_cloud.sh not found at {script_path}"}
-    try:
-        os.chmod(script_path, 0o755)
-        process = subprocess.run([script_path], capture_output=True, text=True, check=True, cwd=SCRIPT_DIR)
-        log_message("info", f"sync_to_cloud.sh executed. Stout: {process.stdout.strip()}. Stderr: {process.stderr.strip()}")
-        return {"status": "success", "message": "Log synchronization script executed.", "stdout": process.stdout.strip(), "stderr": process.stderr.strip()}
-    except subprocess.CalledProcessError as e:
-        log_message("error", f"sync_to_cloud.sh failed: {e}. Stout: {e.stdout.strip()}. Stderr: {e.stderr.strip()}"); return {"status": "error", "message": f"sync_to_cloud.sh failed: {e}", "stdout": e.stdout.strip(), "stderr": e.stderr.strip()}
-    except Exception as e:
-        log_message("error", f"Unexpected error in sync_logs_to_cloud: {e}"); return {"status": "error", "message": f"Unexpected error: {e}"}
-
-# --- Main Command Processing Logic ---
-def process_next_command():
-    log_message("info", "Checking for commands...")
-    commands_data = load_commands()
-    if not commands_data or not commands_data.get("commands"): log_message("info", "No commands found."); return
-    processed_a_command = False
-    for command in commands_data["commands"]:
-        if command.get("status") == "pending":
-            log_message("info", f"Processing cmd: {command.get('command_id')}, action: {command.get('action')}")
-            action = command.get("action"); params = command.get("parameters", {}); command["result"] = {}
-            if action == "status_check":
-                command["status"] = "completed"; command["result"].update({"status": "OK", "message": "System nominal."})
-            elif action == "log_event":
-                event_level=params.get("level","info"); event_type=params.get("event_type","generic"); details=params.get("details","No details.")
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with open(LOG_FILE, "a") as f: f.write(f"[{timestamp}] {event_level.upper()}: [USER EVENT] Type: {event_type}, Details: {details}\n")
-                command["status"] = "completed"; command["result"].update({"status": "LOGGED", "message": "User event recorded."})
-            elif action == "run_shell":
-                shell_cmd = params.get("shell_command")
-                if not shell_cmd: command["status"] = "failed"; command["result"].update({"error": "No shell_command."})
-                elif not any(shell_cmd.strip().startswith(p) for p in ["ls","echo","pwd"]): command["status"] = "failed"; command["result"].update({"error": "Shell command not allowed."})
-                else:
-                    try:
-                        proc = subprocess.run(shell_cmd, shell=True, capture_output=True, text=True, timeout=30)
-                        out=proc.stdout.strip(); err=proc.stderr.strip(); command["result"].update({"stdout":out, "stderr":err})
-                        if proc.returncode == 0: command["status"] = "completed"; log_message("info", f"Shell success. OUT: {out}")
-                        else: command["status"] = "failed"; log_message("error", f"Shell failed. RC:{proc.returncode} ERR:{err} OUT:{out}")
-                    except Exception as e: command["status"] = "failed"; command["result"].update({"error":str(e)})
-            elif action == "sync_logs":
-                res = sync_logs_to_cloud(); command["result"].update(res)
-                command["status"] = "completed" if res.get("status") == "success" else "failed"
-            elif action == "log_ethanol_alternative":
-                res = handle_log_ethanol_alternative(params); command["result"].update(res)
-                command["status"] = "completed" if res.get("status") == "success" else res.get("status", "failed")
-            elif action == "clear_background_thought":
-                res = handle_clear_background_thought(params); command["result"].update(res)
-                command["status"] = "completed" if res.get("status") == "success" else res.get("status", "failed")
+    for file_path, (default_content, expected_type, log_prefix) in files_to_initialize_or_verify.items():
+        if not os.path.exists(file_path):
+            save_json_file(file_path, default_content, log_prefix)
+            log_event(f"{file_path} initialized.", "info")
+        else:
+            loaded_content = load_json_file(file_path, None, f"InitCheck{log_prefix[4:]}") # Use None to distinguish file error vs empty
+            if loaded_content is None or not isinstance(loaded_content, expected_type): # Check type or if load failed critically
+                log_event(f"{file_path} is not a {expected_type.__name__} or is corrupted/unreadable. Re-initializing.", "warning")
+                save_json_file(file_path, default_content, log_prefix)
+            elif file_path == SYNC_STATUS_FILE: # Specific check for SYNC_STATUS_FILE keys
+                 if not all(k in loaded_content for k in default_content.keys()):
+                    log_event(f"{SYNC_STATUS_FILE} is missing essential keys. Re-initializing.", "warning")
+                    save_json_file(SYNC_STATUS_FILE, default_content, log_prefix)
+                 else:
+                    log_event(f"{file_path} exists and appears valid.", "debug")
             else:
-                command["status"] = "failed"; command["result"].update({"error": "Unknown action type"})
-            command["processed_timestamp"] = datetime.datetime.now().isoformat()
-            processed_a_command = True; break
-    if processed_a_command:
-        if not save_commands(commands_data): log_message("critical", "Failed to save commands data post-processing!")
-    else: log_message("info", "No pending commands.")
+                log_event(f"{file_path} exists and appears valid.", "debug")
 
-if __name__ == "__main__":
-    log_message("info", "Katana Agent SDK script started.")
-    process_next_command()
-    log_message("info", "Katana Agent SDK script finished.")
+    # Ensure global memory state is loaded after checks
+    global agent_memory_state
+    agent_memory_state = load_memory()
+    log_event("Katana data file initialization/verification complete.", "info")
+
+if __name__ == '__main__':
+    log_event("katana_agent.py self-test: Initializing files...", "info")
+    initialize_katana_files()
+    log_event("katana_agent.py self-test: File initialization complete.", "info")
+    log_event("katana_agent.py self-test: Current memory state: " + json.dumps(agent_memory_state), "debug")
+    # To verify, after running this, one would check katana_events.log and the content of the .json files.
+    # Example: Create a dummy corrupted file to test re-initialization
+    # with open(COMMANDS_FILE, 'w') as f: f.write("corrupted")
+    # initialize_katana_files() # Should detect and fix
+    # print(load_commands())

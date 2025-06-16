@@ -1,6 +1,42 @@
 {
   "user_id": "default",
-  "background_thoughts": [],
+  "background_thoughts": [
+    {
+      "thought_id": "th_598e89e1",
+      "description": "A new important thought about project Katana.",
+      "ping_frequency": "high",
+      "energy_consumption": "low",
+      "tags": [
+        "project_katana",
+        "development"
+      ],
+      "action": "pending_review",
+      "action_options": [
+        "disable",
+        "defer",
+        "reframe"
+      ],
+      "created_timestamp": "2025-06-16T08:49:14.504099"
+    },
+    {
+      "thought_id": "placeholder_id_from_cmd_014",
+      "description": "An updated important thought about project Katana, now with more details!",
+      "ping_frequency": "very_high",
+      "energy_consumption": "medium",
+      "tags": [
+        "project_katana",
+        "development",
+        "priority"
+      ],
+      "action": "pending_review",
+      "action_options": [
+        "disable",
+        "defer",
+        "reframe"
+      ],
+      "created_timestamp": "2025-06-16T08:49:14.626177"
+    }
+  ],
   "mind_silence_log": [
     {
       "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
