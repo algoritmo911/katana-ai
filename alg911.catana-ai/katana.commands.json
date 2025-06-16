@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "commands": [
+    {
+      "command_id": "cmd_001",
+      "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+      "action": "status_check",
+      "parameters": {
+        "target_module": "core"
+      },
+      "status": "completed",
+      "result": {
+        "status": "OK",
+        "message": "System nominal."
+      },
+      "processed_timestamp": "2025-06-16T08:12:09.215794"
+    },
+    {
+      "command_id": "cmd_002",
+      "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+      "action": "log_event",
+      "parameters": {
+        "event_type": "user_interaction",
+        "details": "User initiated session."
+      },
+      "status": "pending"
+    }
+  ],
+  "pending_tasks": [
+    {
+      "task_id": "task_001",
+      "description": "Trigger morning routine via n8n/Telegram.",
+      "source": "n8n_telegram_integration",
+      "details": {
+        "message_type": "wakeup",
+        "target_user": "default"
+      }
+    },
+    {
+      "task_id": "task_002",
+      "description": "Trigger evening summary via n8n/Telegram.",
+      "source": "n8n_telegram_integration",
+      "details": {
+        "message_type": "end_of_day",
+        "target_user": "default"
+      }
+    }
+  ]
+}
