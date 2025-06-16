@@ -14,3 +14,93 @@
 [2025-06-16 08:14:14] INFO: [ModuleDev] Created placeholder structure for Neuro-Refueling module.
 [2025-06-16 08:14:14] INFO: [ModuleDev] Created placeholder structure for Mind Clearing module.
 [2025-06-16 08:15:23] INFO: [Documentation] Created main README.md for the alg911.catana-ai project.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Katana Agent SDK script started.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Checking for commands...
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Processing command_id: cmd_002, action: log_event
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Executing log_event with parameters: {'event_type': 'user_interaction', 'details': 'User initiated session.'}
+[2025-06-16 08:30:26] INFO: [USER EVENT] Type: user_interaction, Details: User initiated session.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Successfully saved updates to katana.commands.json.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Katana Agent SDK script finished.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Katana Agent SDK script started.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Checking for commands...
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Processing command_id: cmd_003, action: log_event
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Executing log_event with parameters: {'level': 'info', 'event_type': 'system_test', 'details': 'Testing the new log_event functionality.'}
+[2025-06-16 08:30:26] INFO: [USER EVENT] Type: system_test, Details: Testing the new log_event functionality.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Successfully saved updates to katana.commands.json.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Katana Agent SDK script finished.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Katana Agent SDK script started.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Checking for commands...
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Processing command_id: cmd_004, action: run_shell
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Executing run_shell with parameters: {'shell_command': 'ls -la /app/alg911.catana-ai'}
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Executing allowed shell command: ls -la /app/alg911.catana-ai
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Shell command executed successfully. STDOUT: total 48
+drwxr-xr-x 4 jules root 4096 Jun 16 08:30 .
+drwxr-xr-x 4 jules root 4096 Jun 16 08:30 ..
+-rw-r--r-- 1 jules root 2524 Jun 16 08:30 README.md
+-rw-r--r-- 1 jules root 2472 Jun 16 08:30 katana.commands.json
+-rwxr-xr-x 1 jules root 7198 Jun 16 08:30 katana_agent.py
+-rw-r--r-- 1 jules root 3568 Jun 16 08:30 katana_events.log
+drwxr-xr-x 2 jules root 4096 Jun 16 08:30 mind_clearing
+drwxr-xr-x 2 jules root 4096 Jun 16 08:30 neuro_refueling
+-rw-r--r-- 1 jules root  443 Jun 16 08:30 rclone.conf
+-rwxr-xr-x 1 jules root 1599 Jun 16 08:30 sync_to_cloud.sh
+-rw-r--r-- 1 jules root  240 Jun 16 08:30 tasklist.md
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Successfully saved updates to katana.commands.json.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Katana Agent SDK script finished.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Katana Agent SDK script started.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Checking for commands...
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Processing command_id: cmd_005, action: run_shell
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Executing run_shell with parameters: {'shell_command': "echo 'Hello from Katana Shell!'"}
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Executing allowed shell command: echo 'Hello from Katana Shell!'
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Shell command executed successfully. STDOUT: Hello from Katana Shell!
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Successfully saved updates to katana.commands.json.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Katana Agent SDK script finished.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Katana Agent SDK script started.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Checking for commands...
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Processing command_id: cmd_006, action: run_shell
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Executing run_shell with parameters: {'shell_command': 'rm -rf /'}
+[2025-06-16 08:30:26] ERROR: [Katana Agent SDK] Shell command not allowed: rm -rf /
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Successfully saved updates to katana.commands.json.
+[2025-06-16 08:30:26] INFO: [Katana Agent SDK] Katana Agent SDK script finished.
+[2025-06-16 08:32:09] INFO: [Katana Agent SDK] Katana Agent SDK script started.
+[2025-06-16 08:32:09] INFO: [Katana Agent SDK] Checking for commands...
+[2025-06-16 08:32:09] INFO: [Katana Agent SDK] Processing command_id: cmd_007, action: sync_logs
+[2025-06-16 08:32:09] INFO: [Katana Agent SDK] Executing sync_logs action.
+[2025-06-16 08:32:09] INFO: [Katana Agent SDK] Attempting to synchronize logs to cloud...
+[2025-06-16 08:32:09] INFO: [Cloud Sync] Starting synchronization of /app/alg911.catana-ai to gdrive:KatanaBackup/alg911.catana-ai...
+[2025-06-16 08:32:09] INFO: [Cloud Sync] SIMULATED: rclone sync /app/alg911.catana-ai gdrive:KatanaBackup/alg911.catana-ai --config /app/alg911.catana-ai/rclone.conf
+[2025-06-16 08:32:09] INFO: [Cloud Sync] Synchronization of /app/alg911.catana-ai to gdrive:KatanaBackup/alg911.catana-ai completed successfully (simulated).
+[2025-06-16 08:32:09] INFO: [Katana Agent SDK] sync_to_cloud.sh executed. Stout: . Stderr:
+[2025-06-16 08:32:09] INFO: [Katana Agent SDK] Successfully saved updates to /app/alg911.catana-ai/katana.commands.json.
+[2025-06-16 08:32:09] INFO: [Katana Agent SDK] Katana Agent SDK script finished.
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] Katana Agent SDK script started.
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] Checking for commands...
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] [CommandsLoad] Successfully loaded data from /app/alg911.catana-ai/katana.commands.json.
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] Processing command_id: cmd_008, action: log_ethanol_alternative
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] Executing log_ethanol_alternative with parameters: {'alternative_name': 'Evening Tea', 'effect': 'Calming', 'date': '2025-06-16T21:00:00Z', 'craving_event': 'Post-work stress', 'notes': 'Helped to unwind instead of reaching for wine.'}
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] [NeuroRefueling] Attempting to log ethanol alternative: {'alternative_name': 'Evening Tea', 'effect': 'Calming', 'date': '2025-06-16T21:00:00Z', 'craving_event': 'Post-work stress', 'notes': 'Helped to unwind instead of reaching for wine.'}
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] [NeuroRefuelingLoad] Successfully loaded data from /app/alg911.catana-ai/neuro_refueling/alternatives_log.json.
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] [NeuroRefuelingSave] Successfully saved updates to /app/alg911.catana-ai/neuro_refueling/alternatives_log.json.
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] [NeuroRefueling] Successfully logged ethanol alternative: Evening Tea
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] [CommandsSave] Successfully saved updates to /app/alg911.catana-ai/katana.commands.json.
+[2025-06-16 08:33:53] INFO: [Katana Agent SDK] Katana Agent SDK script finished.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] Katana Agent SDK script started.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] Checking for commands...
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [CommandsLoad] Successfully loaded data from /app/alg911.catana-ai/katana.commands.json.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] Processing cmd: cmd_009, action: clear_background_thought
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [MindClearing] Attempting to clear background thought: {'thought_id': 'th001'}
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [MindClearingLoad] Successfully loaded data from /app/alg911.catana-ai/mind_clearing/thought_patterns.json.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [MindClearing] Clearing thought: ID 'th001', Desc: 'Worry about upcoming deadline'
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [MindClearingSave] Successfully saved updates to /app/alg911.catana-ai/mind_clearing/thought_patterns.json.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [MindClearing] Successfully cleared 1 thought(s).
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [CommandsSave] Successfully saved updates to /app/alg911.catana-ai/katana.commands.json.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] Katana Agent SDK script finished.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] Katana Agent SDK script started.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] Checking for commands...
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [CommandsLoad] Successfully loaded data from /app/alg911.catana-ai/katana.commands.json.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] Processing cmd: cmd_010, action: clear_background_thought
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [MindClearing] Attempting to clear background thought: {'thought_description': 'NonExistentThought'}
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [MindClearingLoad] Successfully loaded data from /app/alg911.catana-ai/mind_clearing/thought_patterns.json.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [MindClearing] No thought found matching ID 'None' or Desc 'NonExistentThought'.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] [CommandsSave] Successfully saved updates to /app/alg911.catana-ai/katana.commands.json.
+[2025-06-16 08:35:27] INFO: [Katana Agent SDK] Katana Agent SDK script finished.

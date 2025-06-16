@@ -23,7 +23,129 @@
         "event_type": "user_interaction",
         "details": "User initiated session."
       },
-      "status": "pending"
+      "status": "completed",
+      "result": {
+        "status": "LOGGED",
+        "message": "User event recorded."
+      },
+      "processed_timestamp": "2025-06-16T08:30:26.608715"
+    },
+    {
+      "command_id": "cmd_003",
+      "timestamp": "2025-06-16T08:16:00Z",
+      "action": "log_event",
+      "parameters": {
+        "level": "info",
+        "event_type": "system_test",
+        "details": "Testing the new log_event functionality."
+      },
+      "status": "completed",
+      "result": {
+        "status": "LOGGED",
+        "message": "User event recorded."
+      },
+      "processed_timestamp": "2025-06-16T08:30:26.679991"
+    },
+    {
+      "command_id": "cmd_004",
+      "timestamp": "2025-06-16T08:16:00Z",
+      "action": "run_shell",
+      "parameters": {
+        "shell_command": "ls -la /app/alg911.catana-ai"
+      },
+      "status": "completed",
+      "result": {
+        "stdout": "total 48\ndrwxr-xr-x 4 jules root 4096 Jun 16 08:30 .\ndrwxr-xr-x 4 jules root 4096 Jun 16 08:30 ..\n-rw-r--r-- 1 jules root 2524 Jun 16 08:30 README.md\n-rw-r--r-- 1 jules root 2472 Jun 16 08:30 katana.commands.json\n-rwxr-xr-x 1 jules root 7198 Jun 16 08:30 katana_agent.py\n-rw-r--r-- 1 jules root 3568 Jun 16 08:30 katana_events.log\ndrwxr-xr-x 2 jules root 4096 Jun 16 08:30 mind_clearing\ndrwxr-xr-x 2 jules root 4096 Jun 16 08:30 neuro_refueling\n-rw-r--r-- 1 jules root  443 Jun 16 08:30 rclone.conf\n-rwxr-xr-x 1 jules root 1599 Jun 16 08:30 sync_to_cloud.sh\n-rw-r--r-- 1 jules root  240 Jun 16 08:30 tasklist.md",
+        "stderr": ""
+      },
+      "processed_timestamp": "2025-06-16T08:30:26.741323"
+    },
+    {
+      "command_id": "cmd_005",
+      "timestamp": "2025-06-16T08:16:00Z",
+      "action": "run_shell",
+      "parameters": {
+        "shell_command": "echo 'Hello from Katana Shell!'"
+      },
+      "status": "completed",
+      "result": {
+        "stdout": "Hello from Katana Shell!",
+        "stderr": ""
+      },
+      "processed_timestamp": "2025-06-16T08:30:26.791500"
+    },
+    {
+      "command_id": "cmd_006",
+      "timestamp": "2025-06-16T08:16:00Z",
+      "action": "run_shell",
+      "parameters": {
+        "shell_command": "rm -rf /"
+      },
+      "status": "failed",
+      "result": {
+        "error": "Shell command not allowed."
+      },
+      "processed_timestamp": "2025-06-16T08:30:26.839914"
+    },
+    {
+      "command_id": "cmd_007",
+      "timestamp": "2025-06-16T08:31:00Z",
+      "action": "sync_logs",
+      "parameters": {},
+      "status": "completed",
+      "result": {
+        "status": "success",
+        "message": "Log synchronization script executed.",
+        "stdout": "",
+        "stderr": ""
+      },
+      "processed_timestamp": "2025-06-16T08:32:09.915520"
+    },
+    {
+      "command_id": "cmd_008",
+      "timestamp": "2025-06-16T08:33:00Z",
+      "action": "log_ethanol_alternative",
+      "parameters": {
+        "alternative_name": "Evening Tea",
+        "effect": "Calming",
+        "date": "2025-06-16T21:00:00Z",
+        "craving_event": "Post-work stress",
+        "notes": "Helped to unwind instead of reaching for wine."
+      },
+      "status": "completed",
+      "result": {
+        "status": "success",
+        "message": "Ethanol alternative logged."
+      },
+      "processed_timestamp": "2025-06-16T08:33:53.660920"
+    },
+    {
+      "command_id": "cmd_009",
+      "timestamp": "2025-06-16T08:35:00Z",
+      "action": "clear_background_thought",
+      "parameters": {
+        "thought_id": "th001"
+      },
+      "status": "completed",
+      "result": {
+        "status": "success",
+        "message": "Successfully cleared 1 thought(s)."
+      },
+      "processed_timestamp": "2025-06-16T08:35:27.023156"
+    },
+    {
+      "command_id": "cmd_010",
+      "timestamp": "2025-06-16T08:36:00Z",
+      "action": "clear_background_thought",
+      "parameters": {
+        "thought_description": "NonExistentThought"
+      },
+      "status": "completed",
+      "result": {
+        "status": "success",
+        "message": "No matching thought found to clear."
+      },
+      "processed_timestamp": "2025-06-16T08:35:27.065785"
     }
   ],
   "pending_tasks": [

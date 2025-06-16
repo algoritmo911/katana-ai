@@ -1,17 +1,11 @@
 {
   "user_id": "default",
-  "background_thoughts": [
-    {
-      "thought_id": "th001",
-      "description": "Worry about upcoming deadline",
-      "ping_frequency": "high",
-      "energy_consumption": "medium",
-      "tags": ["work", "stress"],
-      "action": "pending_review",
-      "action_options": ["disable", "defer", "reframe"]
-    }
-  ],
+  "background_thoughts": [],
   "mind_silence_log": [
-    {"timestamp": "YYYY-MM-DDTHH:MM:SSZ", "duration_minutes": 20, "effectiveness": "good"}
+    {
+      "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+      "duration_minutes": 20,
+      "effectiveness": "good"
+    }
   ]
 }
