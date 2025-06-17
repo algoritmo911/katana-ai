@@ -87,6 +87,75 @@ Unit tests are provided in the `tests/` directory. To run them:
    python tests/test_harvester.py
    ```
 
+
+## iCloud Notes Integration (icloud_sync.py)
+
+The Harvester can also (optionally) attempt to fetch secrets from iCloud Notes. This is handled by the `icloud_sync.py` script.
+
+### iCloud Setup
+
+1.  **Install `pyicloud` Dependency**:
+    ```bash
+    pip install pyicloud
+    ```
+    Note: `pyicloud` is an unofficial library and may have limitations or require updates if Apple changes its private APIs.
+
+2.  **Environment Variables for iCloud**:
+    Set the following environment variables with your Apple ID credentials:
+    ```bash
+    export ICLOUD_USERNAME="your_apple_id@example.com"
+    export ICLOUD_PASSWORD="your_apple_id_password_or_app_specific_password"
+    ```
+    *   **App-Specific Passwords**: If you have Two-Factor Authentication (2FA) enabled for your Apple ID (which is highly recommended), you **must** generate an app-specific password for `pyicloud` to use. You can do this at [appleid.apple.com](https://appleid.apple.com) under "App-Specific Passwords". Using your regular Apple ID password directly with 2FA might not work or could be less secure.
+
+3.  **Two-Factor Authentication (2FA) Handling**:
+    When `icloud_sync.py` runs for the first time or if your iCloud session expires, `pyicloud` will likely require 2FA. The script will prompt you in the console:
+    ```
+    🔐 iCloud 2-Factor Authentication is required. Check your Apple device.
+    Enter the 2FA code you received on your Apple device:
+    ```
+    You will need to enter the 6-digit code sent to one of your trusted Apple devices. Subsequent runs might not require this if the session is considered "trusted" by `pyicloud`.
+
+### iCloud Usage
+
+1.  **Prepare iCloud Notes**:
+    *   Create notes in your iCloud Notes app containing the secrets.
+    *   Format secrets as `KEY=VALUE` pairs, each on a new line. The parser in `icloud_sync.py` uses a regex to find these patterns.
+    *   Unlike the Google Keep harvester, the iCloud version currently **scans all notes** by default. It does not filter by a specific label/tag within iCloud Notes (as `pyicloud`'s note filtering capabilities are more limited than `gkeepapi`'s label search).
+
+2.  **Run `icloud_sync.py`**:
+    Navigate to the `katana_secrets_harvester` directory and run:
+    ```bash
+    python icloud_sync.py
+    ```
+    The script will:
+    *   Attempt to log in to iCloud (prompting for 2FA if needed).
+    *   Fetch all notes.
+    *   Parse `KEY=VALUE` secrets from the notes.
+    *   Read the existing `secrets_temp.json` (if any).
+    *   Merge the secrets found from iCloud with the existing ones. If keys conflict, iCloud secrets will overwrite those from Google Keep (or previous runs).
+    *   Save the combined secrets back to `secrets_temp.json`, after backing up the previous version.
+
+### Combined Workflow (Google Keep + iCloud)
+
+To harvest from both Google Keep and iCloud and merge the results:
+
+1.  Run the Google Keep harvester first:
+    ```bash
+    # Ensure GKEEP_USERNAME and GKEEP_PASSWORD are set
+    python harvester.py
+    ```
+    This will create/update `secrets_temp.json` with Google Keep secrets.
+
+2.  Then, run the iCloud harvester:
+    ```bash
+    # Ensure ICLOUD_USERNAME and ICLOUD_PASSWORD are set
+    python icloud_sync.py
+    ```
+    This will read the `secrets_temp.json` (now containing Google Keep secrets), add/overwrite with iCloud secrets, and save the merged result back to `secrets_temp.json`.
+
+This provides a way to aggregate secrets from both sources into a single file.
+
 ## Future Enhancements (Stage 2+)
 - Integration with cloud secret managers (e.g., Google Secret Manager, HashiCorp Vault) to push these temporary secrets.
 - Synchronization with iCloud Keychain notes.

@@ -104,28 +104,7 @@ class TestHarvesterFindNotes(unittest.TestCase):
         self.assertEqual(len(notes), 0)
 
 class TestHarvesterParseKeys(unittest.TestCase):
-    def test_parse_valid_keys(self):
-        note_text = "API_KEY=key123\\nOPENAI_KEY = sk-abc\\n# This is a comment\\nSECRET_TOKEN = token_xyz  "
-        expected = {"API_KEY": "key123", "OPENAI_KEY": "sk-abc", "SECRET_TOKEN": "token_xyz"}
-        self.assertEqual(harvester.parse_keys_from_note_text(note_text), expected)
-
-    def test_parse_empty_text(self):
-        self.assertEqual(harvester.parse_keys_from_note_text(""), {})
-
-    def test_parse_no_equals_sign(self):
-        note_text = "This is just a line\\nAnother line without equals"
-        self.assertEqual(harvester.parse_keys_from_note_text(note_text), {})
-
-    def test_parse_empty_value(self):
-        note_text = "EMPTY_KEY=\\nKEY_WITH_SPACE= value"
-        expected = {"EMPTY_KEY": "", "KEY_WITH_SPACE": "value"}
-        self.assertEqual(harvester.parse_keys_from_note_text(note_text), expected)
-
-    def test_parse_line_starts_with_equals(self):
-        note_text = "=value_should_be_ignored"
-        self.assertEqual(harvester.parse_keys_from_note_text(note_text), {})
-
-class TestHarvesterSaveSecrets(unittest.TestCase):
+    # --- Tests for is_valid_secret_value (called by parse_keys_from_note_text) ---\n        \n        def test_is_valid_secret_value_known_prefixes(self):\n            # harvester.is_valid_secret_value should be importable.\n            # Assumes harvester module is imported in the test script.\n            self.assertTrue(harvester.is_valid_secret_value("sk-abc123xyz", key_name="OPENAI_KEY"))\n            self.assertTrue(harvester.is_valid_secret_value("patSOME_AIRTABLE_TOKEN.123", key_name="AIRTABLE_PAT"))\n            self.assertTrue(harvester.is_valid_secret_value("pcsk_pinecone_key_here", key_name="PINECONE_KEY"))\n            self.assertTrue(harvester.is_valid_secret_value("AIzaSySOMEGOOGLEAPIKEY", key_name="GOOGLE_API_KEY"))\n            self.assertTrue(harvester.is_valid_secret_value("ghp_githubpersonalaccesstoken", key_name="GITHUB_TOKEN"))\n            self.assertTrue(harvester.is_valid_secret_value("1234567890:AAGxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-abc", key_name="TELEGRAM_BOT_TOKEN"))\n    \n        def test_is_valid_secret_value_invalid_or_non_secret(self):\n            self.assertFalse(harvester.is_valid_secret_value("this is just a normal string", key_name="description"))\n            self.assertFalse(harvester.is_valid_secret_value("sk_almost_but_not_quite", key_name="ALMOST_A_KEY"))\n            self.assertFalse(harvester.is_valid_secret_value("12345:SHORTTOKEN", key_name="TELEGRAM_LIKE_SHORT"))\n            self.assertFalse(harvester.is_valid_secret_value("", key_name="EMPTY_VALUE"))\n            self.assertFalse(harvester.is_valid_secret_value(None, key_name="NONE_VALUE")) # type: ignore\n    \n        # --- Modified tests for parse_keys_from_note_text to reflect filtering ---\n    \n        def test_parse_keys_filters_based_on_valid_value(self):\n            note_text = (\n                "VALID_OPENAI_KEY=sk-thisisavalidkey123\\n" # Using escaped \n for multiline string in test\n                "普通のテキスト=This is just some normal text, not a secret value.\\n"\n                "AIRTABLE_TOKEN=patABCDEFGHIJKLMNOPQRSTUVWXYZ.abcdefghijklmnopqrstuvwxyz0123456789\\n"\n                "MAYBE_USEFUL_INFO=Some project related data that is not a secret pattern.\\n"\n                "TELEGRAM_TOKEN=1234567890:AAGabcdefghijklmnopqrstuvwxyzABCDEFGHIJ\\n"\n                "COMMENTED_KEY=#SECRET_KEY=commentedout\\n"\n                "EMPTY_SECRET_VALUE_KEY= \\n" \n                "KEY_WITH_INVALID_VALUE=notaverysecretlookingstring"\n            )\n            expected_keys = {\n                "VALID_OPENAI_KEY": "sk-thisisavalidkey123",\n                "AIRTABLE_TOKEN": "patABCDEFGHIJKLMNOPQRSTUVWXYZ.abcdefghijklmnopqrstuvwxyz0123456789",\n                "TELEGRAM_TOKEN": "1234567890:AAGabcdefghijklmnopqrstuvwxyzABCDEFGHIJ"\n            }\n            # from unittest.mock import MagicMock # Ensure MagicMock is imported if used\n            # harvester.log_message = MagicMock() # Suppress log output during this specific test if noisy\n            parsed = harvester.parse_keys_from_note_text(note_text)\n            self.assertEqual(parsed, expected_keys)\n    \n        def test_parse_keys_only_non_secrets_in_note(self):\n            note_text = (\n                "ProjectName=Katana\\n"\n                "Version=2.1\\n"\n                "Description=Some notes about the project."\n            )\n            expected_keys = {} \n            parsed = harvester.parse_keys_from_note_text(note_text)\n            self.assertEqual(parsed, expected_keys)\n    \n        def test_parse_keys_mixed_with_comments_and_empty_lines(self):\n            note_text = (\n                "\\n"\n                "# This is a section for OpenAI\\n"\n                "OPENAI_API_KEY=sk-anotherkey789\\n"\n                "\\n"\n                "  # Another commented key: GITHUB_TOKEN=ghp_fakekey\\n"\n                "NOT_A_SECRET_KEY=some data here\\n"\n                "VALID_PAT_KEY=patS3cr3tK3yF0rA1rtable\\n"\n            )\n            expected_keys = {\n                "OPENAI_API_KEY": "sk-anotherkey789",\n                "VALID_PAT_KEY": "patS3cr3tK3yF0rA1rtable"\n            }\n            parsed = harvester.parse_keys_from_note_text(note_text)\n            self.assertEqual(parsed, expected_keys)\n\nclass TestHarvesterSaveSecrets(unittest.TestCase):
     TEST_OUTPUT_DIR_NAME = "temp_test_secrets_output_for_save" # Unique name
     DEFAULT_TEST_FILENAME_STR = f"{TEST_OUTPUT_DIR_NAME}/test_secrets.json"
 

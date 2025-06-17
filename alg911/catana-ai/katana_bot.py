@@ -35,7 +35,7 @@ bot = telebot.TeleBot(API_TOKEN)
 def log_local_bot_event(log_message):
     print(f"[KatanaBot] {datetime.utcnow().isoformat()} - {log_message}")
 
-print("Katana Telegram Bot starting...") # This will print when the script is loaded
+print("Katana AI starting...") # This will print when the script is loaded
 log_local_bot_event(f"Commands will be saved to: {COMMANDS_DIR}")
 log_local_bot_event(f"Status will be read from: {STATUS_FILE}")
 
@@ -147,7 +147,7 @@ def handle_command_json_input(message):
 
 # --- Main ---
 if __name__ == '__main__':
-    log_local_bot_event("Starting Katana Telegram Bot script execution...")
+    log_local_bot_event("Starting Katana AI script execution...")
     if API_TOKEN == 'YOUR_TELEGRAM_TOKEN' or not API_TOKEN: # Check for empty token too
         log_local_bot_event("CRITICAL: API_TOKEN is not set. Please set the KATANA_TELEGRAM_TOKEN environment variable or replace 'YOUR_TELEGRAM_TOKEN' in the script.")
         print("CRITICAL: API_TOKEN is not set for Telegram Bot. Exiting.")

@@ -1,10 +1,10 @@
-
 import gkeepapi
 import json
 import os
 import shutil # For backing up secrets file
 from datetime import datetime # For backup file timestamp
 from pathlib import Path # For Path object usage within harvester
+import re
 
 # --- Configuration & Constants ---
 DEFAULT_SECRETS_FILENAME = "secrets_temp.json"
@@ -22,7 +22,6 @@ def login_keep(username, password):
     log_message("info", f"Attempting Google Keep login for user: {username}...")
     keep = gkeepapi.Keep()
     try:
-        # For accounts with 2FA, an "App Password" must be used instead of the regular password.
         success = keep.login(username, password)
         if success:
             log_message("info", "Google Keep login successful.")
@@ -58,20 +57,59 @@ def find_api_notes(keep: gkeepapi.Keep, api_label_name: str = DEFAULT_API_LABEL)
         log_message("error", f"Error finding notes with label '{api_label_name}': {e}")
         return []
 
-def parse_keys_from_note_text(note_text: str):
-    """Parses key-value pairs from the text of a single note."""
-    keys = {}
-    if not note_text:
-        return keys
+# --- Secret Value Validation Logic ---
+VALID_SECRET_PATTERNS = [
+    'sk-',                # OpenAI
+    'pat',                # Airtable PATs often start with 'pat'
+    'pcsk_',              # Pinecone serverless
+    'AIza',               # Google AI/API keys
+    'ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_', # GitHub tokens
+    'glpat-',             # GitLab tokens
+    'xoxb-', 'xoxp-',     # Slack tokens
+]
+# Precompile regex for Telegram tokens for efficiency if used often.
+TELEGRAM_TOKEN_REGEX = re.compile(r"^[0-9]+:[a-zA-Z0-9_-]{30,}$") # Basic regex
 
-    for line in note_text.split('\n'):
+def is_valid_secret_value(value_string: str, key_name: str = "") -> bool:
+    """
+    Checks if the value_string likely represents a secret based on known patterns.
+    Optionally considers the key_name for context.
+    """
+    if not isinstance(value_string, str) or not value_string: # Also check for empty string value
+        return False
+
+    for prefix in VALID_SECRET_PATTERNS:
+        if value_string.startswith(prefix):
+            return True
+
+    if TELEGRAM_TOKEN_REGEX.match(value_string):
+        return True
+
+    return False
+
+# --- Key Parsing Function (with validation) ---
+def parse_keys_from_note_text(note_text: str):
+    """
+    Parses key-value pairs from the text of a single note.
+    Filters keys based on is_valid_secret_value.
+    """
+    parsed_keys = {}
+    if not note_text:
+        return parsed_keys
+
+    for line in note_text.split('\n'): # Explicitly split on newline char
         line = line.strip()
         if '=' in line and not line.startswith('#'):
             parts = line.split('=', 1)
             key = parts[0].strip()
             value = parts[1].strip()
-            keys[key] = value
-    return keys
+
+            if is_valid_secret_value(value, key_name=key):
+                parsed_keys[key] = value
+                log_message("debug", f"Accepted key '{key}' based on valid value pattern.")
+            else:
+                log_message("debug", f"Skipped key '{key}': value '{value[:20]}...' did not match known secret patterns.")
+    return parsed_keys
 
 def save_secrets_to_json(secrets_data: dict, filename: str = DEFAULT_SECRETS_FILENAME):
     """Saves the collected secrets data to a JSON file, backing up the old one."""
@@ -79,7 +117,6 @@ def save_secrets_to_json(secrets_data: dict, filename: str = DEFAULT_SECRETS_FIL
 
     if output_file.exists():
         backup_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        # Ensure backup is in the same directory as the output file by default
         backup_filename = output_file.parent / f"{output_file.stem}_{backup_timestamp}{output_file.suffix}.bak"
         try:
             shutil.copyfile(output_file, backup_filename)
