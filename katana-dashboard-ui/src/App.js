@@ -4,11 +4,24 @@ import LogViewer from './components/LogViewer';
 import KatanaStatus from './components/KatanaStatus';
 import CommandSender from './components/CommandSender';
 import KatanaControls from './components/KatanaControls'; // <-- New import
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function App() {
   return (
     <>
       <CssBaseline />
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>

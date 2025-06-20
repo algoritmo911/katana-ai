@@ -39,3 +39,43 @@ Further development will involve:
 - Setting up and testing real cloud synchronization with rclone.
 - Populating and developing the scaffolded modules (`neuro_refueling`, `mind_clearing`).
 - Beginning design and implementation of other core modules as outlined in the project vision.
+
+## Katana UI Dashboard & Backend Server
+
+A React-based UI dashboard (`katana-dashboard-ui/`) has been developed to provide a web interface for monitoring and interacting with the Katana agent. This UI communicates with a dedicated Python backend server.
+
+### UI Backend Server (`katana_ui_server.py`)
+
+-   **Purpose**: Acts as a bridge between the React UI and the core Katana agent\'s files (`katana.commands.json`, `katana_events.log`, `katana_memory.json`). It uses Flask and Flask-SocketIO for handling HTTP requests and real-time WebSocket communication.
+-   **Location**: `alg911.catana-ai/katana_ui_server.py`
+-   **Key Modules**:
+    -   `backend/socket_handlers.py`: Contains the logic for handling specific WebSocket events from the UI (e.g., sending commands, pinging the agent).
+-   **Dependencies**:
+    -   Flask
+    -   Flask-SocketIO
+    -   watchdog (for monitoring log file changes)
+    -   psutil (for system metrics like CPU/RAM usage for the ping command)
+    -   pytest, pytest-flask, python-socketio[client] (for running tests)
+    *It is recommended to use a Python virtual environment and install dependencies from `requirements.txt` (see below).*
+-   **Running the Server**:
+    Navigate to the `alg911.catana-ai` directory and run:
+    ```bash
+    python katana_ui_server.py
+    ```
+    The server typically runs on `http://localhost:5050`.
+-   **Testing the Backend**:
+    Ensure you have `pytest` and `pytest-flask` installed. From the `alg911.catana-ai` directory, run:
+    ```bash
+    PYTHONPATH=. pytest
+    ```
+    (Setting `PYTHONPATH=.` ensures that modules within `alg911.catana-ai`, like `backend.socket_handlers`, can be correctly imported by the test files.)
+
+### Agent-Side Command Handling (`katana_agent.py`)
+
+The `katana_agent.py` script has been updated with new functions to handle commands initiated from the UI:
+-   `handle_agent_get_config()`: Retrieves agent configuration and stores it in memory.
+-   `handle_agent_reload_settings()`: Placeholder for reloading settings (currently re-triggers file initialization).
+-   `handle_agent_ping_received()`: Processes ping commands logged by the UI backend.
+-   `process_agent_command(command_object)`: A dispatcher function that calls the appropriate handler based on a command\'s \'action\'.
+
+**Note**: For these commands to be fully processed by `katana_agent.py`, a main command processing loop needs to be implemented or activated within `katana_agent.py` to continuously read `katana.commands.json` and execute new commands using `process_agent_command()`.

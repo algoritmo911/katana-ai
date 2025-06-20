@@ -122,6 +122,86 @@ def initialize_katana_files():
     agent_memory_state = load_memory()
     log_event("Katana data file initialization/verification complete.", "info")
 
+# --- Agent Command Handlers (based on user feedback) ---
+# Note: agent_memory_state is the global dictionary for memory.
+# log_event is the existing logging function.
+
+def handle_agent_get_config(command_params=None):
+    # command_params is included for consistency, though not used in this version
+    log_event("Processing 'get_agent_config' command internally.", "info")
+    config_data = {
+        "agent_version": "1.0.0-agent", # Distinct from UI backend version
+        "status": "online", # Placeholder
+        "last_config_retrieval_time_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "hostname": os.uname().nodename if hasattr(os, "uname") else "unknown", # Get actual hostname if possible
+        "os_type": os.uname().sysname if hasattr(os, "uname") else "unknown",
+        "max_cpu_usage_limit_pct": 75, # Example placeholder
+        "max_memory_usage_limit_mb": 2048, # Example placeholder
+        "active_tasks_count": 0, # Placeholder, agent needs logic to track this
+        "environment_info": { # Renamed from environment_vars for clarity
+            "KATANA_ENV_setting": os.environ.get("KATANA_ENV", "not_set"), # Example of reading actual env var
+            "API_TOKEN_IS_SET": "True" if os.environ.get("KATANA_API_TOKEN") else "False", # Example
+        },
+        "monitored_files": { # Example of agent-specific config
+            "commands_file": COMMANDS_FILE,
+            "memory_file": MEMORY_FILE,
+            "events_log_file": EVENTS_LOG_FILE
+        }
+    }
+    # Ensure 'katana_config' key is used as expected by UI (KatanaStatus.js)
+    agent_memory_state["katana_config"] = config_data
+    save_memory() # Persist the updated memory
+    log_event("Agent configuration updated in agent_memory_state['katana_config'] and saved.", "info")
+    return config_data
+
+def handle_agent_reload_settings(command_params=None):
+    log_event("Processing 'reload_core_settings' command internally.", "info")
+    # Placeholder action: re-initialize core files, as discussed.
+    try:
+        initialize_katana_files() # This re-checks/re-creates files if needed
+        log_event("Core settings reload attempted (file initialization re-triggered).", "info")
+        agent_memory_state["last_settings_reload_status"] = "success"
+        agent_memory_state["last_settings_reload_time_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        save_memory()
+        return {"status": "success", "message": "Core settings reload process initiated (file initialization re-triggered)."}
+    except Exception as e:
+        log_event(f"Error during settings reload attempt: {str(e)}", "error")
+        agent_memory_state["last_settings_reload_status"] = "error"
+        agent_memory_state["last_settings_reload_error"] = str(e)
+        agent_memory_state["last_settings_reload_time_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        save_memory()
+        return {"status": "error", "message": f"Failed to reload settings: {str(e)}"}
+
+def handle_agent_ping_received(command_params=None):
+    log_event("Processing 'ping_received' command internally.", "info")
+    agent_memory_state["last_agent_ping_processed_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    if command_params:
+        log_event(f"Ping command parameters: {command_params}", "debug")
+    save_memory()
+    return {"status": "success", "message": "Ping processed by agent."}
+
+# --- Stub for future command processing loop ---
+def process_agent_command(command_object):
+    action = command_object.get("action")
+    params = command_object.get("parameters")
+    command_id = command_object.get("command_id", "unknown_id")
+
+    log_event(f"Agent attempting to process command: {command_id}, Action: {action}", "info")
+    result = {"status": "unknown_action", "message": f"Action '{action}' not recognized by agent."}
+
+    if action == "get_agent_config":
+        get_config_result = handle_agent_get_config(params)
+        result = {"status": "success", "data": get_config_result}
+    elif action == "reload_core_settings":
+        result = handle_agent_reload_settings(params)
+    elif action == "ping_received_from_ui_backend":
+        result = handle_agent_ping_received(params)
+    else:
+        log_event(f"Agent received unknown action: '{action}' for command_id: {command_id}", "warning")
+
+    log_event(f"Agent processing finished for command: {command_id}. Result status: {result.get('status')}", "info")
+    return result
+
 if __name__ == '__main__':
     log_event("katana_agent.py self-test: Initializing files...", "info")
     initialize_katana_files()

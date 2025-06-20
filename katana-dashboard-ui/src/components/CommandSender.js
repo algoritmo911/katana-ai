@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import { Paper, Typography, Box, TextField, Button, Grid, Alert } from '@mui/material';
+import { toast } from 'react-toastify';
 
 const SOCKET_SERVER_URL = 'http://localhost:5050';
 
 const CommandSender = () => {
     const [action, setAction] = useState('');
-    const [parameters, setParameters] = useState('{}'); // Parameters as JSON string
-    const [response, setResponse] = useState(null);
-    const [error, setError] = useState(null);
+    const [parameters, setParameters] = useState('{}');
+    // Response/error state for direct feedback in this component, if any, is handled by toast mostly now
+    // const [response, setResponse] = useState(null);
+    // const [error, setError] = useState(null); // Use toast for most errors
+
     const socketRef = useRef(null);
 
     useEffect(() => {
@@ -23,17 +26,15 @@ const CommandSender = () => {
         socketRef.current.on('command_response', (data) => {
             console.log('CommandSender: Received command_response:', data);
             if (data.success) {
-                setResponse(data.message);
-                setError(null);
+                toast.success(`Command "${data.command_id || action}" sent successfully: ${data.message}`);
             } else {
-                setError(data.message);
-                setResponse(null);
+                toast.error(`Command "${action}" failed: ${data.message}`);
             }
         });
 
         socketRef.current.on('connect_error', (err) => {
             console.error('CommandSender: WebSocket Connection Error:', err);
-            setError('Failed to connect to WebSocket server for sending commands.');
+            toast.error('CommandSender: Failed to connect to WebSocket server.');
         });
 
         socketRef.current.on('disconnect', (reason) => {
@@ -45,32 +46,32 @@ const CommandSender = () => {
                 socketRef.current.disconnect();
             }
         };
-    }, []);
+    }, [action]); // Added action to dependency array for toast message context
 
     const handleSendCommand = () => {
         if (!action.trim()) {
-            setError('Action cannot be empty.');
+            toast.error('Action cannot be empty.');
             return;
         }
         try {
-            // Validate JSON format for parameters
             JSON.parse(parameters);
         } catch (e) {
-            setError('Parameters field must contain valid JSON.');
+            toast.error('Parameters field must contain valid JSON.');
             return;
         }
 
-        setError(null);
-        setResponse(null);
         console.log(`CommandSender: Sending command: Action - ${action}, Params - ${parameters}`);
         socketRef.current.emit('send_command_to_katana', { action, parameters });
+        // Clear action after sending? Optional.
+        // setAction('');
+        // setParameters('{}');
     };
 
     return (
         <Paper elevation={3} sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>Send Command to Katana</Typography>
+            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>Send Custom Command</Typography>
             <Grid container spacing={2} alignItems="flex-start">
-                <Grid item xs={12} sm={4}>
+                <Grid item xs={12} sm={4}> {/* Ensure xs={12} for stacking */}
                     <TextField
                         label="Action"
                         value={action}
@@ -80,7 +81,7 @@ const CommandSender = () => {
                         size="small"
                     />
                 </Grid>
-                <Grid item xs={12} sm={5}>
+                <Grid item xs={12} sm={5}> {/* Ensure xs={12} for stacking */}
                     <TextField
                         label="Parameters (JSON format)"
                         value={parameters}
@@ -90,23 +91,23 @@ const CommandSender = () => {
                         minRows={1}
                         variant="outlined"
                         size="small"
-                        helperText='Example: {"key": "value", "count": 1}'
+                        helperText='Example: {"key": "value"}'
                     />
                 </Grid>
-                <Grid item xs={12} sm={3} sx={{ display: 'flex', alignItems: 'center' }}>
+                <Grid item xs={12} sm={3} sx={{ display: 'flex', alignItems: 'stretch', height: '100%' }}> {/* Ensure xs={12} and full height for button */}
                     <Button
                         variant="contained"
                         color="primary"
                         onClick={handleSendCommand}
                         disabled={!socketRef.current || !socketRef.current.connected}
                         fullWidth
+                        size="medium" // Ensure button is not too small
                     >
                         Send Command
                     </Button>
                 </Grid>
             </Grid>
-            {response && <Alert severity="success" sx={{ mt: 2 }}>{response}</Alert>}
-            {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+            {/* Removed local Alert for response/error as toasts are now primary for this component */}
         </Paper>
     );
 };
