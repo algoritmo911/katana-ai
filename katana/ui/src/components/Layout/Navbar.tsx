@@ -46,6 +46,12 @@ const Navbar: React.FC = () => {
               >
                 Onboarding
               </NavLink>
+              <NavLink
+                to="/logs"
+                className={({ isActive }) => `${isActive ? activeClassName : inactiveClassName} px-3 py-2 rounded-md text-sm font-medium`}
+              >
+                Logs
+              </NavLink>
             </div>
           </div>
         </div>

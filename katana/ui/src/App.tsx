@@ -6,6 +6,7 @@ import ConnectionsPage from './pages/ConnectionsPage';
 import MemoryPage from './pages/MemoryPage';
 import SettingsPage from './pages/SettingsPage';
 import OnboardingPage from './pages/OnboardingPage';
+import LogsPage from './pages/LogsPage'; // Import the new LogsPage
 
 // MainLayout component is not used in this App.tsx structure,
 // Navbar and footer are part of App's direct render.
@@ -23,6 +24,7 @@ function App() {
           <Route path="/memory" element={<MemoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/logs" element={<LogsPage />} /> {/* Add new route for LogsPage */}
           <Route path="*" element={<Navigate replace to="/dashboard" />} />
         </Routes>
       </main>
