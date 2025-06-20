@@ -124,3 +124,32 @@ The bot will start, and you should see log messages in the console and in `katan
     python -m unittest test_bot.py
     ```
     Ensure all tests pass before committing changes.
+
+## Testing with Coverage
+
+To ensure code quality and identify untested parts of the codebase, you can run the unit tests with coverage analysis.
+
+1.  **Install Coverage.py**:
+    If you don't have it installed, get it via pip:
+    ```bash
+    pip install coverage
+    ```
+
+2.  **Run Tests with Coverage**:
+    Navigate to the bot's root directory in your terminal and run the following command:
+    ```bash
+    coverage run -m unittest test_bot.py
+    ```
+
+3.  **View Coverage Report**:
+    After the tests complete, you can view a summary report in the console:
+    ```bash
+    coverage report -m
+    ```
+    This report will show the percentage of code lines covered by tests for each file, helping you pinpoint areas that need more testing.
+
+    For a more detailed HTML report that you can view in your browser:
+    ```bash
+    coverage html
+    ```
+    This will create an `htmlcov/` directory. Open `htmlcov/index.html` in a web browser to explore the coverage results interactively.

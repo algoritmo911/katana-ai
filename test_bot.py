@@ -58,6 +58,26 @@ class TestBot(unittest.TestCase):
             mock_message.text = text_payload_dict_or_str
         return mock_message
 
+    def _test_validation_failure_scenario(self, command_payload, expected_reply_message_part):
+        """Helper to test common validation failure scenarios."""
+        mock_message = self._create_mock_message(command_payload)
+        bot.handle_message(mock_message)
+
+        # Check reply to user
+        self.mock_bot_module_instance.reply_to.assert_called_with(
+            mock_message,
+            expected_reply_message_part # The error_msg from _validate_command is directly used for reply
+        )
+
+        # Check detailed error log
+        # The logged message includes "(Command: {original_command_text})"
+        self.mock_logger.error.assert_called_with(
+            f"Validation failed for {mock_message.chat.id}: {expected_reply_message_part} (Command: {mock_message.text})"
+        )
+        # Also check that the initial "Received message" log was made
+        self.mock_logger.info.assert_any_call(f"Received message from {mock_message.chat.id}: {mock_message.text}")
+
+
     # --- Test Command Validation ---
     def test_valid_command_gets_saved(self):
         command = {"type": "test_type", "module": "test_module", "args": {"data": "value"}, "id": "test_id_valid"}
@@ -90,47 +110,46 @@ class TestBot(unittest.TestCase):
 
     def test_invalid_json_format(self):
         invalid_json_string = "not a valid json"
-        # Use overridden chat_id for clarity in assertion, if needed, or keep default from _create_mock_message
         mock_message = self._create_mock_message(invalid_json_string)
-        # mock_message.chat.id = 123 # Example of overriding if needed
 
         bot.handle_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Invalid JSON format.")
+        # Check initial "Received message" log
+        self.mock_logger.info.assert_any_call(f"Received message from {mock_message.chat.id}: {invalid_json_string}")
+        # Check the specific error log from _parse_command
         self.mock_logger.error.assert_called_with(f"Invalid JSON from {mock_message.chat.id}: {invalid_json_string}")
 
     def test_missing_type_field(self):
-        command = {"module": "test_module", "args": {}, "id": "test_id_missing_type"} # type is missing
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
-        expected_error_msg = "Error: Missing required field 'type'."
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_error_msg)
-        self.mock_logger.error.assert_called_with(f"Validation failed for {mock_message.chat.id}: {expected_error_msg} (Command: {mock_message.text})")
+        command = {"module": "test_module", "args": {}, "id": "test_id_missing_type"}
+        self._test_validation_failure_scenario(command, "Error: Missing required field 'type'.")
 
-    def test_missing_module_field(self): # New test
+    def test_missing_module_field(self):
         command = {"type": "test_type", "args": {}, "id": "test_id_missing_module"}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
-        expected_error_msg = "Error: Missing required field 'module'."
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_error_msg)
-        self.mock_logger.error.assert_called_with(f"Validation failed for {mock_message.chat.id}: {expected_error_msg} (Command: {mock_message.text})")
+        self._test_validation_failure_scenario(command, "Error: Missing required field 'module'.")
 
     def test_invalid_args_type(self):
         command = {"type": "test_type", "module": "test_module", "args": "not_a_dict", "id": "test_id_invalid_args"}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
-        # In bot.py, for (dict,), expected_type_names will be 'dict'.
-        expected_error_msg = "Error: Field 'args' must be type dict. Got str."
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_error_msg)
-        self.mock_logger.error.assert_called_with(f"Validation failed for {mock_message.chat.id}: {expected_error_msg} (Command: {mock_message.text})")
+        self._test_validation_failure_scenario(command, "Error: Field 'args' must be type dict. Got str.")
 
     def test_invalid_id_type(self):
-        command = {"type": "test_type", "module": "test_module", "args": {}, "id": [1,2,3]} # id is a list
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
-        # In bot.py, for (str, int), expected_type_names will be 'str or int'.
-        expected_error_msg = "Error: Field 'id' must be type str or int. Got list."
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_error_msg)
-        self.mock_logger.error.assert_called_with(f"Validation failed for {mock_message.chat.id}: {expected_error_msg} (Command: {mock_message.text})")
+        command = {"type": "test_type", "module": "test_module", "args": {}, "id": [1,2,3]}
+        self._test_validation_failure_scenario(command, "Error: Field 'id' must be type str or int. Got list.")
+
+    def test_missing_args_field(self):
+        command = {"type": "test_type", "module": "test_module", "id": "test_id_missing_args"}
+        self._test_validation_failure_scenario(command, "Error: Missing required field 'args'.")
+
+    def test_missing_id_field(self):
+        command = {"type": "test_type", "module": "test_module", "args": {}}
+        self._test_validation_failure_scenario(command, "Error: Missing required field 'id'.")
+
+    def test_invalid_type_for_type_field(self):
+        command = {"type": 123, "module": "test_module", "args": {}, "id": "test_id_invalid_type_type"}
+        self._test_validation_failure_scenario(command, "Error: Field 'type' must be type str. Got int.")
+
+    def test_invalid_type_for_module_field(self):
+        command = {"type": "test_type", "module": 123, "args": {}, "id": "test_id_invalid_module_type"}
+        self._test_validation_failure_scenario(command, "Error: Field 'module' must be type str. Got int.")
 
 
     # --- Test Command Routing & Specific Handler Logging ---
@@ -217,6 +236,70 @@ class TestBot(unittest.TestCase):
         self.mock_logger.info.assert_any_call(f"Received message from {mock_message.chat.id}: {mock_message.text}")
         self.mock_logger.info.assert_any_call(f"Command type '{command['type']}' for chat_id {mock_message.chat.id} not specifically handled, proceeding with default save.")
         self.mock_logger.info.assert_any_call(f"Saved command from {mock_message.chat.id} to {str(expected_file_path)}")
+
+    @patch('builtins.open', new_callable=MagicMock) # Patch 'open' in the scope where bot.py uses it
+    def test_unknown_command_save_io_error(self, mock_open):
+        mock_open.side_effect = IOError("Simulated disk full error")
+
+        command = {"type": "unknown_type_io_error", "module": "custom_module_io", "args": {"param": "value"}, "id": "custom004_io_error"}
+        mock_message = self._create_mock_message(command)
+
+        bot.handle_message(mock_message)
+
+        # Check that reply indicates an error
+        self.mock_bot_module_instance.reply_to.assert_called_with(
+            mock_message,
+            "Error: Could not save command. Please contact administrator."
+        )
+
+        # Check that error was logged
+        # The file path would be constructed before the open fails.
+        # We need to reconstruct it or be less specific if it's hard to get.
+        # For now, let's check parts of the message.
+        # Expected path: self.test_commands_dir / "telegram_mod_custom_module_io" / f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
+        # Since strftime is mocked, it's predictable.
+        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
+        expected_command_file_path = self.test_commands_dir / "telegram_mod_custom_module_io" / expected_filename
+
+        self.mock_logger.error.assert_any_call(
+            f"Failed to save command for {mock_message.chat.id} to {str(expected_command_file_path)}. Reason: Simulated disk full error"
+        )
+        # Also check that the "Saved command..." info log was NOT called
+        # This requires checking all calls to info or being more specific.
+        # A simple way is to check call_args_list if needed, or ensure error is the last relevant log.
+        # For now, asserting the error is the main goal.
+
+    def test_routing_log_event_with_complex_args(self):
+        command = {
+            "type": "log_event",
+            "module": "complex_event_module",
+            "args": {
+                "action": "data_update",
+                "status": "partial_success",
+                "details": {
+                    "items_processed": 100,
+                    "items_failed": 5,
+                    "errors": [
+                        {"code": "E101", "item_id": "item_X"},
+                        {"code": "E102", "item_id": "item_Y"}
+                    ]
+                }
+            },
+            "id": "evt_complex_args_001"
+        }
+        mock_message = self._create_mock_message(command)
+
+        bot.handle_message(mock_message)
+
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
+
+        self.mock_logger.info.assert_any_call(f"Received message from {mock_message.chat.id}: {mock_message.text}")
+        self.mock_logger.info.assert_any_call(f"Successfully processed command for {mock_message.chat.id}: log_event")
+
+        expected_log_args_detail = command['args']
+        self.mock_logger.info.assert_any_call(
+            f"EVENT LOGGED by {mock_message.chat.id} for module {command['module']}: {expected_log_args_detail}"
+        )
 
 
 if __name__ == '__main__':
