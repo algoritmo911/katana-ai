@@ -1,26 +1,49 @@
 # katana-ai
 
-## Running Tests
+## Local Development Checks
 
-This project uses `pytest` for running unit tests. Ensure you have `pytest` installed (it's included in the CI environment).
+To ensure code quality and consistency before committing, you can run the following checks locally. These are the same checks performed by the CI pipeline.
 
-To run the tests locally:
+### Running Tests
+
+This project uses `pytest` for running unit tests.
 
 1.  **Navigate to the project root directory.**
-2.  **Set PYTHONPATH** (if your project structure requires it, like in this case where tests import from root modules):
+2.  **(Optional but recommended for consistency with CI) Set PYTHONPATH:**
+    Our tests might rely on discovering modules from the project root. To ensure consistent behavior with how Python might see your modules during CI or if your project isn't installed as a package, you can set `PYTHONPATH`:
     ```bash
     export PYTHONPATH=.
     ```
-    Alternatively, you might install your project in editable mode if it's a package:
+    Alternatively, if your project is structured as an installable package, you might run:
     ```bash
-    # pip install -e . # If setup.py or pyproject.toml exists
+    # pip install -e . # If you have a setup.py or pyproject.toml
     ```
 3.  **Run pytest:**
+    To run all tests within the `tests/` directory:
+    ```bash
+    pytest tests/
+    ```
+    Or, if using the `PYTHONPATH` method above, simply:
     ```bash
     pytest
     ```
-    You should see output indicating the number of tests run and their status. The CI pipeline also runs these tests automatically.
+    You should see output indicating the number of tests run and their status.
 
-The tests cover various aspects of the application, including:
-- Core functionality of different modules.
-- Logging mechanisms to ensure messages are recorded correctly.
+### Linting with flake8
+
+To check your code for style issues and potential errors using `flake8`:
+```bash
+flake8 .
+```
+Review any reported errors or warnings.
+
+### Checking Formatting with black
+
+To check if your code adheres to the `black` code formatting standards without modifying files:
+```bash
+black --check .
+```
+If `black` reports that files would be reformatted, you can apply the formatting by running:
+```bash
+black .
+```
