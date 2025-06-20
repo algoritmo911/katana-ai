@@ -203,11 +203,94 @@ class TestKatanaCLI(unittest.TestCase):
         args, kwargs = self.cli.send_telegram_message.call_args
         self.assertEqual(args[0], "test_chat") # chat_id
         self.assertIn("Katana Agent is running.", args[1]) # message content
-        self.assertIn("Pending tasks: 0", args[1]) # Initially 0 other pending tasks (task itself was pending)
+        self.assertIn("Pending tasks: 0", args[1])
+        self.assertIn("Katana Service Status: stopped", args[1]) # Check for default service status inclusion
+
+
+    @patch('katana_agent.datetime.datetime') # Mock datetime for consistent timestamps
+    @patch.object(KatanaCLI, 'send_telegram_message', MagicMock()) # Mock telegram sending
+    def test_06a_process_telegram_message_start_katana(self, mock_dt_tg_start):
+        mock_dt_tg_start.now.return_value = FIXED_DATETIME_NOW
+        telegram_payload = {"chat_id": "tg_chat_start", "text": "/start_katana"}
+        task_id = self.cli.add_task(action="process_telegram_message", parameters=telegram_payload, origin="telegram_webhook")
+
+        # Simulate processing
+        pending_task = self.cli.get_oldest_pending_task()
+        self.cli.update_task(task_id, {"status": "processing", "processed_at": FIXED_DATETIME_ISO})
+        success, result_msg = self.cli._dispatch_command_execution(pending_task['action'], pending_task['parameters'], source="task")
+        self.assertTrue(success)
+        self.assertIn("Processed /start_katana for Telegram.", result_msg)
+        self.cli.update_task(task_id, {"status": "completed", "result": result_msg})
+
+        # Check memory state
+        memory = self._read_json_file(TEST_MEMORY_FILE)
+        self.assertEqual(memory.get('katana_service_status'), "running")
+        self.assertEqual(memory.get('katana_service_last_start_time'), FIXED_DATETIME_ISO)
+
+        # Check if send_telegram_message was called with the right message
+        self.cli.send_telegram_message.assert_called_once_with("tg_chat_start", "Katana service started successfully.")
+
+    @patch('katana_agent.datetime.datetime') # Mock datetime for consistent timestamps
+    @patch.object(KatanaCLI, 'send_telegram_message', MagicMock()) # Mock telegram sending
+    def test_06b_process_telegram_message_stop_katana(self, mock_dt_tg_stop):
+        mock_dt_tg_stop.now.return_value = FIXED_DATETIME_NOW
+        # First, start it to make stop meaningful
+        self.cli._dispatch_command_execution("start_katana", [], source="task") # Use task source for consistency
+
+        mock_dt_tg_stop.now.return_value = FIXED_DATETIME_NOW + datetime.timedelta(seconds=10)
+        stop_time_iso = (FIXED_DATETIME_NOW + datetime.timedelta(seconds=10)).isoformat()
+
+        telegram_payload = {"chat_id": "tg_chat_stop", "text": "/stop_katana"}
+        task_id = self.cli.add_task(action="process_telegram_message", parameters=telegram_payload, origin="telegram_webhook")
+
+        # Simulate processing
+        pending_task = self.cli.get_oldest_pending_task()
+        self.cli.update_task(task_id, {"status": "processing", "processed_at": stop_time_iso})
+        success, result_msg = self.cli._dispatch_command_execution(pending_task['action'], pending_task['parameters'], source="task")
+        self.assertTrue(success)
+        self.assertIn("Processed /stop_katana for Telegram.", result_msg)
+        self.cli.update_task(task_id, {"status": "completed", "result": result_msg})
+
+        # Check memory state
+        memory = self._read_json_file(TEST_MEMORY_FILE)
+        self.assertEqual(memory.get('katana_service_status'), "stopped")
+        self.assertEqual(memory.get('katana_service_last_stop_time'), stop_time_iso)
+
+        # Check if send_telegram_message was called
+        self.cli.send_telegram_message.assert_called_with("tg_chat_stop", "Katana service stopped successfully.")
+
+
+    @patch.object(KatanaCLI, 'send_telegram_message', MagicMock())
+    def test_06c_process_telegram_message_echo_tg(self):
+        telegram_payload = {"chat_id": "tg_chat_echo", "text": "/echo_tg Hello Katana"}
+        task_id = self.cli.add_task(action="process_telegram_message", parameters=telegram_payload, origin="telegram_webhook")
+
+        pending_task = self.cli.get_oldest_pending_task()
+        self.cli.update_task(task_id, {"status": "processing"})
+        success, result_msg = self.cli._dispatch_command_execution(pending_task['action'], pending_task['parameters'], source="task")
+        self.assertTrue(success)
+        self.assertIn("Echo request processed", result_msg)
+        self.cli.update_task(task_id, {"status": "completed", "result": result_msg})
+
+        self.cli.send_telegram_message.assert_called_once_with("tg_chat_echo", "Hello Katana")
+
+    @patch.object(KatanaCLI, 'send_telegram_message', MagicMock())
+    def test_06d_process_telegram_message_unknown_tg_command(self):
+        telegram_payload = {"chat_id": "tg_chat_unknown", "text": "/foobar"}
+        task_id = self.cli.add_task(action="process_telegram_message", parameters=telegram_payload, origin="telegram_webhook")
+
+        pending_task = self.cli.get_oldest_pending_task()
+        self.cli.update_task(task_id, {"status": "processing"})
+        success, result_msg = self.cli._dispatch_command_execution(pending_task['action'], pending_task['parameters'], source="task")
+        self.assertTrue(success)
+        self.assertIn("Unknown Telegram command processed", result_msg)
+        self.cli.update_task(task_id, {"status": "completed", "result": result_msg})
+
+        self.cli.send_telegram_message.assert_called_once_with("tg_chat_unknown", "Sorry, I didn't understand that command. Try /status or /echo_tg <message>.")
 
 
     @patch('katana_agent.datetime.datetime')
-    def test_07_start_stop_status_katana(self, mock_dt_status):
+    def test_07_start_stop_status_katana_cli(self, mock_dt_status): # Renamed to avoid conflict
         mock_dt_status.now.return_value = FIXED_DATETIME_NOW
 
         # Test start_katana
