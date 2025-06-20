@@ -1,12 +1,14 @@
 
 # alg911/catana-ai/utils/secrets_manager.py
 from google.cloud import secretmanager
-import os # For print fallback if logging isn't set up here
 from typing import Optional # For type hinting
+from katana.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # It's good practice to define a logger if this module grows,
 # but for a single function, print statements to stdout/stderr are okay
-# if it's clear they are from this utility.
+# if it's clear they are from this utility. # <- This comment can be updated/removed later if desired.
 
 def get_secret(secret_id: str, project_id: str, version_id: str = "latest") -> Optional[str]:
     """
@@ -26,19 +28,19 @@ def get_secret(secret_id: str, project_id: str, version_id: str = "latest") -> O
         client = secretmanager.SecretManagerServiceClient()
         secret_version_name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
 
-        print(f"[secrets_manager] Attempting to access secret: {secret_version_name}")
+        logger.info(f"Attempting to access secret: {secret_version_name}")
         response = client.access_secret_version(name=secret_version_name)
         payload = response.payload.data.decode("UTF-8")
-        print(f"[secrets_manager] Successfully fetched secret '{secret_id}'.")
+        logger.info(f"Successfully fetched secret '{secret_id}'.")
         return payload
     except Exception as e:
-        print(f"[secrets_manager] ERROR: Could not fetch secret '{secret_id}'. Project: '{project_id}'. Error: {e}")
+        logger.error(f"Could not fetch secret '{secret_id}'. Project: '{project_id}'. Error: {e}")
         if "PermissionDenied" in str(e):
-            print("[secrets_manager] Hint: Check IAM permissions for the Secret Manager Secret Accessor role on the service account or principal running this code.")
+            logger.info("Hint: Check IAM permissions for the Secret Manager Secret Accessor role on the service account or principal running this code.")
         elif "NotFound" in str(e): # google.api_core.exceptions.NotFound
-            print(f"[secrets_manager] Hint: Ensure secret '{secret_id}' (and version '{version_id}') exists in project '{project_id}'.")
+            logger.info(f"Hint: Ensure secret '{secret_id}' (and version '{version_id}') exists in project '{project_id}'.")
         elif "INVALID_ARGUMENT" in str(e): # google.api_core.exceptions.InvalidArgument
-             print(f"[secrets_manager] Hint: Secret name or project ID format might be incorrect: {secret_version_name}")
+             logger.info(f"Hint: Secret name or project ID format might be incorrect: {secret_version_name}")
         # import traceback # For very detailed debugging
-        # print(traceback.format_exc())
+        # logger.debug(traceback.format_exc()) # Consider logger.debug for full tracebacks if desired
         return None

@@ -9,8 +9,14 @@
 from katana import KatanaCore
 # Pathlib and other imports are handled by katana.py if needed by KatanaCore itself.
 
+import logging
+from katana.logging_config import setup_logging, get_logger
+
+logger = get_logger(__name__)
+
 def main():
-    print("Initializing Katana Core Agent...")
+    setup_logging(log_level=logging.INFO)
+    logger.info("Initializing Katana Core Agent...")
     # KatanaCore's core_dir_path_str defaults to ".", which means it expects
     # commands.json, etc., in the Current Working Directory from where agent.py is run.
     # If agent.py is in /app/katana_core/ and run from there (cd /app/katana_core; python agent.py),
@@ -19,7 +25,7 @@ def main():
 
     katana_instance.run()
 
-    print("Katana Core Agent terminated.")
+    logger.info("Katana Core Agent terminated.")
 
 if __name__ == "__main__":
     # This structure allows the script to be run directly.

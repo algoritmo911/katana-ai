@@ -11,13 +11,15 @@ try:
     PYGITHUB_AVAILABLE = True
 except ImportError:
     PYGITHUB_AVAILABLE = False
-    # This print will occur when github_service.py is imported or run if PyGithub is missing.
-    print("[GitHubService:CRITICAL_DEPENDENCY_ERROR] PyGithub library not found. Please run: pip install PyGithub")
+    import logging # Temporary import for early log
+    logging.getLogger(__name__).critical("[GitHubService:CRITICAL_DEPENDENCY_ERROR] PyGithub library not found. Please run: pip install PyGithub")
 
-# --- Logging Helper ---
-def log_message_github(level, message):
-    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ') # Consistent ISO 8601 UTC
-    print(f"[{timestamp}] [GitHubService:{level.upper()}] {message}")
+from katana.logging_config import get_logger, setup_logging # setup_logging for __main__
+import logging # For logger levels if needed
+
+logger = get_logger(__name__)
+
+# log_message_github function removed, using logger directly.
 
 # --- Core Functions ---
 def get_github_service():
@@ -26,28 +28,28 @@ def get_github_service():
     using a Personal Access Token (PAT) from GITHUB_PAT environment variable.
     """
     if not PYGITHUB_AVAILABLE:
-        log_message_github("critical", "Cannot proceed: PyGithub library is not installed.")
+        logger.critical("Cannot proceed: PyGithub library is not installed.")
         return None
 
     github_pat = os.getenv('GITHUB_PAT')
     if not github_pat:
-        log_message_github("critical", "GITHUB_PAT environment variable not set. Cannot authenticate with GitHub.")
-        log_message_github("critical", "Please create a PAT with appropriate scopes (e.g., repo, notifications, gist) and set it as GITHUB_PAT.")
+        logger.critical("GITHUB_PAT environment variable not set. Cannot authenticate with GitHub.")
+        logger.critical("Please create a PAT with appropriate scopes (e.g., repo, notifications, gist) and set it as GITHUB_PAT.")
         return None
 
     try:
         g = Github(github_pat)
         user = g.get_user() # Test authentication
-        log_message_github("info", f"Successfully authenticated with GitHub as user: {user.login}")
+        logger.info(f"Successfully authenticated with GitHub as user: {user.login}")
         return g
     except BadCredentialsException:
-        log_message_github("error", "GitHub authentication failed: Bad credentials (invalid PAT?).")
+        logger.error("GitHub authentication failed: Bad credentials (invalid PAT?).")
         return None
     except GithubException as e: # Catch more specific PyGithub exceptions first
-        log_message_github("error", f"A GitHub API error occurred during authentication: {e.status} {e.data}")
+        logger.error(f"A GitHub API error occurred during authentication: {e.status} {e.data}")
         return None
     except Exception as e: # Catch any other unexpected errors
-        log_message_github("error", f"An unexpected error occurred during GitHub authentication: {e}")
+        logger.error(f"An unexpected error occurred during GitHub authentication: {e}")
         return None
 
 def list_user_repos(g: Github, max_repos: int = 20):
@@ -55,7 +57,7 @@ def list_user_repos(g: Github, max_repos: int = 20):
     if not g: return []
     repos_info = []
     try:
-        log_message_github("info", f"Fetching up to {max_repos} repositories for authenticated user...")
+        logger.info(f"Fetching up to {max_repos} repositories for authenticated user...")
         user = g.get_user()
         count = 0
         # Sort by 'pushed' for more recent activity, or 'updated'
@@ -70,11 +72,11 @@ def list_user_repos(g: Github, max_repos: int = 20):
                 "is_fork": repo.fork, "is_private": repo.private
             })
             count += 1
-        log_message_github("info", f"Fetched {len(repos_info)} repositories.")
+        logger.info(f"Fetched {len(repos_info)} repositories.")
     except GithubException as e:
-        log_message_github("error", f"GitHub API error listing repositories: {e.status} {e.data}")
+        logger.error(f"GitHub API error listing repositories: {e.status} {e.data}")
     except Exception as e:
-        log_message_github("error", f"Error listing repositories: {e}")
+        logger.error(f"Error listing repositories: {e}")
     return repos_info
 
 def get_repo_commits(g: Github, repo_full_name: str, max_commits: int = 5):
@@ -82,7 +84,7 @@ def get_repo_commits(g: Github, repo_full_name: str, max_commits: int = 5):
     if not g: return []
     commits_info = []
     try:
-        log_message_github("info", f"Fetching last {max_commits} commits for repository: {repo_full_name}...")
+        logger.info(f"Fetching last {max_commits} commits for repository: {repo_full_name}...")
         repo = g.get_repo(repo_full_name)
         commits_paginated_list = repo.get_commits()
         count = 0
@@ -99,13 +101,13 @@ def get_repo_commits(g: Github, repo_full_name: str, max_commits: int = 5):
                 "message": commit_data.message, "url": commit.html_url
             })
             count += 1
-        log_message_github("info", f"Fetched {len(commits_info)} commits for {repo_full_name}.")
+        logger.info(f"Fetched {len(commits_info)} commits for {repo_full_name}.")
     except UnknownObjectException:
-        log_message_github("error", f"Repository '{repo_full_name}' not found.")
+        logger.error(f"Repository '{repo_full_name}' not found.")
     except GithubException as e:
-        log_message_github("error", f"GitHub API error getting commits for {repo_full_name}: {e.status} {e.data}")
+        logger.error(f"GitHub API error getting commits for {repo_full_name}: {e.status} {e.data}")
     except Exception as e:
-        log_message_github("error", f"Error getting commits for {repo_full_name}: {e}")
+        logger.error(f"Error getting commits for {repo_full_name}: {e}")
     return commits_info
 
 def get_user_notifications(g: Github, since_iso: str = None, all_notifications: bool = False, participating: bool = False):
@@ -120,9 +122,9 @@ def get_user_notifications(g: Github, since_iso: str = None, all_notifications: 
         try:
             since_dt = datetime.fromisoformat(since_iso.replace('Z', '+00:00')).replace(tzinfo=timezone.utc)
         except ValueError:
-            log_message_github("warning", f"Invalid 'since_iso' format: {since_iso}. Should be ISO 8601. Fetching without time filter.")
+            logger.warning(f"Invalid 'since_iso' format: {since_iso}. Should be ISO 8601. Fetching without time filter.")
 
-    log_message_github("info", f"Fetching notifications (all: {all_notifications}, participating: {participating}, since: {since_dt.isoformat() if since_dt else 'N/A'})...")
+    logger.info(f"Fetching notifications (all: {all_notifications}, participating: {participating}, since: {since_dt.isoformat() if since_dt else 'N/A'})...")
     try:
         # PyGithub's get_notifications takes 'all' and 'participating' booleans, and 'since' datetime object.
         # Need to ensure Github.NotSet is correctly handled or not needed if since_dt can be None
@@ -141,23 +143,25 @@ def get_user_notifications(g: Github, since_iso: str = None, all_notifications: 
                 "last_read_at_utc": notif.last_read_at.replace(tzinfo=timezone.utc).isoformat() if notif.last_read_at else None,
                 "unread": notif.unread
             })
-        log_message_github("info", f"Fetched {len(notifications_info)} notifications.")
+        logger.info(f"Fetched {len(notifications_info)} notifications.")
     except GithubException as e:
-        log_message_github("error", f"GitHub API error getting notifications: {e.status} {e.data}")
+        logger.error(f"GitHub API error getting notifications: {e.status} {e.data}")
     except Exception as e:
-        log_message_github("error", f"Error getting notifications: {e}")
+        logger.error(f"Error getting notifications: {e}")
     return notifications_info
 
 # --- Main Execution (Example Usage) ---
 if __name__ == '__main__':
-    import traceback # For main example's error logging
-    log_message_github("info", "Starting GitHub Service example...")
+    setup_logging(log_level=logging.INFO)
+    # import traceback # For main example's error logging - logger.exception or logger.error with exc_info=True can be used instead
+
+    logger.info("Starting GitHub Service example...")
     github_service = get_github_service()
     if github_service:
-        log_message_github("info", "GitHub service obtained. Performing example actions...")
+        logger.info("GitHub service obtained. Performing example actions...")
         my_repos = list_user_repos(github_service, max_repos=3)
         if my_repos:
-            print("\n--- My Recent Repositories (up to 3) ---")
+            print("\n--- My Recent Repositories (up to 3) ---") # User-facing output
             for repo_data in my_repos:
                 print(f"  Name: {repo_data['full_name']} (Lang: {repo_data['language']}, Last Updated: {repo_data['last_updated']})")
                 if my_repos.index(repo_data) == 0:
@@ -165,19 +169,19 @@ if __name__ == '__main__':
                     if repo_commits:
                         print(f"    Recent Commits for {repo_data['full_name']} (up to 2):")
                         for commit_data in repo_commits:
-                            print(f"      SHA: {commit_data['sha'][:7]}, Author: {commit_data['author_name']}, Date: {commit_data['date_utc']}")
-                            print(f"      Msg: {commit_data['message'].splitlines()[0][:70]}...")
+                            print(f"      SHA: {commit_data['sha'][:7]}, Author: {commit_data['author_name']}, Date: {commit_data['date_utc']}") # User-facing output
+                            print(f"      Msg: {commit_data['message'].splitlines()[0][:70]}...") # User-facing output
         else:
-            log_message_github("info", "No repositories found or an error occurred.")
+            logger.info("No repositories found or an error occurred.")
 
-        print("\n--- My Unread Notifications (since 1 day ago) ---")
+        print("\n--- My Unread Notifications (since 1 day ago) ---") # User-facing output
         since_yesterday_dt = datetime.now(timezone.utc) - timedelta(days=1)
         # Corrected call to get_user_notifications
         my_notifications = get_user_notifications(github_service, since_iso=since_yesterday_dt.isoformat(), all_notifications=False)
         if my_notifications:
             for notif_data in my_notifications[:3]: # Print max 3
-                print(f"  Repo: {notif_data['repository_full_name']}, Title: {notif_data['title']} (Reason: {notif_data['reason']}, Unread: {notif_data['unread']})")
+                print(f"  Repo: {notif_data['repository_full_name']}, Title: {notif_data['title']} (Reason: {notif_data['reason']}, Unread: {notif_data['unread']})") # User-facing output
         else:
-            log_message_github("info", "No unread notifications found since yesterday or an error occurred.")
+            logger.info("No unread notifications found since yesterday or an error occurred.")
     else:
-        log_message_github("critical", "Could not initialize GitHub service. Exiting example.")
+        logger.critical("Could not initialize GitHub service. Exiting example.")
