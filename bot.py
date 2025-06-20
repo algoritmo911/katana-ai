@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 
 # TODO: Get API token from environment variable or secrets manager
-API_TOKEN = 'YOUR_API_TOKEN'
+API_TOKEN = '123:dummy_token' # Placeholder for tests
 
 bot = telebot.TeleBot(API_TOKEN)
 
@@ -96,11 +96,11 @@ def handle_message(message):
     module_command_dir.mkdir(parents=True, exist_ok=True)
     command__file_path = module_command_dir / command_file_name
 
-    with open(command_file_path, "w", encoding="utf-8") as f:
+    with open(command__file_path, "w", encoding="utf-8") as f:
         json.dump(command_data, f, ensure_ascii=False, indent=2)
 
-    bot.reply_to(message, f"✅ Command received and saved as `{command_file_path}`.")
-    log_local_bot_event(f"Saved command from {chat_id} to {command_file_path}")
+    bot.reply_to(message, f"✅ Command received and saved as `{command__file_path}`.")
+    log_local_bot_event(f"Saved command from {chat_id} to {command__file_path}")
 
 if __name__ == '__main__':
     log_local_bot_event("Bot starting...")

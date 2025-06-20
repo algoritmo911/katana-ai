@@ -89,6 +89,12 @@ class TestBot(unittest.TestCase):
         bot.handle_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Missing required field 'type'.")
 
+    def test_missing_module_field(self):
+        command = {"type": "test_type", "args": {}, "id": "test_id"} # module is missing
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Missing required field 'module'.")
+
     def test_invalid_args_type(self):
         command = {"type": "test_type", "module": "test_module", "args": "not_a_dict", "id": "test_id"}
         mock_message = self._create_mock_message(command)
@@ -103,6 +109,18 @@ class TestBot(unittest.TestCase):
 
 
     # --- Test Command Routing ---
+
+    @patch('bot.log_local_bot_event')
+    def test_handle_log_event_calls_logger(self, mock_log_local_bot_event_func):
+        command_data = {'type': 'log_event', 'module': 'test', 'args': {'message': 'hello test'}, 'id': 'test001'}
+        chat_id = 98765
+
+        bot.handle_log_event(command_data, chat_id)
+
+        mock_log_local_bot_event_func.assert_called_once()
+        expected_log_message = f"handle_log_event called for chat_id {chat_id} with data: {command_data}"
+        mock_log_local_bot_event_func.assert_called_with(expected_log_message)
+
     @patch('bot.handle_log_event')
     def test_routing_log_event(self, mock_handle_log_event_func):
         command = {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
@@ -153,5 +171,3 @@ class TestBot(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-```
