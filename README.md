@@ -33,11 +33,16 @@ Before running the bot, you need to set the following environment variable:
     ```bash
     cd bot
     ```
-2.  Install dependencies (if you haven't already):
+2.  **Recommended: Create and activate a Python virtual environment.** For example:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    ```
+3.  Install dependencies (if you haven't already):
     ```bash
     pip install -r requirements.txt
     ```
-3.  Run the bot:
+4.  Run the bot:
     ```bash
     python katana_bot.py
     ```

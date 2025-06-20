@@ -1,0 +1,24 @@
+/app/bot/katana_bot.py:20: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
+[BOT EVENT] 2025-06-20T15:37:51.928727: Bot starting...
+Traceback (most recent call last):
+  File "/app/bot/katana_bot.py", line 105, in <module>
+    bot.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/telebot/__init__.py", line 1042, in polling
+    logger.info('Starting your bot with username: [@%s]', self.user.username)
+                                                          ^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/telebot/__init__.py", line 275, in user
+    self._user = self.get_me()
+                 ^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/telebot/__init__.py", line 1228, in get_me
+    result = apihelper.get_me(self.token)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/telebot/apihelper.py", line 198, in get_me
+    return _make_request(token, method_url)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/telebot/apihelper.py", line 164, in _make_request
+    json_result = _check_result(method_name, result)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/telebot/apihelper.py", line 191, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 401. Description: Unauthorized
