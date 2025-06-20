@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
+from bot_components.handlers.log_event_handler import handle_log_event # Moved here
+from bot_components.handlers.ping_handler import handle_ping # Added ping handler
 
 # TODO: Get API token from environment variable or secrets manager
 API_TOKEN = '123:dummy_token' # Placeholder for tests
@@ -13,15 +15,10 @@ bot = telebot.TeleBot(API_TOKEN)
 COMMAND_FILE_DIR = Path('commands')
 COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 
+
 def log_local_bot_event(message):
     """Logs an event to the console."""
     print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
-
-def handle_log_event(command_data, chat_id):
-    """Placeholder for handling 'log_event' commands."""
-    log_local_bot_event(f"handle_log_event called for chat_id {chat_id} with data: {command_data}")
-    # Actual implementation for log_event will go here
-    # bot.reply_to(message, "✅ 'log_event' received (placeholder).") # TODO: Add reply mechanism
 
 def handle_mind_clearing(command_data, chat_id):
     """Placeholder for handling 'mind_clearing' commands."""
@@ -76,8 +73,13 @@ def handle_message(message):
     command_type = command_data.get("type")
 
     if command_type == "log_event":
-        handle_log_event(command_data, chat_id)
+        # handle_log_event is now imported
+        handle_log_event(command_data, chat_id, log_local_bot_event) # Pass logger function
         bot.reply_to(message, "✅ 'log_event' processed (placeholder).")
+        return
+    elif command_type == "ping":
+        reply_message = handle_ping(command_data, chat_id, log_local_bot_event)
+        bot.reply_to(message, reply_message)
         return
     elif command_type == "mind_clearing":
         handle_mind_clearing(command_data, chat_id)

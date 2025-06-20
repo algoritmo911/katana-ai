@@ -112,25 +112,63 @@ class TestBot(unittest.TestCase):
 
     @patch('bot.log_local_bot_event')
     def test_handle_log_event_calls_logger(self, mock_log_local_bot_event_func):
+        from bot_components.handlers.log_event_handler import handle_log_event # Updated import path
         command_data = {'type': 'log_event', 'module': 'test', 'args': {'message': 'hello test'}, 'id': 'test001'}
         chat_id = 98765
 
-        bot.handle_log_event(command_data, chat_id)
+        handle_log_event(command_data, chat_id, mock_log_local_bot_event_func) # Pass mock logger
 
         mock_log_local_bot_event_func.assert_called_once()
         expected_log_message = f"handle_log_event called for chat_id {chat_id} with data: {command_data}"
         mock_log_local_bot_event_func.assert_called_with(expected_log_message)
 
-    @patch('bot.handle_log_event')
+    def test_handle_ping_calls_logger(self):
+        from bot_components.handlers.ping_handler import handle_ping # Direct import for direct test
+        command_data = {'type': 'ping', 'module': 'test', 'args': {}, 'id': 'ping_test_002'}
+        chat_id = 54321
+        mock_logger = MagicMock()
+
+        reply = handle_ping(command_data, chat_id, mock_logger)
+
+        mock_logger.assert_called_once_with(f"handle_ping called for chat_id {chat_id} with data: {command_data}")
+        self.assertEqual(reply, "✅ 'ping' received.")
+
+    def test_log_event_success(self):
+        command_data = {"type": "log_event", "module": "logging_module", "args": {"level": "info", "message": "Successful event"}, "id": "log_success_001"}
+        mock_message = self._create_mock_message(command_data)
+
+        # We need to patch handle_log_event because we are testing the reply from handle_message,
+        # not the full execution of handle_log_event itself here.
+        with patch('bot.handle_log_event') as mock_actual_handler: # Corrected patch path
+            bot.handle_message(mock_message)
+            # Assert that the mock_actual_handler (the moved handle_log_event) is called with the command_data, chat_id, AND the actual log_local_bot_event from bot.py
+            mock_actual_handler.assert_called_once_with(command_data, mock_message.chat.id, bot.log_local_bot_event)
+
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
+
+    @patch('bot.handle_log_event') # Corrected patch path
     def test_routing_log_event(self, mock_handle_log_event_func):
         command = {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
         mock_message = self._create_mock_message(command)
 
         bot.handle_message(mock_message)
 
-        mock_handle_log_event_func.assert_called_once_with(command, mock_message.chat.id)
+        # Assert that the mock_handle_log_event_func is called with command, chat_id, AND the actual log_local_bot_event from bot.py
+        mock_handle_log_event_func.assert_called_once_with(command, mock_message.chat.id, bot.log_local_bot_event)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
 
+    @patch('bot.handle_ping') # Patching where it's used in bot.py
+    def test_routing_ping(self, mock_handle_ping_func):
+        command = {"type": "ping", "module": "system", "args": {}, "id": "ping001"}
+        mock_message = self._create_mock_message(command)
+
+        # Define a specific return value for the mock
+        mock_handle_ping_func.return_value = "Ping success from mock"
+
+        bot.handle_message(mock_message)
+
+        mock_handle_ping_func.assert_called_once_with(command, mock_message.chat.id, bot.log_local_bot_event)
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Ping success from mock")
 
     @patch('bot.handle_mind_clearing')
     def test_routing_mind_clearing(self, mock_handle_mind_clearing_func):
