@@ -133,6 +133,17 @@ class TestBot(unittest.TestCase):
         mock_logger.assert_called_once_with(f"handle_ping called for chat_id {chat_id} with data: {command_data}")
         self.assertEqual(reply, "✅ 'ping' received.")
 
+    def test_handle_mind_clearing_calls_logger(self):
+        from bot_components.handlers.mind_clearing_handler import handle_mind_clearing
+        command_data = {'type': 'mind_clearing', 'module': 'test_wellness', 'args': {'duration': '5m'}, 'id': 'mc_test_003'}
+        chat_id = 13579
+        mock_logger = MagicMock()
+
+        reply = handle_mind_clearing(command_data, chat_id, mock_logger)
+
+        mock_logger.assert_called_once_with(f"handle_mind_clearing called for chat_id {chat_id} with data: {command_data}")
+        self.assertEqual(reply, "✅ 'mind_clearing' processed (placeholder).")
+
     def test_log_event_success(self):
         command_data = {"type": "log_event", "module": "logging_module", "args": {"level": "info", "message": "Successful event"}, "id": "log_success_001"}
         mock_message = self._create_mock_message(command_data)
@@ -175,9 +186,14 @@ class TestBot(unittest.TestCase):
         command = {"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}
         mock_message = self._create_mock_message(command)
 
+        # Set the mock's return value, as bot.py now uses it for the reply
+        mock_handle_mind_clearing_func.return_value = "✅ 'mind_clearing' processed (placeholder)."
+
         bot.handle_message(mock_message)
 
-        mock_handle_mind_clearing_func.assert_called_once_with(command, mock_message.chat.id)
+        # Assert that the mock is called with the logger function as the third argument
+        mock_handle_mind_clearing_func.assert_called_once_with(command, mock_message.chat.id, bot.log_local_bot_event)
+        # This assertion should still pass as bot.py uses the return value from the handler
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'mind_clearing' processed (placeholder).")
 
 

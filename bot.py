@@ -3,8 +3,9 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
-from bot_components.handlers.log_event_handler import handle_log_event # Moved here
-from bot_components.handlers.ping_handler import handle_ping # Added ping handler
+from bot_components.handlers.log_event_handler import handle_log_event
+from bot_components.handlers.ping_handler import handle_ping
+from bot_components.handlers.mind_clearing_handler import handle_mind_clearing # Added mind_clearing handler
 
 # TODO: Get API token from environment variable or secrets manager
 API_TOKEN = '123:dummy_token' # Placeholder for tests
@@ -20,11 +21,7 @@ def log_local_bot_event(message):
     """Logs an event to the console."""
     print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
 
-def handle_mind_clearing(command_data, chat_id):
-    """Placeholder for handling 'mind_clearing' commands."""
-    log_local_bot_event(f"handle_mind_clearing called for chat_id {chat_id} with data: {command_data}")
-    # Actual implementation for mind_clearing will go here
-    # bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
+# Removed local handle_mind_clearing function
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
@@ -82,8 +79,9 @@ def handle_message(message):
         bot.reply_to(message, reply_message)
         return
     elif command_type == "mind_clearing":
-        handle_mind_clearing(command_data, chat_id)
-        bot.reply_to(message, "✅ 'mind_clearing' processed (placeholder).")
+        # handle_mind_clearing is now imported and expects logger_func
+        reply_message = handle_mind_clearing(command_data, chat_id, log_local_bot_event)
+        bot.reply_to(message, reply_message) # Use the returned message
         return
 
     # If type is not matched, proceed with default behavior (saving)
