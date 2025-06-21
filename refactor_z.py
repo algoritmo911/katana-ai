@@ -4,6 +4,9 @@ import os
 import shutil
 import json
 from datetime import datetime # Not used in this version, but can be kept for future use
+from katana.logging_config import setup_logging, get_logger
+
+logger = get_logger(__name__)
 
 BASE = "alg911/catana-ai"
 DIR_STRUCTURE = [
@@ -33,18 +36,18 @@ def ensure_dirs():
     # Ensure BASE itself exists first relative to script execution dir
     if not os.path.exists(BASE):
       os.makedirs(BASE) # Create BASE if it doesn't exist
-      print(f"[+] Base project directory created: {BASE}")
+      logger.info(f"[+] Base project directory created: {BASE}")
     else:
-      print(f"[i] Base project directory already exists: {BASE}")
+      logger.info(f"[i] Base project directory already exists: {BASE}")
 
 
     for d in DIR_STRUCTURE:
         path = os.path.join(BASE, d)
         if not os.path.exists(path):
             os.makedirs(path, exist_ok=True)
-            print(f"[+] Directory created: {path}")
+            logger.info(f"[+] Directory created: {path}")
         else:
-            print(f"[i] Directory already exists: {path}")
+            logger.info(f"[i] Directory already exists: {path}")
 
 
 def write_file(path, content, overwrite=False): # Added overwrite flag
@@ -58,9 +61,9 @@ def write_file(path, content, overwrite=False): # Added overwrite flag
                 f.write(content)
             else: # Assume JSON serializable for lists/dicts
                 json.dump(content, f, indent=2)
-        print(f"[✓] File {'written' if not os.path.exists(path) or overwrite else 'created'}: {path}")
+        logger.info(f"[✓] File {'written' if not os.path.exists(path) or overwrite else 'created'}: {path}")
     else:
-        print(f"[i] File already exists (skipped write): {path}")
+        logger.info(f"[i] File already exists (skipped write): {path}")
 
 
 def ensure_files(overwrite_existing_placeholders=False): # Flag to control overwriting
@@ -75,13 +78,14 @@ def ensure_files(overwrite_existing_placeholders=False): # Flag to control overw
 
 
 def refactor_structure(overwrite_placeholders=False):
-    print("🔁 Initiating Refactor Z: Structure Rebuild (using refactor_z.py)")
+    logger.info("🔁 Initiating Refactor Z: Structure Rebuild (using refactor_z.py)")
     ensure_dirs()
     ensure_files(overwrite_existing_placeholders=overwrite_placeholders)
-    print("✅ Refactor Z (structure part) complete — боевое дерево создано.\n")
+    logger.info("✅ Refactor Z (structure part) complete — боевое дерево создано.\n")
 
 
 if __name__ == "__main__":
+    setup_logging()
     # Set overwrite_placeholders to True if you want to reset default files to their template content.
     # Set to False to only create them if they are missing.
     # For the subtask, the previous state might have actual data, so False is safer unless specified.
