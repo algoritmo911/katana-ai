@@ -7,7 +7,11 @@ flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statist
 echo "Running formatters..."
 black .
 
-echo "Running tests..."
-pytest --disable-warnings tests/
+echo "Running tests with coverage..."
+coverage run -m pytest --disable-warnings tests/
+echo "Generating coverage report..."
+coverage report -m
+# Optional: uncomment to generate HTML report
+# coverage html
 
 echo "All checks passed!"

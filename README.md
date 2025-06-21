@@ -1,39 +1,69 @@
 # katana-ai
 
-## Local Development Checks & Writing Tests
+## Development Environment Setup
 
-To ensure code quality, consistency, and stability before committing, please run the following checks locally. These are generally the same checks performed by the CI pipeline.
+### Prerequisites
+- Python 3.x
+- pip
 
-### Running Local Checks Before Pushing
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd katana-ai
+```
 
-Always perform these checks before pushing your changes:
+### 2. Install Dependencies
+It's recommended to use a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+```
+Install the required packages:
+```bash
+pip install -r requirements.txt
+```
 
-1.  **Run Unit Tests with pytest:**
-    ```bash
-    # Ensure your PYTHONPATH is set if needed, e.g., from the project root:
-    # export PYTHONPATH=.
-    pytest tests/
-    ```
-    All tests should pass.
+### 3. Set Up Pre-commit Hooks
+Pre-commit hooks help ensure code quality before you commit.
+```bash
+pip install pre-commit
+pre-commit install
+```
+Now, `black` and `flake8` will run automatically on changed files before each commit.
 
-2.  **Lint with flake8:**
-    ```bash
-    flake8 .
-    ```
-    Address any reported errors or significant warnings.
+### 4. Environment Variables (If Applicable)
+If the project requires specific environment variables for configuration (e.g., API keys, database URLs):
+- Create a `.env` file in the project root.
+- You can use `.env.example` as a template if it exists.
+- **Note:** `.env` files should be added to `.gitignore` to avoid committing secrets.
+  (At the moment, no specific environment variables are defined for this project).
 
-3.  **Check Formatting with black:**
-    ```bash
-    black --check .
-    ```
-    If `black` reports that files would be reformatted, apply the formatting by running:
-    ```bash
-    black .
-    ```
+## Running Checks and Tests Locally
 
-### Guidelines for Writing New Tests
+To ensure your code is clean, formatted, and all tests pass before pushing changes, use the `run_checks.sh` script:
 
-As the project evolves, maintaining good test coverage is crucial.
+```bash
+./run_checks.sh
+```
+This script will:
+1. Run `flake8` for linting.
+2. Run `black` to format the code (it will reformat files if needed).
+3. Run `pytest` with `coverage` to execute unit tests and report test coverage.
+
+## Continuous Integration (CI) Pipeline
+
+The project uses GitHub Actions for CI. The workflow is defined in `.github/workflows/main.yml`.
+When you push changes to `main` or create a pull request targeting `main`, the CI pipeline automatically:
+1. Sets up a clean Python environment.
+2. Installs all dependencies from `requirements.txt`.
+3. Runs the `./run_checks.sh` script, which includes:
+    - Linting with `flake8`.
+    - Formatting checks with `black`.
+    - Unit tests with `pytest` and coverage reporting.
+
+If any of these steps fail, the CI build will be marked as failed, helping to catch issues early.
+
+## Guidelines for Writing New Tests
 
 *   **New Features, New Tests:** Every new feature, component, or significant piece of logic should have corresponding unit tests.
 *   **Test Public Interfaces:** Focus your tests on the public methods and interfaces of your modules and classes. Test the contract, not the implementation details.
@@ -45,9 +75,13 @@ As the project evolves, maintaining good test coverage is crucial.
 *   **Update Tests with Code:** If you refactor or change existing code, ensure you update the corresponding tests to reflect these changes. Outdated tests can be misleading.
 *   **Aim for Readability:** Write clear and understandable test code. Good test names and well-structured assertions help.
 
+## Troubleshooting
+
+For common issues and their solutions, please refer to [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 ### Common Issues & Solutions (Placeholder)
 
 *(This section can be expanded as common issues are identified with local setup or testing.)*
 
-*   **ModuleNotFoundError:** If you encounter `ModuleNotFoundError` when running tests, ensure your `PYTHONPATH` is correctly set to include the project's root directory (e.g., `export PYTHONPATH=.` from the project root).
-*   **Dependency Issues:** Ensure all development dependencies (like `pytest`, `flake8`, `black`) are installed in your environment.
+*   **ModuleNotFoundError:** If you encounter `ModuleNotFoundError` when running tests, ensure your `PYTHONPATH` is correctly set to include the project's root directory (e.g., `export PYTHONPATH=.` from the project root) or that you have activated your virtual environment.
+*   **Dependency Issues:** Ensure all development dependencies (like `pytest`, `flake8`, `black`) are installed in your active virtual environment using `pip install -r requirements.txt`.
