@@ -8,10 +8,12 @@ from datetime import datetime, timezone  # Ensure timezone for ISO checks
 import unittest
 import logging  # Added for test_log_rotation
 from logging.handlers import RotatingFileHandler  # Added for test_log_rotation
+from katana.utils.logging_config import JsonFormatter  # Added for test_log_rotation
 
 # --- Test Configuration (Global constants for easy access) ---
 AGENT_BASE_DIR = Path(__file__).resolve().parent.parent
-AGENT_SCRIPT_PATH = AGENT_BASE_DIR / "katana_agent.py"
+# Corrected path to the agent script:
+AGENT_SCRIPT_PATH = AGENT_BASE_DIR.parent.parent / "katana/mci_agent/katana_agent.py"
 
 COMMANDS_DIR = AGENT_BASE_DIR / "commands"
 LOGS_DIR = AGENT_BASE_DIR / "logs"
@@ -131,15 +133,12 @@ class TestKatanaAgentMCI(unittest.TestCase):
             EVENTS_LOG_FILE.unlink()
         # Do not create COMMAND_FILE or AGENT_STATUS_FILE here; agent should handle missing ones.
 
-    def run_agent_mci(
-        self, timeout=35
-    ):  # Slightly longer timeout for multi-file ops
+    def run_agent_mci(self, timeout=35):  # Slightly longer timeout for multi-file ops
         env = os.environ.copy()
         project_root = AGENT_BASE_DIR.parent.parent
         current_pythonpath = env.get("PYTHONPATH", "")
         new_pythonpath = os.pathsep.join(
-            [str(project_root)]
-            + ([current_pythonpath] if current_pythonpath else [])
+            [str(project_root)] + ([current_pythonpath] if current_pythonpath else [])
         )
         env["PYTHONPATH"] = new_pythonpath
 
@@ -167,8 +166,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
         cmd_id_for_file = command_data.get("id", str(uuid.uuid4()))
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
         command_file_path = (
-            target_dir
-            / f"{filename_prefix}_{cmd_id_for_file}_{timestamp}.json"
+            target_dir / f"{filename_prefix}_{cmd_id_for_file}_{timestamp}.json"
         )
 
         with open(command_file_path, "w") as f:
@@ -179,9 +177,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
         processed_data = []
         if not PROCESSED_DIR.exists():
             return processed_data
-        for root, _, files in os.walk(
-            PROCESSED_DIR
-        ):  # os.walk to handle subdirs
+        for root, _, files in os.walk(PROCESSED_DIR):  # os.walk to handle subdirs
             for filename in files:
                 if filename.endswith(".json"):
                     file_path = Path(root) / filename
@@ -248,9 +244,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
         archived_cmd = processed_commands[0]
         self.assertIn("id", archived_cmd)
         generated_id = archived_cmd["id"]
-        self.assertTrue(
-            is_valid_uuid_str(generated_id), "Generated ID is not a UUID."
-        )
+        self.assertTrue(is_valid_uuid_str(generated_id), "Generated ID is not a UUID.")
         self.assertEqual(archived_cmd.get("type"), "log_event")
         self.assert_command_processed_and_archived(cmd_file_path, generated_id)
 
@@ -318,9 +312,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
         )
         self.assertEqual(finish_log.get("level"), "INFO")
         self.assertIn("raw_result", finish_log)
-        self.assertEqual(
-            finish_log.get("raw_result", {}).get("status"), "success"
-        )
+        self.assertEqual(finish_log.get("raw_result", {}).get("status"), "success")
         self.assertEqual(
             finish_log.get("raw_result", {}).get("message"), "MC default run"
         )
@@ -330,9 +322,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
             (
                 le
                 for le in log_entries
-                if le.get("message", "").startswith(
-                    "Command processing finished."
-                )
+                if le.get("message", "").startswith("Command processing finished.")
                 and le.get("command_id") == cmd_id
                 and le.get("level") == "INFO"
             ),
@@ -351,9 +341,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
     def test_mci_status_check(self):
         cmd_id = "mci_sc_001"
         cmd_data = {"id": cmd_id, "type": "status_check"}
-        cmd_file_path = self.create_command_file(
-            cmd_data, filename_prefix="status"
-        )
+        cmd_file_path = self.create_command_file(cmd_data, filename_prefix="status")
         self.run_agent_mci()
         self.assertTrue(AGENT_STATUS_FILE.exists())
         status_data = json.loads(AGENT_STATUS_FILE.read_text())
@@ -373,9 +361,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
             "module": module_name,
             "args": {},
         }
-        cmd_file_path = self.create_command_file(
-            cmd_data, sub_dir="testing_failures"
-        )
+        cmd_file_path = self.create_command_file(cmd_data, sub_dir="testing_failures")
         result = self.run_agent_mci()  # Agent run triggers logging
         self.assertIn(
             f"Executing {module_name}", result.stdout
@@ -396,9 +382,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
             ),
             None,
         )
-        self.assertIsNotNone(
-            error_log_module, "Module execution error log not found."
-        )
+        self.assertIsNotNone(error_log_module, "Module execution error log not found.")
         self.assertIn(
             f"Error executing module '{module_name}'",
             error_log_module.get("message"),
@@ -418,9 +402,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
             (
                 le
                 for le in log_entries
-                if le.get("message", "").startswith(
-                    "Command processing finished."
-                )
+                if le.get("message", "").startswith("Command processing finished.")
                 and le.get("command_id") == cmd_id
                 and le.get("level") == "ERROR"
             ),
@@ -465,9 +447,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
             status_data.get("status"), "idle_restored_from_internal_default"
         )
         self.assertTrue(is_iso_timestamp_str(status_data.get("timestamp")))
-        self.assertIn(
-            "internal default structure", status_data.get("notes", "")
-        )
+        self.assertIn("internal default structure", status_data.get("notes", ""))
 
     def test_mci_malformed_command_file(self):
         malformed_dir = COMMANDS_DIR / "malformed_tests"
@@ -476,11 +456,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
         with open(malformed_file_path, "w") as f:
             # Valid JSON, but an array, not a dict (object) as expected for a command
             json.dump(
-                [
-                    {
-                        "item_in_array": "this should be skipped as non-dict command_data"
-                    }
-                ],
+                [{"item_in_array": "this should be skipped as non-dict command_data"}],
                 f,
             )
 
@@ -506,9 +482,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
                 and f"Content of {malformed_file_path} is not a JSON object. Skipping."
                 in entry.get("message", "")
             ):
-                self.assertEqual(
-                    entry.get("file_path"), str(malformed_file_path)
-                )
+                self.assertEqual(entry.get("file_path"), str(malformed_file_path))
                 malformed_log_found = True
                 break
         self.assertTrue(
@@ -537,9 +511,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
         )
 
         # Verify the valid command was processed
-        self.assert_command_processed_and_archived(
-            valid_cmd_file_path, valid_cmd_id
-        )
+        self.assert_command_processed_and_archived(valid_cmd_file_path, valid_cmd_id)
 
     def test_log_levels_and_structured_fields(self):
         cmd_id = "mci_log_levels_001"
@@ -570,18 +542,12 @@ class TestKatanaAgentMCI(unittest.TestCase):
             ),
             None,
         )
-        self.assertIsNotNone(
-            processing_log, "Processing log for command not found."
-        )
+        self.assertIsNotNone(processing_log, "Processing log for command not found.")
 
         self.assertEqual(processing_log.get("level"), "INFO")
-        self.assertEqual(
-            processing_log.get("command_id"), cmd_id
-        )  # Check extra field
+        self.assertEqual(processing_log.get("command_id"), cmd_id)  # Check extra field
         self.assertEqual(processing_log.get("module"), "katana_agent")
-        self.assertTrue(
-            isinstance(processing_log.get("function"), str)
-        )  # e.g. main
+        self.assertTrue(isinstance(processing_log.get("function"), str))  # e.g. main
         self.assertTrue(isinstance(processing_log.get("line_number"), int))
         self.assertTrue(is_iso_timestamp_str(processing_log.get("timestamp")))
 
@@ -596,9 +562,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
             ),
             None,
         )
-        self.assertIsNotNone(
-            debug_log, "A DEBUG level log was expected but not found."
-        )
+        self.assertIsNotNone(debug_log, "A DEBUG level log was expected but not found.")
         self.assertEqual(debug_log.get("module"), "katana_agent")
 
         # To test WARNING, ERROR, CRITICAL more directly, we'd need commands that reliably trigger them.
@@ -619,9 +583,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
             "module": module_name,
             "args": {"force_exception_log": True},
         }
-        cmd_file_path = self.create_command_file(
-            cmd_data, sub_dir="testing_exceptions"
-        )
+        cmd_file_path = self.create_command_file(cmd_data, sub_dir="testing_exceptions")
 
         self.run_agent_mci()
 
@@ -709,12 +671,10 @@ class TestKatanaAgentMCI(unittest.TestCase):
                 handler.close()
                 test_logger.removeHandler(handler)
 
-        rotating_handler = (
-            RotatingFileHandler(  # Use imported RotatingFileHandler
-                temp_log_file_path,
-                maxBytes=handler_max_bytes,
-                backupCount=handler_backup_count,
-            )
+        rotating_handler = RotatingFileHandler(  # Use imported RotatingFileHandler
+            temp_log_file_path,
+            maxBytes=handler_max_bytes,
+            backupCount=handler_backup_count,
         )
         rotating_handler.setFormatter(
             JsonFormatter()
@@ -738,9 +698,7 @@ class TestKatanaAgentMCI(unittest.TestCase):
 
         # Close the handler to ensure logs are flushed and files are closed.
         rotating_handler.close()
-        test_logger.removeHandler(
-            rotating_handler
-        )  # Clean up handler from logger
+        test_logger.removeHandler(rotating_handler)  # Clean up handler from logger
 
         # 3. Verify rotation
         self.assertTrue(

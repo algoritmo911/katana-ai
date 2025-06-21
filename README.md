@@ -20,6 +20,78 @@ Application logs are primarily written in JSON format to log files, facilitating
     *   `command_id`: For `katana_mci_agent.py`, logs related to command processing.
     *   Other custom key-value pairs passed via the `extra` parameter in logging calls.
 
+### Log Examples
+
+Below are conceptual examples of what log entries might look like. Actual timestamps, line numbers, and specific messages will vary.
+
+**Example: INFO Log (Agent Command Processing)**
+
+```json
+{
+  "timestamp": "2024-07-25T10:30:05.123456+00:00",
+  "level": "INFO",
+  "message": "Processing command, type: trigger_module, file: cmd_trigger_example_20240725103000123456.json",
+  "module": "katana_mci_agent",
+  "function": "main",
+  "line_number": 350,
+  "command_id": "cmd_trigger_example_12345"
+}
+```
+
+**Example: ERROR Log with Exception (Bot Message Handling)**
+
+```json
+{
+  "timestamp": "2024-07-25T10:32:15.654321+00:00",
+  "level": "ERROR",
+  "message": "An unexpected error occurred in handle_message: SimFailedError",
+  "module": "katana_bot",
+  "function": "handle_message",
+  "line_number": 125,
+  "user_id": "user_67890",
+  "exception": "Traceback (most recent call last):\\n  File \"/app/katana/bot/katana_bot.py\", line 120, in handle_message\\n    result = external_service.call(user_text)\\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \"/app/some_service.py\", line 42, in call\\n    raise SimFailedError(\"Service communication failed\")\\nSimFailedError: Service communication failed"
+}
+```
+
+### Understanding `extra` Fields
+
+The `extra` parameter in logging calls (e.g., `logger.info("message", extra={"key": "value"})`) is used to add custom key-value pairs to log records. These provide context-specific information relevant to the logged event.
+
+In the JSON log output, these `extra` fields appear as top-level keys alongside the standard logging fields.
+
+**Example: `user_id` in Bot Logs**
+
+When the Telegram bot logs an interaction, it often includes the `user_id`:
+
+```json
+{
+  "timestamp": "2024-07-25T10:35:00.789012+00:00",
+  "level": "INFO",
+  "message": "Received /start command",
+  "module": "katana_bot",
+  "function": "start",
+  "line_number": 60,
+  "user_id": "user_12345"
+}
+```
+
+**Example: `command_id` and other details in Agent Logs**
+
+The MCI Agent includes `command_id` and potentially other details related to command execution or errors:
+
+```json
+{
+  "timestamp": "2024-07-25T10:38:00.987654+00:00",
+  "level": "ERROR",
+  "message": "Module 'example_module' reported error.",
+  "module": "katana_mci_agent",
+  "function": "execute_module",
+  "line_number": 150,
+  "command_id": "cmd_abc_789",
+  "error_message": "Required parameter 'x' not found."
+}
+```
+
 ### Log Levels
 
 Standard Python logging levels are used:

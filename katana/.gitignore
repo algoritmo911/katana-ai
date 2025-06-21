@@ -74,6 +74,7 @@ services/api_integrations/credentials.json # User should provide this, but ignor
 *.log
 logs/ # Ignore top-level logs/ dir in katana/
 mci_agent/logs/
+bot/logs/ # Added for Katana Bot specific logs
 services/api_integrations/logs/
 
 # OS generated files
