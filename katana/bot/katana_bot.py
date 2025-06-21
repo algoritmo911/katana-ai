@@ -4,11 +4,13 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 from openai import OpenAI, APIError, AuthenticationError, RateLimitError # For openai >= 1.0.0
 import traceback # For more detailed error logging
 import logging # Import logging for setup_logging level
-from katana.logging_config import setup_logging, get_logger
+# Import VOICE_LOG_FILE instead of BOT_LOG_FILE
+from katana.logging_config import setup_logging, get_logger, DEFAULT_LOGGER_NAME, VOICE_LOG_FILE, LOGS_DIR
 
-# --- Initialize Logging ---
-setup_logging(log_level=logging.INFO) # Or logging.DEBUG, etc.
-logger = get_logger(__name__) # Get a logger for this module
+# --- Logger for this module ---
+# Note: Specific logger configuration (like file output) is handled in main() via setup_logging.
+# Here, we just get the logger instance that will be configured by setup_logging.
+logger = get_logger(f"{DEFAULT_LOGGER_NAME}.bot")
 
 # --- Configuration ---
 # Token and keys from environment variables
@@ -71,11 +73,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- Main Bot Setup ---
 def main():
     """Starts the bot."""
+
+    # --- Ensure Log Directory Exists ---
+    if not os.path.exists(LOGS_DIR):
+        os.makedirs(LOGS_DIR, exist_ok=True)
+        # Optional: Log directory creation, but logger might not be set up yet to catch this.
+        # Consider logging this after setup_logging if needed, or just let it be silent.
+        # print(f"Created log directory: {LOGS_DIR}")
+
+
+    # --- Initialize Logging for the Bot ---
+    # This configures a dedicated log file for the bot, now using VOICE_LOG_FILE
+    # as per the subtask requirements, and sets its log level.
+    # It also sets the general logging level for other parts of katana (e.g., katana_events.log).
+    bot_module_config = {
+        f"{DEFAULT_LOGGER_NAME}.bot": {
+            "filename": VOICE_LOG_FILE, # Using VOICE_LOG_FILE for bot logs
+            "level": logging.INFO,      # Log level for the bot's dedicated log file
+        }
+    }
+    # General log level for DEFAULT_LOGGER_NAME (katana_logger), affecting katana_events.log and console for it.
+    setup_logging(
+        log_level=logging.INFO, # Default for katana_logger
+        module_file_configs=bot_module_config
+        # module_levels can be added here if other specific levels are needed for non-file-logging modules
+    )
+
+    # Now that logging is configured, initial critical checks can use the logger.
     if not TELEGRAM_TOKEN:
         logger.critical("Telegram bot cannot start: KATANA_TELEGRAM_TOKEN environment variable not set.")
         return
-    if not OPENAI_API_KEY: # Already checked, but good for main entry point
-        logger.critical("OpenAI API Key not set. Message handling will fail.")
+    if not OPENAI_API_KEY and not client: # Check client as well, as it might be initialized if key was present earlier
+        logger.critical("OpenAI API Key not set and client not initialized. Message handling will fail.")
         # Allow bot to start for /start command, but message handling will fail gracefully.
 
     logger.info(f"Initializing Katana Telegram Bot (AI Chat Mode) with token ending: ...{TELEGRAM_TOKEN[-4:] if len(TELEGRAM_TOKEN) > 4 else 'TOKEN_TOO_SHORT'}")

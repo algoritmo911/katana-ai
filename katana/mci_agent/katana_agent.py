@@ -7,10 +7,11 @@ import uuid
 import traceback
 import shutil
 import logging
-from katana.logging_config import setup_logging, get_logger
+from katana.logging_config import setup_logging, get_logger, DEFAULT_LOGGER_NAME, CORE_LOG_FILE, LOGS_DIR
 
-# Initialize logger for this module
-logger = get_logger(__name__)
+# Initialize logger for this module. It will be configured in main().
+# Changed to .mci_agent to align with specific configuration.
+logger = get_logger(f"{DEFAULT_LOGGER_NAME}.mci_agent")
 
 # Path Constants (Refactor Z)
 BASE_DIR = Path(__file__).resolve().parent
@@ -148,16 +149,42 @@ def move_to_processed(original_command_file_path, processed_command_data):
 
 # --- MCI Main Function ---
 def main(loop=False, delay=5):
-    # Setup logging as the first step in main
-    setup_logging(log_level=logging.INFO) # Or logging.DEBUG, etc.
+    # --- Ensure Log Directory Exists ---
+    # Explicitly create LOGS_DIR as per subtask request pattern,
+    # though file handlers in logging_config would also create their parent dirs.
+    if not os.path.exists(LOGS_DIR):
+        try:
+            os.makedirs(LOGS_DIR, exist_ok=True)
+            # Optional: print(f"Created log directory: {LOGS_DIR}")
+            # Cannot use logger here as it's not configured yet.
+        except Exception as e_mkdir_logs:
+            # If this fails, logging to files might fail. Print error to console.
+            print(f"CRITICAL: Could not create log directory {LOGS_DIR}: {e_mkdir_logs}", flush=True)
 
-    # LOGS_DIR and LOG_ARCHIVE_DIR are not created by agent anymore.
+
+    # --- Initialize Logging for the MCI Agent ---
+    # This configures a dedicated log file for MCI agent operations (`core.log`)
+    # and sets the general logging level for other parts of katana (e.g., katana_events.log).
+    mci_agent_module_config = {
+        f"{DEFAULT_LOGGER_NAME}.mci_agent": { # Changed key to .mci_agent
+            "filename": CORE_LOG_FILE,
+            "level": logging.INFO, # Set level to INFO as per subtask example
+        }
+    }
+    # General log level for DEFAULT_LOGGER_NAME (katana_logger), affecting katana_events.log and console for it.
+    setup_logging(
+        log_level=logging.INFO, # Default for katana_logger
+        module_file_configs=mci_agent_module_config
+    )
+
+    # LOGS_DIR is now handled above. PROCESSED_COMMANDS_DIR etc. are agent specific.
     dirs_to_create = [COMMANDS_DIR, STATUS_DIR, MODULES_DIR, PROCESSED_COMMANDS_DIR]
     for d in dirs_to_create:
         try:
             os.makedirs(d, exist_ok=True)
         except Exception as e:
-            logger.critical(f"Could not create directory {d}: {e}") # Changed from print
+            # Logger is now configured, so we can use it.
+            logger.critical(f"Could not create application directory {d}: {e}")
 
     # --- File Recovery using Internal Defaults (Refactor Z: Log & Test) ---
     # restore_commands = False # This variable was unused.

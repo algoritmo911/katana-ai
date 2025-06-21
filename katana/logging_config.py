@@ -16,6 +16,7 @@ LOGS_DIR = "logs" # Base directory for all log files
 CORE_LOG_FILE = f"{LOGS_DIR}/core.log" # Log file for core module
 TRADER_LOG_FILE = f"{LOGS_DIR}/trader.log" # Log file for trader module
 VOICE_LOG_FILE = f"{LOGS_DIR}/voice.log" # Log file for voice module
+BOT_LOG_FILE = f"{LOGS_DIR}/bot.log" # Log file for bot specific logs
 
 # It's good practice to ensure the log directory exists.
 # This can be done here or by a deployment/startup script.
@@ -288,6 +289,11 @@ if __name__ == '__main__':
         f"{DEFAULT_LOGGER_NAME}.voice": {
             "filename": VOICE_LOG_FILE,
             "level": logging.DEBUG,
+        },
+        # Adding bot logger configuration to the example
+        f"{DEFAULT_LOGGER_NAME}.bot": {
+            "filename": BOT_LOG_FILE,
+            "level": logging.INFO,
         }
     }
 
@@ -318,6 +324,7 @@ if __name__ == '__main__':
     core_logger = get_logger(f"{DEFAULT_LOGGER_NAME}.core") # Gets 'katana_logger.core'
     trader_logger = get_logger(f"{DEFAULT_LOGGER_NAME}.trader") # Gets 'katana_logger.trader'
     voice_logger = get_logger(f"{DEFAULT_LOGGER_NAME}.voice") # Gets 'katana_logger.voice'
+    bot_logger = get_logger(f"{DEFAULT_LOGGER_NAME}.bot") # Gets 'katana_logger.bot'
 
     # Loggers for modules that propagate to main_katana_logger
     module1_logger = get_logger(f"{DEFAULT_LOGGER_NAME}.module1")
@@ -354,6 +361,12 @@ if __name__ == '__main__':
     # Expected: DEBUG level; output to console and logs/voice.log
     print("\nTesting voice_logger (console, voice.log)...")
     voice_logger.debug("voice_logger: DEBUG message.")
+
+    # Scenario 4b: Logging from 'bot' module (newly added to example)
+    # Expected: INFO level; output to console and logs/bot.log
+    print("\nTesting bot_logger (console, bot.log)...")
+    bot_logger.debug("bot_logger: DEBUG message (Should NOT be visible; bot_logger level is INFO)")
+    bot_logger.info("bot_logger: INFO message.")
 
     # Scenario 5: Logging from 'module1' (propagates to main_katana_logger)
     # Expected: DEBUG level; output to console and logs/katana_events.log
@@ -407,4 +420,5 @@ if __name__ == '__main__':
     print(f"  - Core module specific logs: {CORE_LOG_FILE}")
     print(f"  - Trader module specific logs: {TRADER_LOG_FILE}")
     print(f"  - Voice module specific logs: {VOICE_LOG_FILE}")
+    print(f"  - Bot module specific logs: {BOT_LOG_FILE}") # Added bot log to example output
     print("Please review the console output and the contents of these log files to verify the logging behavior.")
