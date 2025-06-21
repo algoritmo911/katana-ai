@@ -5,7 +5,8 @@ from pathlib import Path
 from datetime import datetime
 
 # TODO: Get API token from environment variable or secrets manager
-API_TOKEN = 'YOUR_API_TOKEN'
+# Using a format-valid dummy token for testing purposes if no env var is set.
+API_TOKEN = os.environ.get('TELEGRAM_API_TOKEN', '12345:dummytoken')
 
 bot = telebot.TeleBot(API_TOKEN)
 
@@ -19,14 +20,18 @@ def log_local_bot_event(message):
 
 def handle_log_event(command_data, chat_id):
     """Placeholder for handling 'log_event' commands."""
-    log_local_bot_event(f"handle_log_event called for chat_id {chat_id} with data: {command_data}")
+    log_local_bot_event(f"handle_log_event called for chat_id {chat_id} with data: {json.dumps(command_data)}")
     # Actual implementation for log_event will go here
+    # TODO: Add more specific logging based on args if needed
+    log_local_bot_event(f"Successfully processed 'log_event' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
     # bot.reply_to(message, "✅ 'log_event' received (placeholder).") # TODO: Add reply mechanism
 
 def handle_mind_clearing(command_data, chat_id):
     """Placeholder for handling 'mind_clearing' commands."""
-    log_local_bot_event(f"handle_mind_clearing called for chat_id {chat_id} with data: {command_data}")
+    log_local_bot_event(f"handle_mind_clearing called for chat_id {chat_id} with data: {json.dumps(command_data)}")
     # Actual implementation for mind_clearing will go here
+    # TODO: Add more specific logging based on args if needed
+    log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
     # bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
 
 @bot.message_handler(func=lambda message: True)
@@ -62,15 +67,31 @@ def handle_message(message):
         # For 'id', it can be str or int. For others, it's a single type.
         if field == "id":
             if not any(isinstance(command_data[field], t) for t in expected_type):
-                error_msg = f"Error: Field '{field}' must be type {' or '.join(t.__name__ for t in expected_type)}. Got {type(command_data[field]).__name__}."
+                error_msg = f"Error: Field '{field}' must be type {' or '.join(t.__name__ for t in expected_type)}. Got value '{command_data[field]}' of type {type(command_data[field]).__name__}."
                 bot.reply_to(message, error_msg)
                 log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
                 return
         elif not isinstance(command_data[field], expected_type):
-            error_msg = f"Error: Field '{field}' must be type {expected_type.__name__}. Got {type(command_data[field]).__name__}."
+            error_msg = f"Error: Field '{field}' must be type {expected_type.__name__}. Got value '{command_data[field]}' of type {type(command_data[field]).__name__}."
             bot.reply_to(message, error_msg)
             log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
             return
+
+    # Additional validation for 'module' and 'type' fields
+    if not command_data['module'].strip():
+        error_msg = f"Error: Field 'module' must be a non-empty string. Got value '{command_data['module']}'."
+        bot.reply_to(message, error_msg)
+        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+        return
+
+    if not command_data['type'].strip():
+        error_msg = f"Error: Field 'type' must be a non-empty string. Got value '{command_data['type']}'."
+        bot.reply_to(message, error_msg)
+        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+        return
+
+    # Log successful validation
+    log_local_bot_event(f"Successfully validated command from {chat_id}: {json.dumps(command_data)}")
 
     # Command routing based on 'type'
     command_type = command_data.get("type")
@@ -85,16 +106,17 @@ def handle_message(message):
         return
 
     # If type is not matched, proceed with default behavior (saving)
-    log_local_bot_event(f"Command type '{command_type}' not specifically handled, proceeding with default save.")
+    log_local_bot_event(f"Command type '{command_type}' not specifically handled, proceeding with default save. Full command data: {json.dumps(command_data)}")
 
     # Save the command to a file
+    log_local_bot_event(f"Attempting to save command from {chat_id}. Full command data: {json.dumps(command_data)}")
     timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
     command_file_name = f"{timestamp_str}_{chat_id}.json"
 
     module_name = command_data.get('module', 'telegram_general')
     module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{module_name}" if module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
     module_command_dir.mkdir(parents=True, exist_ok=True)
-    command__file_path = module_command_dir / command_file_name
+    command_file_path = module_command_dir / command_file_name
 
     with open(command_file_path, "w", encoding="utf-8") as f:
         json.dump(command_data, f, ensure_ascii=False, indent=2)

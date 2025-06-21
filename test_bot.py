@@ -29,11 +29,16 @@ class TestBot(unittest.TestCase):
         self.mock_datetime = self.mock_datetime_patcher.start()
         self.mock_datetime.utcnow.return_value.strftime.return_value = "YYYYMMDD_HHMMSS_ffffff"
 
+        # Patch log_local_bot_event
+        self.mock_log_event_patcher = patch('bot.log_local_bot_event')
+        self.mock_log_local_bot_event = self.mock_log_event_patcher.start()
+
 
     def tearDown(self):
         # Stop patchers
         self.bot_patcher.stop()
         self.mock_datetime_patcher.stop()
+        self.mock_log_event_patcher.stop()
 
         # Clean up: remove dummy directory and its contents
         if self.test_commands_dir.exists():
@@ -75,6 +80,15 @@ class TestBot(unittest.TestCase):
         self.assertTrue(args[1].startswith("✅ Command received and saved as"))
         self.assertIn(str(expected_file_path), args[1])
 
+        # Check logging for successfully validated command
+        found_log = False
+        for call_arg in self.mock_log_local_bot_event.call_args_list:
+            args, _ = call_arg
+            if f"Successfully validated command from {mock_message.chat.id}: {json.dumps(command)}" in args[0]:
+                found_log = True
+                break
+        self.assertTrue(found_log, "Expected log for successful validation with full command data was not found.")
+
 
     def test_invalid_json_format(self):
         mock_message = MagicMock() # Simpler mock for this case
@@ -89,21 +103,103 @@ class TestBot(unittest.TestCase):
         bot.handle_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Missing required field 'type'.")
 
+    def test_empty_string_type(self):
+        command = {"type": "", "module": "test_module", "args": {}, "id": "1"}
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'type' must be a non-empty string. Got value ''.")
+
+    def test_whitespace_string_type(self):
+        command = {"type": "   ", "module": "test_module", "args": {}, "id": "1"}
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'type' must be a non-empty string. Got value '   '.")
+
+    def test_missing_module_field(self):
+        command = {"type": "test_type", "args": {}, "id": "test_id"} # module is missing
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Missing required field 'module'.")
+
+    def test_empty_string_module(self):
+        command = {"type": "test", "module": "", "args": {}, "id": "1"}
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'module' must be a non-empty string. Got value ''.")
+
+    def test_whitespace_string_module(self):
+        command = {"type": "test", "module": "   ", "args": {}, "id": "1"}
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'module' must be a non-empty string. Got value '   '.")
+
     def test_invalid_args_type(self):
         command = {"type": "test_type", "module": "test_module", "args": "not_a_dict", "id": "test_id"}
         mock_message = self._create_mock_message(command)
         bot.handle_message(mock_message)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'args' must be type dict. Got str.")
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'args' must be type dict. Got value 'not_a_dict' of type str.")
 
     def test_invalid_id_type(self):
         command = {"type": "test_type", "module": "test_module", "args": {}, "id": [1,2,3]} # id is a list
         mock_message = self._create_mock_message(command)
         bot.handle_message(mock_message)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'id' must be type str or int. Got list.")
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'id' must be type str or int. Got value '[1, 2, 3]' of type list.")
+
+    # --- ID field type tests ---
+    def test_valid_command_with_int_id(self):
+        command = {"type": "test_type_int_id", "module": "test_module_int_id", "args": {}, "id": 123}
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+
+        expected_module_dir = self.test_commands_dir / "telegram_mod_test_module_int_id"
+        self.assertTrue(expected_module_dir.exists())
+        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
+        expected_file_path = expected_module_dir / expected_filename
+        self.assertTrue(expected_file_path.exists())
+        with open(expected_file_path, "r") as f:
+            saved_data = json.load(f)
+        self.assertEqual(saved_data, command)
+        self.mock_bot_module_instance.reply_to.assert_called_once()
+        args, kwargs = self.mock_bot_module_instance.reply_to.call_args
+        self.assertTrue(args[1].startswith("✅ Command received and saved as"))
+
+        # Check logging for successfully validated command
+        found_log = False
+        for call_arg in self.mock_log_local_bot_event.call_args_list:
+            args, _ = call_arg
+            if f"Successfully validated command from {mock_message.chat.id}: {json.dumps(command)}" in args[0]:
+                found_log = True
+                break
+        self.assertTrue(found_log, "Expected log for successful validation with full command data (int id) was not found.")
+
+    # --- Args field tests ---
+    def test_valid_command_with_empty_args(self):
+        command = {"type": "test_empty_args", "module": "test_mod_empty_args", "args": {}, "id": "empty_args_id"}
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+
+        expected_module_dir = self.test_commands_dir / "telegram_mod_test_mod_empty_args"
+        self.assertTrue(expected_module_dir.exists())
+        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
+        expected_file_path = expected_module_dir / expected_filename
+        self.assertTrue(expected_file_path.exists())
+        self.mock_bot_module_instance.reply_to.assert_called_once()
+
+    def test_valid_command_with_simple_args(self):
+        command = {"type": "test_simple_args", "module": "test_mod_simple_args", "args": {"key": "value"}, "id": "simple_args_id"}
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+
+        expected_module_dir = self.test_commands_dir / "telegram_mod_test_mod_simple_args"
+        self.assertTrue(expected_module_dir.exists())
+        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
+        expected_file_path = expected_module_dir / expected_filename
+        self.assertTrue(expected_file_path.exists())
+        self.mock_bot_module_instance.reply_to.assert_called_once()
 
 
     # --- Test Command Routing ---
-    @patch('bot.handle_log_event')
+    @patch('bot.handle_log_event') # Keep this patch local as it's specific to this test
     def test_routing_log_event(self, mock_handle_log_event_func):
         command = {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
         mock_message = self._create_mock_message(command)
@@ -114,7 +210,7 @@ class TestBot(unittest.TestCase):
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
 
 
-    @patch('bot.handle_mind_clearing')
+    @patch('bot.handle_mind_clearing') # Keep this patch local
     def test_routing_mind_clearing(self, mock_handle_mind_clearing_func):
         command = {"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}
         mock_message = self._create_mock_message(command)
@@ -150,8 +246,28 @@ class TestBot(unittest.TestCase):
         self.assertTrue(args[1].startswith("✅ Command received and saved as"))
         self.assertIn(str(expected_file_path), args[1])
 
+    # --- Logging Verification Tests ---
+    def test_validation_failure_logs_details(self):
+        command = {"type": "test_type", "module": "", "args": {}, "id": "fail_log_id"} # Empty module
+        original_command_text = json.dumps(command)
+        mock_message = self._create_mock_message(command)
+
+        bot.handle_message(mock_message)
+
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'module' must be a non-empty string. Got value ''.")
+
+        found_log = False
+        expected_log_part = "Validation failed for 12345: Error: Field 'module' must be a non-empty string. Got value ''."
+        expected_command_part = f"(Command: {original_command_text})"
+
+        for call_arg in self.mock_log_local_bot_event.call_args_list:
+            args, _ = call_arg
+            log_message = args[0] # The first positional argument to log_local_bot_event
+            if expected_log_part in log_message and expected_command_part in log_message:
+                found_log = True
+                break
+        self.assertTrue(found_log, f"Expected log with validation failure details was not found. Searched for: '{expected_log_part}' and '{expected_command_part}'")
+
 
 if __name__ == '__main__':
     unittest.main()
-
-```
