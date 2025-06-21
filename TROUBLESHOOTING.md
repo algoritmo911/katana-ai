@@ -65,6 +65,52 @@ Some developers might experience issues when installing Python packages (e.g., `
     `pip` automatically caches packages. If a download was corrupted, clearing the cache might help, but this is less likely for persistent network issues.
     To clear the cache: `pip cache purge`.
 
+## Migrating from `unittest` to `pytest`: Common Points
+
+The project now uses `pytest` as its primary test runner. If you are more familiar with Python's built-in `unittest` module, here are a few common differences and tips:
+
+*   **Test Discovery**:
+    *   `unittest`: Requires test methods to be part of classes inheriting from `unittest.TestCase` and methods to be prefixed with `test_`.
+    *   `pytest`: Has more flexible discovery. It will find tests in files named `test_*.py` or `*_test.py`. Functions prefixed with `test_` and methods in classes prefixed with `Test` (that don't need to inherit from `unittest.TestCase`) are discovered.
+
+*   **Assertion Style**:
+    *   `unittest`: Uses specific assertion methods like `self.assertEqual()`, `self.assertTrue()`, `self.assertRaises()`.
+    *   `pytest`: Allows the use of Python's standard `assert` statement, which provides more detailed introspection on failures. For example, instead of `self.assertEqual(a, b)`, you just write `assert a == b`. For exceptions, you use `pytest.raises` as a context manager:
+        ```python
+        import pytest
+
+        def my_function_that_raises():
+            raise ValueError("Example error")
+
+        def test_my_function():
+            with pytest.raises(ValueError, match="Example error"):
+                my_function_that_raises()
+        ```
+
+*   **Test Setup/Teardown (Fixtures)**:
+    *   `unittest`: Uses `setUp`, `tearDown`, `setUpClass`, `tearDownClass` methods within `TestCase` classes.
+    *   `pytest`: Uses a powerful concept called "fixtures". Fixtures are functions (often decorated with `@pytest.fixture`) that can provide data or set up state for your tests. They can be requested by tests simply by naming them as arguments. `pytest` also supports `setup_module`, `teardown_module`, `setup_function`, `teardown_function`, and methods like `setup_method` and `teardown_method` in test classes.
+        ```python
+        @pytest.fixture
+        def example_data():
+            return {"key": "value"}
+
+        def test_using_fixture(example_data):
+            assert example_data["key"] == "value"
+        ```
+
+*   **No `self` for Test Functions**:
+    *   When writing test functions directly (not in a class), `pytest` does not pass a `self` argument, unlike `unittest` methods.
+
+*   **Running Tests**:
+    *   `unittest`: Typically run via `python -m unittest test_module.py`.
+    *   `pytest`: Simply run `pytest` in the terminal from your project root, and it will discover and run tests.
+
+*   **`pytest-cov` for Coverage**:
+    *   While `unittest` can be used with `coverage.py` (as previously done), `pytest` integrates well with `pytest-cov` for seamless coverage reporting (`pytest --cov=.`).
+
+These are some of the main differences. `pytest` offers many more advanced features like parametrization, plugins, and rich reporting that can simplify test writing and maintenance. Refer to the official `pytest` documentation for more details.
+
 ## Mocking for CI/CD or Restricted Environments (Future Consideration)
 
 As mentioned in feedback, if direct installation of dependencies like `httpx` or GUI/React components becomes problematic in certain environments (especially CI/CD pipelines or highly restricted development setups):

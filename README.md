@@ -121,9 +121,13 @@ The bot will start, and you should see log messages in the console and in `katan
 *   **Branch**: All development for these improvements should be done in the `feature/command-handling-enhancements` branch (or similar, based on original issue's "улучшения в управлении коммандами/подвигами").
 *   **Testing**: Unit tests are located in `test_bot.py`. Run tests using:
     ```bash
-    python -m unittest test_bot.py
+    pytest
     ```
-    Ensure all tests pass before committing changes.
+    Alternatively, you can be more specific:
+    ```bash
+    python -m pytest test_bot.py
+    ```
+    The project uses `pytest` as the standard framework for unit testing. Ensure all tests pass before committing changes.
 
 ## Testing with Coverage
 
