@@ -38,6 +38,19 @@ If the project requires specific environment variables for configuration (e.g., 
 - **Note:** `.env` files should be added to `.gitignore` to avoid committing secrets.
   (At the moment, no specific environment variables are defined for this project).
 
+### 5. API Keys and Secrets Management (`secrets.toml`)
+
+For integrations with external services that require API keys or other secrets (like Coinbase for authenticated actions in the future), this project uses a `secrets.toml` file.
+
+-   **Template:** A template file `secrets.toml.example` is provided in the repository. It shows the expected structure for your secrets.
+-   **Local Setup:** To use services requiring secrets:
+    1.  Copy `secrets.toml.example` to a new file named `secrets.toml` in the project root.
+    2.  Edit `secrets.toml` and fill in your actual API keys and other secret values.
+-   **Security:**
+    -   The `secrets.toml` file is **explicitly ignored by Git** (via `.gitignore`).
+    -   **DO NOT COMMIT YOUR ACTUAL `secrets.toml` FILE OR YOUR SECRETS TO THE REPOSITORY.**
+    -   Currently, only unauthenticated API endpoints (like Coinbase spot prices) are used, so `secrets.toml` is for future-proofing authenticated requests.
+
 ## Running Checks and Tests Locally
 
 To ensure your code is clean, formatted, and all tests pass before pushing changes, use the `run_checks.sh` script:
