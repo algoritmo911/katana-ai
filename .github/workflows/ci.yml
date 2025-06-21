@@ -1,0 +1,102 @@
+name: Katana CI
+
+on:
+  push:
+    branches:
+      - main
+      - master # In case master is used instead of main
+      - develop
+  pull_request:
+    branches:
+      - main
+      _master: # In case master is used instead of main
+      - develop
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./alg911.catana-ai # Set working directory for all run steps
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4 # Updated to v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4 # Updated to v4
+        with:
+          python-version: '3.10' # Specify Python version
+          cache: 'pip' # Cache pip dependencies
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint with Flake8
+        run: |
+          echo "Running Flake8 for critical errors (E9, F63, F7, F82)..."
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          echo "Running Flake8 for style and complexity..."
+          flake8 . --count --exit-zero --max-complexity=12 --max-line-length=119 --statistics
+          # Adjusted max-complexity and max-line-length slightly for common preferences
+
+      - name: Check Formatting with Black
+        run: |
+          black --check . --line-length=119
+          # Adjusted line-length to match common preference slightly different from 127
+
+      - name: Run Python Tests with Pytest
+        run: |
+          pytest # Assumes pytest will discover tests in the working directory (alg911.catana-ai/)
+                 # Or specify: pytest .
+                 # Or: pytest test_katana_cli.py test_cli_integration.py ... etc.
+
+      # --- Placeholder Frontend Steps ---
+      - name: Set up Node.js
+        uses: actions/setup-node@v4 # Updated to v4
+        with:
+          node-version: '20' # Specify Node.js version
+          cache: 'npm' # Cache npm dependencies if package-lock.json exists
+
+      - name: Install Frontend Dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f yarn.lock ]; then
+            yarn install --frozen-lockfile
+          else
+            echo "No package-lock.json or yarn.lock found, skipping frontend dependency installation."
+          fi
+        working-directory: . # Run npm/yarn from repo root if package.json is there, adjust if frontend is in a subfolder
+
+      - name: Run Frontend Tests (Jest)
+        run: |
+          if [ -f package.json ]; then # Check if package.json exists
+            npm test --if-present
+          else
+            echo "No package.json found, skipping Jest tests."
+          fi
+        working-directory: . # Adjust if needed
+
+      - name: Build Frontend
+        run: |
+          if [ -f package.json ]; then # Check if package.json exists
+            npm run build --if-present
+          else
+            echo "No package.json found, skipping frontend build."
+          fi
+        working-directory: . # Adjust if needed
+
+      # --- Placeholder Notification Step ---
+      - name: Send Notification
+        if: failure() # Only run if a previous step in the job failed
+        run: |
+          echo "Build or tests failed. Implement notification logic here."
+          echo "For example, send a message to a Telegram bot or an email."
+          # Example: curl -X POST -H 'Content-Type: application/json' \
+          # -d '{"chat_id": "YOUR_CHAT_ID", "text": "Katana CI build failed on branch ${{ github.ref_name }} - ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
+          # https://api.telegram.org/botYOUR_TELEGRAM_BOT_TOKEN/sendMessage
+          # Remember to use secrets for tokens and chat IDs: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+```

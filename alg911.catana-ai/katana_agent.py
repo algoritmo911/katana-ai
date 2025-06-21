@@ -3,6 +3,7 @@ import os
 import datetime
 import logging # New import
 import requests # For sending messages to Telegram via n8n webhook
+import sys # For sys.argv and sys.exit
 # import time # Not used
 import uuid # For generating command IDs if needed
 # import traceback # Not used
@@ -275,6 +276,33 @@ class KatanaCLI:
         # as _execute_process_telegram_message returns status of command processing, not message delivery.
         # Delivery status is logged.
 
+    def _process_pending_tasks(self, iterations: int = 1):
+        """
+        Processes a specified number of pending tasks from the queue.
+        """
+        self.logger.debug(f"Checking for pending tasks to process for {iterations} iteration(s).")
+        for _ in range(iterations):
+            pending_task = self.get_oldest_pending_task()
+            if pending_task:
+                task_id = pending_task["command_id"]
+                action = pending_task["action"]
+                parameters = pending_task.get("parameters", {})
+
+                self.logger.info(f"Processing task {task_id}: {action} with params {parameters}")
+                self.update_task(task_id, {
+                    "status": "processing",
+                    "processed_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+                })
+
+                success, result_msg = self._dispatch_command_execution(action, parameters, source="task")
+
+                final_status = "completed" if success else "failed"
+                self.update_task(task_id, {"status": final_status, "result": result_msg})
+                self.logger.info(f"Task {task_id} ({action}) finished with status: {final_status}. Result: {result_msg}")
+            else:
+                self.logger.debug("No pending tasks found in this iteration.")
+                break # No more tasks to process in this wave
+
     def _execute_process_telegram_message(self, params: dict, source: str) -> tuple[bool, str | None]:
         """
         Handles tasks originating from Telegram messages.
@@ -431,10 +459,14 @@ class KatanaCLI:
 
         try:
             task_id = self.add_task(action=action_name, parameters=parameters, origin="cli_addtask")
-            msg = f"Task {task_id} for action '{action_name}' added."
-            self.logger.info(msg)
-            print(msg)
-            return True, msg
+            # Make the printed output easily parsable for internal_task_id
+            cli_output_msg = f"CREATED_TASK_ID: {task_id}"
+            # The log message can be more verbose
+            log_msg = f"Task {task_id} for action '{action_name}' added via CLI."
+            self.logger.info(log_msg)
+            # Print only the parsable part to stdout for subprocess communication
+            print(cli_output_msg)
+            return True, cli_output_msg # Return the parsable message as well
         except Exception as e:
             err_msg = f"Failed to add task: {e}"
             self.logger.error(err_msg)
@@ -468,31 +500,12 @@ class KatanaCLI:
             return False, f"Unknown command: {command_name}"
 
     def start_shell(self):
-        self.logger.info("KatanaCLI shell started. Processing pending tasks before prompt...")
+        self.logger.info("KatanaCLI interactive shell started.")
 
-        # Main loop for both task processing and CLI interaction
         running = True
         while running:
-            # 1. Process one pending task
-            pending_task = self.get_oldest_pending_task()
-            if pending_task:
-                task_id = pending_task["command_id"]
-                action = pending_task["action"]
-                parameters = pending_task.get("parameters", {})
-
-                self.logger.info(f"Processing task {task_id}: {action} with params {parameters}")
-                self.update_task(task_id, {
-                    "status": "processing",
-                    "processed_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
-                })
-
-                success, result_msg = self._dispatch_command_execution(action, parameters, source="task")
-
-                final_status = "completed" if success else "failed"
-                self.update_task(task_id, {"status": final_status, "result": result_msg})
-                self.logger.info(f"Task {task_id} ({action}) finished with status: {final_status}. Result: {result_msg}")
-                # Potentially loop here to process all tasks before showing prompt, or process one per CLI cycle.
-                # For now, one task per CLI cycle.
+            # 1. Process one pending task before showing prompt in interactive mode
+            self._process_pending_tasks(iterations=1)
 
             # 2. CLI Interaction
             try:
@@ -527,12 +540,49 @@ class KatanaCLI:
 
 if __name__ == '__main__':
     cli = KatanaCLI()
-    cli.logger.info("Katana Agent CLI starting...") # Use cli.logger
-    cli.initialize_katana_files()
-    # The self-test messages from previous step are removed as requested.
-    # Starting the shell
-    cli.start_shell()
-    cli.logger.info("Katana Agent CLI has shut down.")
+    cli.initialize_katana_files() # Initialize files first
 
-    # To verify, after running this, one would check katana_events.log and the content of the .json files,
-    # and interact with the CLI.
+    if len(sys.argv) > 1:
+        # Non-interactive mode: execute command from args, process tasks, then exit.
+        cli.logger.info(f"Katana Agent CLI starting in non-interactive mode. Args: {sys.argv[1:]}")
+
+        # Reconstruct the command string from sys.argv for parsing
+        # Example: if sys.argv is ['katana_agent.py', 'addtask', 'action_name', 'p1=v1']
+        # command_input_str becomes "addtask action_name p1=v1"
+        command_input_str = " ".join(sys.argv[1:])
+        cli.logger.info(f"Executing command from args: '{command_input_str}'")
+
+        # Use existing parse_command for consistency
+        command_name, args = cli.parse_command(command_input_str)
+
+        if command_name:
+            # Add to history even for non-interactive commands for audit.
+            cli.add_to_history(f"[ARG_CMD] {command_input_str}")
+            # Dispatch the command. Source 'cli' is appropriate as it's a direct command.
+            # The print(result_message) below handles the output from _execute_addtask_command
+            success, result_message_from_dispatch = cli._dispatch_command_execution(command_name, args, source="cli")
+
+            # If the command was not 'addtask', its direct result might be printed by the handler (if source=='cli')
+            # or we can print it here. For 'addtask', the specific "CREATED_TASK_ID: ..." is already printed.
+            # The result_message_from_dispatch from addtask is "CREATED_TASK_ID: ...", which is already printed by the handler.
+            # For other commands, their specific CLI print logic inside handlers (if source=='cli') or here:
+            if command_name != "addtask" and result_message_from_dispatch and source=="cli":
+                 print(result_message_from_dispatch)
+
+            if not success and command_name == "exit":
+                cli.logger.info("Non-interactive 'exit' command processed. Shutting down.")
+                sys.exit(0) # Graceful exit if the command was 'exit'
+
+            # Process tasks a couple of times to handle tasks potentially added by the command
+            cli.logger.info("Processing tasks (up to 2 iterations) after command execution...")
+            cli._process_pending_tasks(iterations=2)
+        else:
+            cli.logger.warning("No valid command could be parsed from command-line arguments.")
+
+        cli.logger.info("Katana Agent CLI non-interactive mode finished.")
+        sys.exit(0)
+    else:
+        # Interactive mode
+        cli.logger.info("Katana Agent CLI starting in interactive mode...")
+        cli.start_shell() # Enters the interactive loop
+        cli.logger.info("Katana Agent CLI has shut down.")
