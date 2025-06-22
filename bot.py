@@ -119,7 +119,7 @@ def get_help_message():
     message_lines.extend([
         "",
         "**Примеры текстовых команд (NLP):**",
-        "Вы можете использовать фразы вроде:",
+        "Вы можете использовать фразы для получения информации о системе, например:",
     ])
     message_lines.extend([f"- {example}" for example in NLP_EXAMPLES])
 

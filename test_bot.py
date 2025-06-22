@@ -377,6 +377,57 @@ class TestBot(unittest.TestCase):
         # Restore mock_get_utc_now to its initial test time for subsequent tests (if any within the same class instance, though unittest typically isolates)
         self.mock_get_utc_now.return_value = self.current_test_time
 
+    # --- Tests for specific new cacheable NLP commands ---
+
+    def _test_cacheable_nlp_command(self, nlp_input, expected_command, initial_output, cached_output_check_str="(из кеша)"):
+        """Helper function to test a cacheable NLP command."""
+        with patch('bot.interpret', wraps=bot.interpret) as mock_interpret_spy, \
+             patch('bot.run_katana_command') as mock_run_katana:
+
+            mock_run_katana.return_value = initial_output
+            mock_message = self._create_mock_text_message(nlp_input)
+
+            # First call: should execute, cache, and increment misses
+            bot.handle_text_message(mock_message)
+            mock_interpret_spy.assert_called_with(nlp_input)
+            # We check the *result* of interpret inside the main logic, so here we ensure run_katana_command got the expected one.
+            mock_run_katana.assert_called_once_with(expected_command)
+
+            args, _ = self.mock_bot_module_instance.send_message.call_args
+            self.assertIn(initial_output, args[1])
+            self.assertNotIn(cached_output_check_str, args[1])
+            original_misses = bot.CACHE_STATS["misses"]
+            original_hits = bot.CACHE_STATS["hits"]
+
+            # Second call: should hit cache, not execute, and increment hits
+            mock_run_katana.reset_mock()
+            self.mock_bot_module_instance.send_message.reset_mock()
+
+            bot.handle_text_message(mock_message)
+            mock_run_katana.assert_not_called() # Should not run command again
+            args, _ = self.mock_bot_module_instance.send_message.call_args
+            self.assertIn(initial_output, args[1]) # Still same output
+            self.assertIn(cached_output_check_str, args[1])
+
+            # Check specific stats if needed, or rely on the main caching test for detailed stat checks
+            self.assertEqual(bot.CACHE_STATS["misses"], original_misses) # Misses should not change
+            self.assertEqual(bot.CACHE_STATS["hits"], original_hits + 1) # Hits should increment
+
+    def test_nlp_uptime_p_cached(self):
+        self._test_cacheable_nlp_command("дай аптайм подробно", "uptime -p", "up 2 hours, 5 minutes")
+
+    def test_nlp_free_m_cached(self):
+        self._test_cacheable_nlp_command("сколько памяти", "free -m", "total used free\nMem: 1024 512 512")
+
+    def test_nlp_whoami_cached(self):
+        self._test_cacheable_nlp_command("кто я такой", "whoami", "testuser")
+
+    def test_nlp_date_cached(self):
+        # For 'date', the output changes each second. If TTL is very short (e.g., 1s),
+        # it's harder to test cache hit reliably without advancing time by less than TTL.
+        # Assuming 60s default TTL for now, it will cache.
+        self._test_cacheable_nlp_command("какое сегодня число", "date", "Mon Jan  1 12:00:00 UTC 2024")
+
 
     @patch('bot.get_help_message')
     def test_start_command(self, mock_get_help):
