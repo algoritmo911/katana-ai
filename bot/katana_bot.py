@@ -3,6 +3,24 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
+import logging # Added for better logging
+
+# Ensure nlp_services is discoverable
+import sys
+# Assuming katana_bot.py is in bot/ and nlp_services/ is at the project root (parent of bot/)
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+
+from nlp_services.anthropic_client import get_anthropic_chat_response
+from nlp_services.openai_client import get_openai_chat_response
+from nlp_services.base_nlp_client import NLPServiceError # To catch all custom NLP errors
+
+# Setup basic logging for the bot
+logger = logging.getLogger(__name__)
+if not logger.hasHandlers():
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 
 # Получаем токен из переменной окружения
 API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN', 'YOUR_API_TOKEN')
@@ -15,9 +33,25 @@ bot = telebot.TeleBot(API_TOKEN)
 COMMAND_FILE_DIR = Path('commands')
 COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 
-def log_local_bot_event(message):
-    """Вывод лога события в консоль."""
-    print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
+def log_local_bot_event(message, level=logging.INFO, **kwargs):
+    """Логирование события бота с использованием стандартного модуля logging."""
+    # Construct a base message string
+    log_message = f"[BOT EVENT] {message}"
+
+    # Use the appropriate logger method based on the level
+    if level == logging.DEBUG:
+        logger.debug(log_message, **kwargs)
+    elif level == logging.INFO:
+        logger.info(log_message, **kwargs)
+    elif level == logging.WARNING:
+        logger.warning(log_message, **kwargs)
+    elif level == logging.ERROR:
+        logger.error(log_message, **kwargs)
+    elif level == logging.CRITICAL:
+        logger.critical(log_message, **kwargs)
+    else: # Default to INFO if level is unknown or not set
+        logger.info(log_message, **kwargs)
+
 
 def handle_log_event(command_data, chat_id):
     """Обработка команды 'log_event' (заглушка)."""
@@ -84,13 +118,71 @@ def handle_message(message):
         bot.reply_to(message, "✅ 'mind_clearing' processed (placeholder).")
         return
 
-    log_local_bot_event(f"Command type '{command_type}' not specifically handled, proceeding with default save.")
+    # Check for NLP modules
+    module_name = command_data.get("module")
 
+    if module_name in ["anthropic_chat", "openai_chat"]:
+        args = command_data.get("args", {})
+        prompt = args.get("prompt")
+        history = args.get("history", [])
+        # For model_name, system_prompt, max_tokens, pass None if not provided, client functions have defaults
+        model_name_arg = args.get("model_name") # client functions handle None
+        system_prompt_arg = args.get("system_prompt") # client functions handle None
+        max_tokens_arg = args.get("max_tokens") # client functions handle None
+
+        if not prompt:
+            bot.reply_to(message, f"❌ Error: 'prompt' is a required argument in 'args' for module '{module_name}'.")
+            log_local_bot_event(f"Missing 'prompt' for {module_name} from {chat_id}", level=logging.ERROR)
+            return
+
+        try:
+            log_local_bot_event(f"Processing '{module_name}' for {chat_id}. Prompt: '{prompt[:50]}...'")
+            assistant_response = None
+            if module_name == "anthropic_chat":
+                assistant_response = get_anthropic_chat_response(
+                    history=history,
+                    user_prompt=prompt,
+                    model_name=model_name_arg if model_name_arg else "claude-3-opus-20240229", # Explicitly pass client default if None
+                    system_prompt=system_prompt_arg,
+                    max_tokens_to_sample=max_tokens_arg if max_tokens_arg is not None else 1024 # Pass client default if arg is None
+                )
+            elif module_name == "openai_chat":
+                assistant_response = get_openai_chat_response(
+                    history=history,
+                    user_prompt=prompt,
+                    model_name=model_name_arg if model_name_arg else "gpt-3.5-turbo", # Explicitly pass client default if None
+                    system_prompt=system_prompt_arg,
+                    max_tokens=max_tokens_arg if max_tokens_arg is not None else 1024 # Pass client default if arg is None
+                )
+
+            bot.reply_to(message, f"🤖: {assistant_response}")
+            log_local_bot_event(f"Successfully replied to '{module_name}' for {chat_id}. Response: '{str(assistant_response)[:50]}...'")
+
+        except NLPServiceError as e:
+            log_local_bot_event(
+                f"NLP Error for module {module_name} from {chat_id}: {str(e)}. User message: {e.user_message}",
+                level=logging.ERROR,
+                exc_info=True if e.original_error else False # Log stack trace if original error exists
+            )
+            bot.reply_to(message, f"🤖⚠️: {e.user_message}")
+        except Exception as e:
+            log_local_bot_event(
+                f"Unexpected error processing {module_name} for {chat_id}: {str(e)}",
+                level=logging.ERROR,
+                exc_info=True
+            )
+            bot.reply_to(message, "🤖⚠️: Произошла внутренняя ошибка при обработке вашего запроса.")
+        return # NLP command processed or errored out
+
+    # Fallback for other modules or if type was not log_event/mind_clearing
+    log_local_bot_event(f"Command type '{command_type}' with module '{module_name}' not specifically handled by NLP, proceeding with default save.")
+
+    # Ensure module_name for file saving uses the actual module name or a default
+    effective_module_name = module_name if module_name else 'telegram_general'
     timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
     command_file_name = f"{timestamp_str}_{chat_id}.json"
     
-    module_name = command_data.get('module', 'telegram_general')
-    module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{module_name}" if module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
+    module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{effective_module_name}" if effective_module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
     module_command_dir.mkdir(parents=True, exist_ok=True)
     command_file_path = module_command_dir / command_file_name
 
