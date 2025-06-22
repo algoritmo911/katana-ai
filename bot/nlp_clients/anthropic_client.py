@@ -10,35 +10,27 @@ from .base_nlp_client import (
 # Anthropic Specific Exceptions
 class AnthropicClientError(NLPServiceError):
     """Base exception for all Anthropic client errors."""
-    def __init__(self, user_message: str = "Произошла ошибка при обращении к Anthropic.", original_error: Exception | None = None):
-        super().__init__(user_message, original_error)
+    pass
 
 class AnthropicAPIError(AnthropicClientError, NLPAPIError):
     """Generic Anthropic API error."""
-    def __init__(self, user_message: str = "Произошла непредвиденная ошибка API Anthropic.", original_error: Exception | None = None):
-        # Call NLPAPIError's __init__ which then calls NLPServiceError's __init__
-        NLPAPIError.__init__(self, user_message=user_message, original_error=original_error)
-        # Ensure AnthropicClientError part of MRO is also handled if it had its own __init__ logic (it doesn't here beyond NLPServiceError)
+    pass
 
 class AnthropicAuthenticationError(AnthropicClientError, NLPAuthenticationError):
     """Raised for Anthropic authentication failures."""
-    def __init__(self, user_message: str = "Ошибка аутентификации с Anthropic. Проверьте ваш API-ключ.", original_error: Exception | None = None):
-        NLPAuthenticationError.__init__(self, user_message=user_message, original_error=original_error)
+    pass
 
 class AnthropicRateLimitError(AnthropicClientError, NLPRateLimitError):
     """Raised for Anthropic rate limit errors."""
-    def __init__(self, user_message: str = "Сервис Anthropic временно перегружен (лимит запросов). Попробуйте позже.", original_error: Exception | None = None):
-        NLPRateLimitError.__init__(self, user_message=user_message, original_error=original_error)
+    pass
 
 class AnthropicInvalidRequestError(AnthropicClientError, NLPBadRequestError):
     """Raised for invalid requests to the Anthropic API."""
-    def __init__(self, user_message: str = "Некорректный запрос к Anthropic. Пожалуйста, проверьте данные.", original_error: Exception | None = None):
-        NLPBadRequestError.__init__(self, user_message=user_message, original_error=original_error)
+    pass
 
 class AnthropicInternalServerError(AnthropicClientError, NLPInternalServerError):
     """Raised for Anthropic internal server errors."""
-    def __init__(self, user_message: str = "Внутренняя ошибка сервера Anthropic. Попробуйте позже.", original_error: Exception | None = None):
-        NLPInternalServerError.__init__(self, user_message=user_message, original_error=original_error)
+    pass
 
 
 class AnthropicClient:
