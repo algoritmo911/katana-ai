@@ -19,16 +19,48 @@ def check_heartbeat(file_path: Path, threshold_seconds: int) -> bool:
     Returns:
         True if heartbeat is okay, False otherwise.
     """
+DEFAULT_ALERT_CONTACT_TELEGRAM = "@admin_user_or_group"
+DEFAULT_ALERT_CONTACT_EMAIL = "admin@example.com"
+
+def simulate_alert(reason: str, details: str):
+    """
+    Simulates sending an alert. In a real scenario, this would integrate
+    with an actual notification service (Telegram, Email, PagerDuty, etc.).
+    """
+    alert_message = f"ALERT TRIGGERED: {reason}\nDetails: {details}\n" \
+                    f"Simulated notification to:\n" \
+                    f"  Telegram: {DEFAULT_ALERT_CONTACT_TELEGRAM}\n" \
+                    f"  Email: {DEFAULT_ALERT_CONTACT_EMAIL}"
+    print(alert_message, file=sys.stderr) # Print alerts to stderr for cron jobs to capture
+
+def check_heartbeat(file_path: Path, threshold_seconds: int) -> bool:
+    """
+    Checks the heartbeat file.
+
+    Args:
+        file_path: Path to the heartbeat file.
+        threshold_seconds: Maximum allowed age of the heartbeat in seconds.
+
+    Returns:
+        True if heartbeat is okay, False otherwise.
+    """
     if not file_path.exists():
-        print(f"CRITICAL: Heartbeat file not found: {file_path}", file=sys.stderr)
+        reason = "Heartbeat file not found"
+        details = f"File: {file_path}"
+        print(f"CRITICAL: {reason} - {details}", file=sys.stderr)
+        simulate_alert(reason, details)
         return False
 
+    timestamp_str = "" # Define in broader scope for use in except ValueError
     try:
         with open(file_path, "r") as f:
             timestamp_str = f.read().strip()
 
         if not timestamp_str:
-            print(f"CRITICAL: Heartbeat file is empty: {file_path}", file=sys.stderr)
+            reason = "Heartbeat file is empty"
+            details = f"File: {file_path}"
+            print(f"CRITICAL: {reason} - {details}", file=sys.stderr)
+            simulate_alert(reason, details)
             return False
 
         last_heartbeat_time = float(timestamp_str)
@@ -36,20 +68,32 @@ def check_heartbeat(file_path: Path, threshold_seconds: int) -> bool:
         age_seconds = current_time - last_heartbeat_time
 
         if age_seconds > threshold_seconds:
-            print(f"CRITICAL: Heartbeat is stale! Last update was {age_seconds:.0f} seconds ago (threshold: {threshold_seconds}s). File: {file_path}", file=sys.stderr)
+            reason = "Heartbeat is stale"
+            details = f"Last update was {age_seconds:.0f} seconds ago (threshold: {threshold_seconds}s). File: {file_path}"
+            print(f"CRITICAL: {reason} - {details}", file=sys.stderr)
+            simulate_alert(reason, details)
             return False
         else:
             print(f"OK: Heartbeat is fresh. Last update was {age_seconds:.0f} seconds ago. File: {file_path}")
             return True
 
     except ValueError:
-        print(f"CRITICAL: Heartbeat file content is not a valid timestamp: {file_path} (Content: '{timestamp_str}')", file=sys.stderr)
+        reason = "Heartbeat file content is not a valid timestamp"
+        details = f"File: {file_path} (Content: '{timestamp_str}')"
+        print(f"CRITICAL: {reason} - {details}", file=sys.stderr)
+        simulate_alert(reason, details)
         return False
     except IOError as e:
-        print(f"CRITICAL: Error reading heartbeat file {file_path}: {e}", file=sys.stderr)
+        reason = "Error reading heartbeat file"
+        details = f"File: {file_path}, Error: {e}"
+        print(f"CRITICAL: {reason} - {details}", file=sys.stderr)
+        simulate_alert(reason, details)
         return False
     except Exception as e:
-        print(f"CRITICAL: Unexpected error checking heartbeat file {file_path}: {e}", file=sys.stderr)
+        reason = "Unexpected error checking heartbeat file"
+        details = f"File: {file_path}, Error: {e}"
+        print(f"CRITICAL: {reason} - {details}", file=sys.stderr)
+        simulate_alert(reason, details)
         return False
 
 if __name__ == "__main__":

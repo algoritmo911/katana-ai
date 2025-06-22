@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime
 import logging # Added for better logging
 import time # For sleep in polling loop
+import signal # For graceful shutdown
 
 # Ensure nlp_services is discoverable
 import sys
@@ -44,6 +45,33 @@ except Exception as e:
     logger.critical(f"FATAL: Failed to create TeleBot instance: {e}", exc_info=True)
     # Depending on desired behavior, could re-raise or sys.exit()
     raise # Re-raise to prevent running with a non-functional bot object
+
+# --- Graceful Shutdown ---
+shutdown_requested = False # Flag to indicate if shutdown was initiated by signal
+
+def graceful_shutdown_handler(signum, frame):
+    """Handles SIGINT and SIGTERM for graceful shutdown."""
+    global shutdown_requested
+    if not shutdown_requested: # Process signal only once
+        shutdown_requested = True
+        logger.warning(f"Shutdown signal {signal.Signals(signum).name} received. Attempting graceful shutdown...")
+        if 'bot' in globals() and bot is not None:
+            try:
+                logger.info("Calling bot.stop_polling()...")
+                bot.stop_polling()
+                # Polling loop should exit after this.
+            except Exception as e:
+                logger.error(f"Error during bot.stop_polling(): {e}", exc_info=True)
+        else:
+            logger.warning("Bot object not available for stop_polling(). Exiting directly.")
+        # Further cleanup can be added here if needed
+    else:
+        logger.warning(f"Repeated shutdown signal {signal.Signals(signum).name} received. Already shutting down.")
+
+# Register signal handlers early, but bot object might not be ready if token fails
+# We will register them in if __name__ == '__main__' after bot is created.
+
+# --- End Graceful Shutdown ---
 
 # Папка для сохранения команд
 COMMAND_FILE_DIR = Path('commands')
@@ -226,11 +254,16 @@ if __name__ == '__main__':
     # log_local_bot_event("Bot starting...") # Already logged by logger.info("Initializing Katana Bot...")
     logger.info("Attempting to start bot polling...")
 
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, graceful_shutdown_handler)
+    signal.signal(signal.SIGTERM, graceful_shutdown_handler)
+    logger.info("Signal handlers for SIGINT and SIGTERM registered.")
+
     heartbeat_file_path = project_root / "katana_heartbeat.txt" # Heartbeat file in project root
     heartbeat_interval_seconds = 60 # How often to update heartbeat if we had an active loop
     last_heartbeat_time = 0
 
-    while True:
+    while not shutdown_requested: # Continue polling until shutdown is requested
         try:
             # Update heartbeat at the start of each polling attempt/iteration
             current_time = time.time()
@@ -251,10 +284,14 @@ if __name__ == '__main__':
             logger.error(f"Bot polling encountered an error: {e}", exc_info=True)
             logger.info("Restarting polling in 15 seconds...")
             time.sleep(15)
-        else: # This block executes if the try block completes without an exception (e.g., bot.stop_polling() was called)
-            logger.info("Bot polling exited cleanly. Will restart if in a loop, or exit if stopped intentionally.")
-            # If we want to truly stop on clean exit, we might break the while loop here.
-            # For now, it will restart, which is robust for unexpected clean exits.
-            # Consider adding a flag or condition to break loop if needed.
-            time.sleep(5) # Brief pause before restarting even on clean exit, unless designed to stop.
-    # log_local_bot_event("Bot stopped.") # This line would be unreachable if polling is in an infinite loop.
+        else: # This block executes if the try block completes without an exception
+            if shutdown_requested:
+                logger.info("Bot polling exited cleanly due to shutdown request.")
+                break # Exit the while loop, effectively stopping the bot
+            else:
+                # This case means bot.polling() returned without an exception,
+                # but shutdown was not requested via signal. This might be unexpected.
+                logger.warning("Bot polling exited cleanly but no shutdown signal was received. Restarting in 5 seconds...")
+                time.sleep(5)
+
+    logger.info("Katana Bot has shut down.")

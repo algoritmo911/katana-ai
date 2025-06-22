@@ -139,8 +139,9 @@ For production deployments, it's highly recommended to run the Katana Bot as a m
 5.  **Check service status:**
     ```bash
     sudo systemctl status katana_bot.service
-    journalctl -u katana_bot.service -f # To follow logs
+    journalctl -u katana_bot.service -f # To follow logs (-n 100 to see last 100 lines)
     ```
+    *   **Log Management**: By default, `systemd` uses `journald`. You can configure `journald` (e.g., in `/etc/systemd/journald.conf`) for persistence, rotation, and size limits. If you chose file-based logging in the `.service` file (e.g., `StandardOutput=append:/var/log/katana_bot/katana_bot.log`), ensure the directory exists and `your_user` has write permissions. Log rotation for files would then need to be managed separately (e.g., with `logrotate`).
 
 ### Using Supervisor
 
@@ -172,6 +173,7 @@ For production deployments, it's highly recommended to run the Katana Bot as a m
     sudo supervisorctl tail -f katana_bot stdout # To follow stdout logs
     sudo supervisorctl tail -f katana_bot stderr # To follow stderr logs
     ```
+    *   **Log Management**: Supervisor handles log rotation for files specified by `stdout_logfile` and `stderr_logfile` based on `stdout_logfile_maxbytes` and `stdout_logfile_backups` (and similarly for stderr). Ensure the log directories (e.g., `/path/to/your/katana-bot-project/logs/` or `/var/log/katana_bot/`) exist and are writable by the user running the Supervisor process or the user specified in the `katana_bot.conf`.
 
 ## Monitoring
 
@@ -211,7 +213,85 @@ Add a line like this to run the check every 5 minutes:
 *   This example logs the output of the check script. For active alerting, you would modify `check_heartbeat.py` or pipe its output to a notification service.
 
 ### Extending for Active Notifications
-The `check_heartbeat.py` script currently logs to stderr on failure. To implement active notifications (e.g., email, Telegram message):
-1.  Modify `check_heartbeat.py` to include logic for sending notifications using appropriate libraries (e.g., `smtplib` for email, or `python-telegram-bot` to send a message via another bot).
-2.  Ensure the script has the necessary configurations (SMTP server details, Telegram bot token for notifications, recipient addresses/chat IDs). These should also be managed securely.
+The `check_heartbeat.py` script currently logs to stderr and simulates alert messages. To implement active notifications:
+
+*   **Option 1: Wrapper Script (Simple)**
+    You can create a small shell script that runs `check_heartbeat.py` and then, based on its exit code, sends a notification.
+    Example `run_heartbeat_check_and_alert.sh`:
+    ```bash
+    #!/bin/bash
+    PYTHON_EXEC="/path/to/your/katana-bot-project/venv/bin/python" # Or just python3 if in PATH
+    SCRIPT_PATH="/path/to/your/katana_bot-project/tools/check_heartbeat.py"
+    HEARTBEAT_FILE="/path/to/your/katana-bot-project/katana_heartbeat.txt"
+    LOG_FILE="/var/log/katana_bot/heartbeat_check.log" # Ensure this dir exists and is writable
+
+    # Run the check
+    output=$($PYTHON_EXEC $SCRIPT_PATH --file $HEARTBEAT_FILE --threshold 300 2>&1)
+    exit_code=$?
+
+    echo "$(date): Check script exited with $exit_code. Output: $output" >> $LOG_FILE
+
+    if [ $exit_code -ne 0 ]; then
+        # Heartbeat failed, send alert
+        alert_subject="Katana Bot Heartbeat FAILED"
+        alert_body="Katana Bot heartbeat is stale or file is missing. Check logs.\nOutput:\n$output"
+
+        # Example: Send email (requires `mailutils` or `sendmail` configured)
+        # echo -e "$alert_body" | mail -s "$alert_subject" your_email@example.com
+
+        # Example: Send Telegram message via another bot's API (replace with your bot token and chat ID)
+        # TELEGRAM_BOT_TOKEN_ALERT="your_alert_bot_token"
+        # TELEGRAM_CHAT_ID_ALERT="your_chat_id_for_alerts"
+        # curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN_ALERT/sendMessage" \
+        #     -d chat_id="$TELEGRAM_CHAT_ID_ALERT" \
+        #     -d text="$alert_subject\n\n$alert_body" > /dev/null
+
+        echo "ALERT: $alert_subject - $alert_body (Actual notification would be sent here)" >> $LOG_FILE
+    fi
+    ```
+    Then, schedule `run_heartbeat_check_and_alert.sh` in cron instead of `check_heartbeat.py` directly.
+
+*   **Option 2: Modify `check_heartbeat.py` Directly**
+    1.  Add libraries like `smtplib` (for email) or `requests` (for calling Telegram API, etc.) to `check_heartbeat.py`.
+    2.  Implement functions within the Python script to send notifications.
+    3.  Securely manage credentials for these notification services (e.g., via environment variables for the cron job, or a config file for the script).
+
+### Future Monitoring Enhancements (Conceptual)
+
+*   **HTTP `/health` Endpoint:**
+    *   For more active checks by load balancers or external monitoring services, you could add a simple HTTP server (e.g., using Flask or http.server in a separate thread) to `katana_bot.py`.
+    *   This server would expose an endpoint like `/health`.
+    *   A request to `/health` could check:
+        *   If the main bot polling thread/loop is considered active.
+        *   The age of the last successful message processing (if tracked).
+        *   Connection status to Telegram (if `telebot` provides such a check).
+    *   It would return an HTTP 200 status if healthy, or 503 Service Unavailable if not.
+
+*   **Prometheus Metrics:**
+    *   Integrate a Prometheus client library (e.g., `prometheus_client`) into `katana_bot.py`.
+    *   Expose metrics on an HTTP endpoint (often `/metrics`), such as:
+        *   Number of messages processed.
+        *   Number of errors (total, by type).
+        *   NLP client request latencies.
+        *   Information about the bot's state.
+    *   Set up Prometheus to scrape this endpoint and Alertmanager to fire alerts based on these metrics.
+
+## Troubleshooting Common Issues
+
+*   **Bot does not start / `ValueError` for Token:**
+    *   Ensure `KATANA_TELEGRAM_TOKEN` environment variable is correctly set *in the environment where the bot script runs*. This is crucial for systemd/supervisor services.
+    *   Verify the token format is `numbers:characters`.
+*   **`ModuleNotFoundError`:**
+    *   If running as a service, ensure `WorkingDirectory` is correct and the Python executable used (especially if from a virtual environment) can find all installed packages.
+    *   Activate the virtual environment if necessary before running, or use the full path to the venv Python interpreter in service files.
+*   **Heartbeat file not updated / Permission errors:**
+    *   Ensure the directory where `katana_heartbeat.txt` (project root by default) is located is writable by the user the bot service runs as.
+    *   Check logs from `katana_bot.py` for any `IOError` related to heartbeat file writing.
+*   **`check_heartbeat.py` script issues:**
+    *   Verify paths to the script and heartbeat file are correct in cron jobs.
+    *   Ensure the script has execute permissions (`chmod +x tools/check_heartbeat.py`).
+    *   Check logs from the cron job (e.g., `/var/log/katana_bot/heartbeat_check.log` in the example) for errors.
+*   **Service fails to stay running (systemd/supervisor):**
+    *   Check `journalctl -u katana_bot.service` (for systemd) or Supervisor's log files for the bot process. These logs will contain startup errors or runtime exceptions from `katana_bot.py`.
+    *   Ensure `RestartSec` (systemd) or `startsecs`/`startretries` (Supervisor) are configured to allow for recovery time if there are transient issues.
 ```
