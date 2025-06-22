@@ -7,13 +7,22 @@ USE_LLM_NLP = os.environ.get('USE_LLM_NLP', 'false').lower() == 'true'
 def basic_interpret(text: str) -> str | None:
     """Basic keyword-based text interpretation."""
     text = text.lower()
+    # Order can matter if keywords overlap. More specific checks can go first.
+    if "красивый аптайм" in text or "аптайм красиво" in text or ("аптайм" in text and "подробно" in text):
+        return "uptime -p"
     if "место" in text or "диск" in text:
         return "df -h"
-    if "работает" in text or "аптайм" in text:
+    if "работает" in text or "аптайм" in text: # General uptime, will be caught if more specific above isn't.
         return "uptime"
-    if "загрузка" in text or "cpu" in text or "процессор" in text: # Added "процессор"
+    if "память" in text or "оперативка" in text or "сколько памяти" in text:
+        return "free -m"
+    if "кто я" in text or "пользователь" in text or "юзер" in text: # "юзер" is a common transliteration
+        return "whoami"
+    if "дата" in text or "время" in text or "какое сегодня число" in text:
+        return "date"
+    if "загрузка" in text or "cpu" in text or "процессор" in text:
         return "top -n1 | head -5"
-    if "папки" in text or "файлы" in text or "список" in text: # Added "список"
+    if "папки" in text or "файлы" in text or "список" in text:
         return "ls -al"
     return None
 
