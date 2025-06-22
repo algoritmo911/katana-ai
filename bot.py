@@ -38,7 +38,15 @@ def log_local_bot_event(message):
 # --- Bot State & Cache Setup ---
 BOT_START_TIME = get_utc_now()
 CACHE = {}
-CACHE_TTL_SECONDS = 60 # Time-to-live for cache entries, e.g., 60 seconds
+DEFAULT_CACHE_TTL_SECONDS = 60 # Default Time-to-live for cache entries
+COMMAND_TTLS = {
+    "df -h": 60,
+    "uptime": 30,
+    "uptime -p": 30,
+    "free -m": 45,
+    "whoami": 90,
+    "date": 15,
+}
 CACHE_STATS = {"hits": 0, "misses": 0}
 
 # --- Katana Command Execution ---
@@ -158,10 +166,15 @@ def send_status(message):
     active_cache_items = 0
     current_time = get_utc_now()
     for cmd, data in list(CACHE.items()): # Iterate over a copy for safe removal
-        if (current_time - data['timestamp']).total_seconds() >= CACHE_TTL_SECONDS:
+        # For counting active items, we ideally should use the specific TTL the item was stored with.
+        # However, cache entries don't store their TTL. So, this check is a general one.
+        # Using DEFAULT_CACHE_TTL_SECONDS as a general benchmark here.
+        # A refinement would be to store TTL with cache entry and use data['ttl'].
+        item_ttl_for_status_check = COMMAND_TTLS.get(cmd, DEFAULT_CACHE_TTL_SECONDS)
+        if (current_time - data['timestamp']).total_seconds() >= item_ttl_for_status_check:
             # Optional: Clean up expired items during status check, or rely on overwrite
             # del CACHE[cmd]
-            # log_local_bot_event(f"Expired cache item '{cmd}' removed during status check.")
+            # log_local_bot_event(f"Expired cache item '{cmd}' (TTL: {item_ttl_for_status_check}s) removed during status check.")
             pass # Just counting active ones
         else:
             active_cache_items += 1
@@ -173,7 +186,7 @@ def send_status(message):
         f"Время работы: {uptime_str}\n"
         f"\n"
         f"**Кеш:**\n"
-        f"TTL записей: {CACHE_TTL_SECONDS} секунд\n"
+        f"Стандартный TTL: {DEFAULT_CACHE_TTL_SECONDS} секунд (некоторые команды могут иметь свой TTL)\n"
         f"Активных записей в кеше: {active_cache_items}\n"
         f"Всего записей в кеше (включая устаревшие): {total_cache_items}\n"
         f"Попаданий в кеш: {CACHE_STATS['hits']}\n"
@@ -213,8 +226,10 @@ def handle_text_message(message):
 
         if nlp_command in CACHEABLE_NLP_COMMANDS:
             current_time = get_utc_now()
+            command_ttl = COMMAND_TTLS.get(nlp_command, DEFAULT_CACHE_TTL_SECONDS)
+
             if nlp_command in CACHE and \
-               (current_time - CACHE[nlp_command]['timestamp']).total_seconds() < CACHE_TTL_SECONDS:
+               (current_time - CACHE[nlp_command]['timestamp']).total_seconds() < command_ttl:
                 output = CACHE[nlp_command]['output']
                 cache_hit = True
                 CACHE_STATS["hits"] += 1

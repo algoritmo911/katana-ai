@@ -322,10 +322,13 @@ class TestBot(unittest.TestCase):
     @patch('bot.run_katana_command')
     @patch('bot.interpret')
     def test_nlp_command_caching(self, mock_interpret, mock_run_katana):
-        """Test caching mechanism for NLP commands."""
+        """Test caching mechanism for NLP commands, including adaptive TTL."""
+        # Using 'uptime' which has a specific TTL of 30s in COMMAND_TTLS
         nlp_input_text = "покажи аптайм"
-        interpreted_command = "uptime" # This is in CACHEABLE_NLP_COMMANDS
+        interpreted_command = "uptime"
         first_output = "10 days, 02:30:00"
+        command_specific_ttl = bot.COMMAND_TTLS.get(interpreted_command, bot.DEFAULT_CACHE_TTL_SECONDS)
+        self.assertEqual(command_specific_ttl, 30, "TTL for 'uptime' should be 30s for this test")
 
         mock_interpret.return_value = interpreted_command
         mock_run_katana.return_value = first_output
@@ -354,9 +357,8 @@ class TestBot(unittest.TestCase):
         self.assertEqual(bot.CACHE_STATS["hits"], 1)
 
         # Test cache expiry
-        # Advance time beyond CACHE_TTL_SECONDS
-        # self.current_test_time is the initial time returned by mock_get_utc_now
-        future_time = self.current_test_time + self.real_timedelta(seconds=bot.CACHE_TTL_SECONDS + 5)
+        # Advance time beyond the command_specific_ttl
+        future_time = self.current_test_time + self.real_timedelta(seconds=command_specific_ttl + 5)
 
         # Change what bot.get_utc_now() will return for the next part of the test
         self.mock_get_utc_now.return_value = future_time
@@ -471,7 +473,7 @@ class TestBot(unittest.TestCase):
         self.assertIn("Статус Бота", reply_text)
         self.assertIn("Время работы:", reply_text)
         self.assertIn("Кеш:", reply_text)
-        self.assertIn(f"TTL записей: {bot.CACHE_TTL_SECONDS} секунд", reply_text)
+        self.assertIn(f"Стандартный TTL: {bot.DEFAULT_CACHE_TTL_SECONDS} секунд", reply_text)
         self.assertIn("Активных записей в кеше:", reply_text) # Check count if specific logic is complex
         self.assertIn(f"Попаданий в кеш: {bot.CACHE_STATS['hits']}", reply_text)
         self.assertIn(f"Промахов кеша: {bot.CACHE_STATS['misses']}", reply_text)
