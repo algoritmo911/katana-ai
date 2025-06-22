@@ -302,3 +302,201 @@ class TestBot(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+# --- New Test Class for Refactored Functions ---
+# Mock telebot and its related objects if they are used directly by tested functions
+# For route_command, it uses bot.reply_to, so we'll need to mock 'katana_bot.bot'
+# This mock_bot_instance can be defined globally for this test class or per method.
+mock_bot_instance_for_refactored = MagicMock()
+
+class TestKatanaBotRefactoredFunctions(unittest.TestCase):
+
+    def setUp(self):
+        # It's good practice to have a separate test directory for these tests too,
+        # or ensure that COMMAND_FILE_DIR is mocked if save_command_to_file is tested
+        # in a way that writes files.
+        self.test_commands_dir_refactored = Path("test_commands_refactored_temp_dir")
+        self.test_commands_dir_refactored.mkdir(parents=True, exist_ok=True)
+
+        self.original_command_file_dir = katana_bot.COMMAND_FILE_DIR
+        katana_bot.COMMAND_FILE_DIR = self.test_commands_dir_refactored
+
+        # Reset mocks for each test method if using a shared mock instance
+        mock_bot_instance_for_refactored.reset_mock()
+
+
+    def tearDown(self):
+        if self.test_commands_dir_refactored.exists():
+            shutil.rmtree(self.test_commands_dir_refactored)
+        katana_bot.COMMAND_FILE_DIR = self.original_command_file_dir
+
+
+    def test_parse_command_valid(self):
+        command_text = '{"type": "test", "module": "test_mod", "args": {}, "id": "123"}'
+        data, error = katana_bot.parse_command(command_text)
+        self.assertIsNotNone(data)
+        self.assertIsNone(error)
+        self.assertEqual(data["type"], "test")
+
+    def test_parse_command_invalid_json(self):
+        command_text = 'this is not json'
+        data, error = katana_bot.parse_command(command_text)
+        self.assertIsNone(data)
+        self.assertIsNotNone(error)
+        self.assertEqual(error, "Invalid JSON format.")
+
+    def test_validate_command_valid(self):
+        command_data = {"type": "test", "module": "test_mod", "args": {}, "id": "123"}
+        error = katana_bot.validate_command(command_data)
+        self.assertIsNone(error)
+
+    def test_validate_command_missing_field(self):
+        command_data = {"module": "test_mod", "args": {}, "id": "123"} # Missing "type"
+        error = katana_bot.validate_command(command_data)
+        self.assertIsNotNone(error)
+        self.assertEqual(error, "Missing required field 'type'.")
+
+    def test_validate_command_invalid_type(self):
+        command_data = {"type": 123, "module": "test_mod", "args": {}, "id": "123"} # "type" should be str
+        error = katana_bot.validate_command(command_data)
+        self.assertIsNotNone(error)
+        self.assertEqual(error, "Field 'type' must be type str. Got int.")
+
+    def test_validate_command_invalid_id_type(self):
+        command_data = {"type": "test", "module": "test_mod", "args": {}, "id": [1,2]} # "id" should be str or int
+        error = katana_bot.validate_command(command_data)
+        self.assertIsNotNone(error)
+        self.assertEqual(error, "Field 'id' must be type str or int. Got list.")
+
+    def test_validate_command_valid_id_int(self):
+        command_data = {"type": "test", "module": "test_mod", "args": {}, "id": 123}
+        error = katana_bot.validate_command(command_data)
+        self.assertIsNone(error)
+
+    @patch('bot.katana_bot.bot', mock_bot_instance_for_refactored)
+    @patch('bot.katana_bot.handle_log_event')
+    def test_route_command_log_event(self, mock_handle_log_event):
+        mock_message_obj = MagicMock() # Renamed from mock_message to avoid conflict if setUp uses it
+        chat_id = 12345
+        command_data = {"type": "log_event", "module": "logging", "args": {"level": "info"}, "id": "event1"}
+
+        result = katana_bot.route_command(command_data, mock_message_obj, chat_id)
+
+        self.assertTrue(result)
+        mock_handle_log_event.assert_called_once_with(command_data, chat_id)
+        mock_bot_instance_for_refactored.reply_to.assert_called_once_with(mock_message_obj, "✅ 'log_event' processed (placeholder).")
+
+    @patch('bot.katana_bot.bot', mock_bot_instance_for_refactored)
+    @patch('bot.katana_bot.handle_mind_clearing')
+    def test_route_command_mind_clearing(self, mock_handle_mind_clearing):
+        mock_message_obj = MagicMock()
+        chat_id = 12345
+        command_data = {"type": "mind_clearing", "module": "utils", "args": {}, "id": "clear1"}
+
+        result = katana_bot.route_command(command_data, mock_message_obj, chat_id)
+
+        self.assertTrue(result)
+        mock_handle_mind_clearing.assert_called_once_with(command_data, chat_id)
+        mock_bot_instance_for_refactored.reply_to.assert_called_once_with(mock_message_obj, "✅ 'mind_clearing' processed (placeholder).")
+
+    @patch('bot.katana_bot.bot', mock_bot_instance_for_refactored)
+    def test_route_command_unknown_type(self):
+        mock_message_obj = MagicMock()
+        chat_id = 12345
+        command_data = {"type": "unknown_command", "module": "test", "args": {}, "id": "unknown1"}
+
+        result = katana_bot.route_command(command_data, mock_message_obj, chat_id)
+
+        self.assertFalse(result)
+        mock_bot_instance_for_refactored.reply_to.assert_not_called()
+
+    @patch("builtins.open", new_callable=unittest.mock.mock_open)
+    @patch("bot.katana_bot.Path.mkdir") # Mocking Path.mkdir, will apply to all instances of Path
+    @patch("bot.katana_bot.datetime")
+    def test_save_command_to_file_general(self, mock_datetime_module, mock_path_mkdir, mock_file_open):
+        # Configure datetime mock
+        mock_now = katana_bot.datetime(2023, 1, 1, 12, 0, 0, 123456) # Use katana_bot.datetime for consistency if it's imported there
+        mock_datetime_module.utcnow.return_value = mock_now
+        # If strftime is called on the datetime object directly:
+        # mock_now.strftime.return_value = '20230101_120000_123456'
+        # If strftime is called on the result of utcnow():
+        mock_datetime_module.utcnow.return_value.strftime.return_value = '20230101_120000_123456'
+        expected_timestamp_str = '20230101_120000_123456'
+
+        chat_id = 67890
+        command_data = {"type": "save_this", "module": "telegram_general", "args": {"data": "content"}, "id": "save1"}
+
+        # Use the mocked COMMAND_FILE_DIR from setUp
+        expected_dir = self.test_commands_dir_refactored / 'telegram_general'
+        expected_filename = f"{expected_timestamp_str}_{chat_id}.json"
+        expected_path = expected_dir / expected_filename
+
+        returned_path = katana_bot.save_command_to_file(command_data, chat_id)
+
+        # Check that mkdir was called on the correct Path object (expected_dir)
+        # Path.mkdir is called on the `module_command_dir` instance.
+        # We need to ensure `module_command_dir` (which is `expected_dir` here) had `mkdir` called.
+        # The patch on `bot.katana_bot.Path.mkdir` means any Path(...).mkdir(...) call is caught.
+        # We need to check if it was called with parents=True, exist_ok=True by the correct Path instance.
+        # This can be tricky. A simpler check is that `mock_path_mkdir` was called.
+        # To be more specific, one might need to inspect `mock_path_mkdir.call_args_list`.
+        mock_path_mkdir.assert_any_call(parents=True, exist_ok=True)
+
+
+        mock_file_open.assert_called_once_with(expected_path, "w", encoding="utf-8")
+        handle = mock_file_open()
+
+        # Check the content written by json.dump by joining all parts written
+        written_content = "".join(call_args[0][0] for call_args in handle.write.call_args_list)
+        expected_content = json.dumps(command_data, ensure_ascii=False, indent=2)
+        self.assertEqual(written_content, expected_content)
+        self.assertEqual(returned_path, expected_path)
+
+
+    @patch("builtins.open", new_callable=unittest.mock.mock_open)
+    @patch("bot.katana_bot.Path.mkdir")
+    @patch("bot.katana_bot.datetime")
+    def test_save_command_to_file_specific_module(self, mock_datetime_module, mock_path_mkdir, mock_file_open):
+        mock_now = katana_bot.datetime(2023, 1, 1, 12, 0, 0, 123456)
+        mock_datetime_module.utcnow.return_value = mock_now
+        mock_datetime_module.utcnow.return_value.strftime.return_value = '20230101_120000_123456'
+        expected_timestamp_str = '20230101_120000_123456'
+
+        chat_id = 67890
+        module_name = "custom_module"
+        command_data = {"type": "save_this", "module": module_name, "args": {"data": "content"}, "id": "save2"}
+
+        expected_dir = self.test_commands_dir_refactored / f"telegram_mod_{module_name}"
+        expected_filename = f"{expected_timestamp_str}_{chat_id}.json"
+        expected_path = expected_dir / expected_filename
+
+        returned_path = katana_bot.save_command_to_file(command_data, chat_id)
+
+        mock_path_mkdir.assert_any_call(parents=True, exist_ok=True) # Check if mkdir was called
+        mock_file_open.assert_called_once_with(expected_path, "w", encoding="utf-8")
+        self.assertEqual(returned_path, expected_path)
+
+
+    @patch("builtins.open", new_callable=unittest.mock.mock_open)
+    @patch("bot.katana_bot.Path.mkdir")
+    @patch("bot.katana_bot.datetime")
+    def test_save_command_to_file_invalid_module_name_sanitized(self, mock_datetime_module, mock_path_mkdir, mock_file_open):
+        mock_now = katana_bot.datetime(2023, 1, 1, 12, 0, 0, 123456)
+        mock_datetime_module.utcnow.return_value = mock_now
+        mock_datetime_module.utcnow.return_value.strftime.return_value = '20230101_120000_123456'
+        expected_timestamp_str = '20230101_120000_123456'
+
+        chat_id = 67890
+        command_data = {"type": "save_this", "module": "../../../etc/passwd", "args": {"data": "content"}, "id": "save3"}
+
+        # It should default to 'telegram_general' due to sanitization in save_command_to_file
+        expected_dir = self.test_commands_dir_refactored / 'telegram_general'
+        expected_filename = f"{expected_timestamp_str}_{chat_id}.json"
+        expected_path = expected_dir / expected_filename
+
+        returned_path = katana_bot.save_command_to_file(command_data, chat_id)
+
+        mock_path_mkdir.assert_any_call(parents=True, exist_ok=True)
+        mock_file_open.assert_called_once_with(expected_path, "w", encoding="utf-8")
+        self.assertEqual(returned_path, expected_path)
