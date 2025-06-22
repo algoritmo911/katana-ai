@@ -5,9 +5,75 @@ import logging
 from pathlib import Path
 from datetime import datetime, timezone
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+import threading
+import time
+
+# Получаем логгер. Конфигурация логирования (basicConfig, handlers)
+# предполагается выполненной в главном скрипте (например, run_bot_locally.py)
+# или в блоке if __name__ == '__main__' ниже, если этот файл запускается напрямую.
 logger = logging.getLogger(__name__)
+
+# --- Heartbeat Function ---
+_heartbeat_thread = None
+_heartbeat_stop_event = threading.Event()
+
+def _write_heartbeat(file_path: str):
+    """Writes/updates the heartbeat file with the current timestamp."""
+    try:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'w') as f:
+            f.write(datetime.now(timezone.utc).isoformat())
+        # logger.debug(f"Heartbeat updated: {file_path}") # Too noisy for INFO
+    except Exception as e:
+        logger.error(f"Failed to write heartbeat to {file_path}: {e}", exc_info=True)
+
+def _heartbeat_loop(file_path: str, interval: int):
+    """Periodically writes a heartbeat to the specified file."""
+    logger.info(f"Heartbeat thread started. Updating {file_path} every {interval} seconds.")
+    while not _heartbeat_stop_event.is_set():
+        _write_heartbeat(file_path)
+        _heartbeat_stop_event.wait(interval) # Wait for interval or until stop_event is set
+    logger.info("Heartbeat thread stopped.")
+
+def start_heartbeat_thread():
+    """Starts the global heartbeat thread if configured and not already running."""
+    global _heartbeat_thread
+    if _heartbeat_thread is not None and _heartbeat_thread.is_alive():
+        logger.warning("Heartbeat thread already running.")
+        return
+
+    heartbeat_file = os.getenv('HEARTBEAT_FILE_PATH')
+    heartbeat_interval_str = os.getenv('HEARTBEAT_INTERVAL_SECONDS', '30') # Default to 30 seconds
+
+    if not heartbeat_file:
+        logger.info("HEARTBEAT_FILE_PATH not set. Heartbeat thread will not start.")
+        return
+
+    try:
+        heartbeat_interval = int(heartbeat_interval_str)
+        if heartbeat_interval <= 0:
+            raise ValueError("Heartbeat interval must be positive.")
+    except ValueError:
+        logger.error(f"Invalid HEARTBEAT_INTERVAL_SECONDS: '{heartbeat_interval_str}'. Must be a positive integer. Heartbeat disabled.", exc_info=True)
+        return
+
+    _heartbeat_stop_event.clear()
+    _heartbeat_thread = threading.Thread(target=_heartbeat_loop, args=(heartbeat_file, heartbeat_interval), daemon=True)
+    _heartbeat_thread.start()
+
+def stop_heartbeat_thread():
+    """Stops the global heartbeat thread."""
+    global _heartbeat_thread
+    if _heartbeat_thread and _heartbeat_thread.is_alive():
+        logger.info("Stopping heartbeat thread...")
+        _heartbeat_stop_event.set()
+        _heartbeat_thread.join(timeout=5) # Wait for thread to finish
+        if _heartbeat_thread.is_alive():
+            logger.warning("Heartbeat thread did not stop in time.")
+        _heartbeat_thread = None
+    else:
+        logger.info("Heartbeat thread not running or already stopped.")
 
 # --- Заглушки и глобальные переменные ---
 # Это будет заменено реальной реализацией или импортом
@@ -229,10 +295,28 @@ def handle_message(message):
             logger.error(f"[ErrorID: {error_id}] Failed to send error reply to user {message.chat.id}: {ex_reply}", exc_info=True)
 
 if __name__ == '__main__':
-    logger.info("Bot starting...")
-    # bot.polling() # Old call
-    bot.polling(none_stop=True) # New call with none_stop=True
-    logger.info("Bot polling started (this message might not be reached if polling is truly endless).")
-    # В режиме none_stop=True, poling() является блокирующим вызовом и не завершится сам по себе.
-    # Логирование "Bot stopped." будет достигнуто только если процесс бота будет прерван извне (Ctrl+C, kill).
-    # Для run_bot_locally.py это нормально, т.к. мы ожидаем, что бот будет работать до прерывания.
+    # This configuration will be applied only if katana_bot.py is run directly.
+    # If imported (e.g., by run_bot_locally.py), the logging configuration
+    # from the importing script should take precedence.
+    # Check if handlers are already configured for the root logger.
+    if not logging.getLogger().hasHandlers():
+        # Get LOG_LEVEL from environment, default to INFO
+        log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
+        log_level = getattr(logging, log_level_str, logging.INFO)
+        logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    logger.info("Bot starting directly from katana_bot.py...")
+    start_heartbeat_thread()  # Start heartbeat when run directly
+    try:
+        # bot.polling() # Old call
+        bot.polling(none_stop=True) # New call with none_stop=True
+        logger.info("Bot polling started (this message might not be reached if polling is truly endless).")
+        # In none_stop=True mode, polling() is a blocking call and won't complete on its own.
+        # "Bot stopped." logging will only be reached if the bot process is interrupted externally (Ctrl+C, kill).
+    except KeyboardInterrupt:
+        logger.info("🤖 Bot polling interrupted by user (Ctrl+C) when run directly. Shutting down...")
+    except Exception as e:
+        logger.error(f"💥 An unexpected error occurred while running the bot directly: {e}", exc_info=True)
+    finally:
+        stop_heartbeat_thread()  # Stop heartbeat when run directly
+        logger.info("🛑 Katana Bot (run directly) has shut down.")

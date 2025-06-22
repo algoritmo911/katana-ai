@@ -3,24 +3,52 @@ import logging
 from dotenv import load_dotenv
 
 # Настройка логирования до загрузки остальных модулей бота, чтобы видеть все с самого начала
-# Устанавливаем базовый уровень INFO, чтобы видеть сообщения от python-dotenv и нашего бота
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Устанавливаем базовый уровень INFO
+log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
+
+# Базовая конфигурация для вывода в консоль
+logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__) # Логгер для этого скрипта
+
+# Настройка логирования в файл, если указано в .env
+LOG_FILE_PATH = os.getenv('LOG_FILE_PATH')
+if LOG_FILE_PATH:
+    try:
+        # Убедимся, что директория для лог-файла существует
+        os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)
+
+        # Создаем файловый обработчик
+        file_handler = logging.FileHandler(LOG_FILE_PATH, mode='a', encoding='utf-8')
+        file_handler.setLevel(log_level)
+        file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(file_formatter)
+
+        # Добавляем файловый обработчик к корневому логгеру, чтобы все логгеры писали в файл
+        logging.getLogger().addHandler(file_handler)
+        logger.info(f"✅ Logging to file enabled: {LOG_FILE_PATH}")
+    except Exception as e:
+        logger.error(f"❌ Failed to configure file logging to {LOG_FILE_PATH}: {e}", exc_info=True)
+
 
 logger.info("Attempting to load environment variables from .env file...")
 # Загружаем переменные окружения из .env файла
 # Это должно быть сделано до импорта bot.katana_bot, так как он ожидает, что переменные уже установлены
-if load_dotenv():
-    logger.info("✅ .env file loaded successfully.")
+if load_dotenv(): # `load_dotenv` сам найдет .env файл
+    logger.info("✅ .env file loaded successfully (or was already loaded).")
 else:
-    logger.warning("⚠️ .env file not found or is empty. Relying on system environment variables.")
+    logger.warning("⚠️ .env file not found. Relying on system environment variables if already set.")
 
 # Теперь, когда переменные окружения (предположительно) загружены, импортируем бота
 try:
-    from bot.katana_bot import bot, logger as bot_logger # Импортируем и логгер бота для консистентности
-    # Можно настроить логгер бота здесь дополнительно, если нужно
+    # Импортируем логгер бота, чтобы он также унаследовал файловый обработчик, если настроен
+    from bot.katana_bot import bot, logger as bot_logger, start_heartbeat_thread, stop_heartbeat_thread
+    # Если в bot.katana_bot своя конфигурация логирования, она может перезаписать эту.
+    # Убедимся, что katana_bot использует тот же logger или настраивается согласованно.
+    # В текущей реализации katana_bot.py использует logging.getLogger(__name__),
+    # так что он должен наследовать обработчики от корневого логгера.
 except ImportError as e:
-    logger.error(f"❌ Failed to import bot.katana_bot. Ensure it exists and PYTHONPATH is set correctly. Error: {e}", exc_info=True)
+    logger.error(f"❌ Failed to import from bot.katana_bot. Ensure it exists and PYTHONPATH is set correctly. Error: {e}", exc_info=True)
     exit(1)
 except Exception as e:
     logger.error(f"❌ An unexpected error occurred during bot import: {e}", exc_info=True)
@@ -29,6 +57,7 @@ except Exception as e:
 
 if __name__ == '__main__':
     logger.info("🚀 Starting Katana Bot locally...")
+    start_heartbeat_thread() # Start the heartbeat thread
     try:
         # bot.polling() в katana_bot.py уже настроен с none_stop=True
         # и содержит свое логирование старта.
@@ -47,4 +76,5 @@ if __name__ == '__main__':
         # Но на всякий случай, если ошибка произойдет на уровне самого polling или инициализации.
         logger.error(f"💥 An unexpected error occurred while running the bot: {e}", exc_info=True)
     finally:
+        stop_heartbeat_thread() # Stop the heartbeat thread
         logger.info("🛑 Katana Bot has shut down.")

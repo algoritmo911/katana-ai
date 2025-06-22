@@ -1,3 +1,4 @@
 pytest
 pyTelegramBotAPI
 python-dotenv
+flake8
