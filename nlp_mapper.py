@@ -6,7 +6,28 @@ USE_LLM_NLP = os.environ.get('USE_LLM_NLP', 'false').lower() == 'true'
 
 def basic_interpret(text: str) -> str | None:
     """Basic keyword-based text interpretation."""
+    original_text = text # Keep original for potential raw command execution
     text = text.lower()
+
+    # Handle /run <command> syntax
+    if text.startswith("/run "):
+        command_part = original_text[5:].strip() # Extract command after "/run "
+        # If the extracted command is simple and known, map it.
+        # Otherwise, return the raw command_part to be executed directly.
+        # This allows for flexibility, e.g., /run custom_script.sh arg1
+        if command_part.lower() == "uptime":
+            return "uptime"
+        if command_part.lower() == "df -h":
+            return "df -h"
+        if command_part.lower() == "ls -al":
+            return "ls -al"
+        # Add more known /run commands if needed, or just return command_part
+        if command_part: # Ensure it's not empty
+            return command_part # Execute arbitrary command
+        else:
+            return None # Or some error/help message for "/run " with no command
+
+    # Existing keyword-based interpretation
     if "место" in text or "диск" in text:
         return "df -h"
     if "работает" in text or "аптайм" in text:

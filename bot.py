@@ -49,15 +49,22 @@ def run_katana_command(command: str) -> str:
         log_local_bot_event(f"Command output: {output}")
         return output
     except subprocess.CalledProcessError as e:
-        error_message = f"Error executing command '{command}': {e.stderr.strip()}"
+        # Check if stderr is empty or provides a generic "not found" type error
+        stderr_output = e.stderr.strip()
+        if "not found" in stderr_output.lower() or "no such file" in stderr_output.lower():
+            error_message = f"⚠️ Команда '{command}' не найдена или не может быть исполнена."
+        elif stderr_output:
+            error_message = f"🚫 Ошибка при выполнении команды '{command}':\n`{stderr_output}`"
+        else:
+            error_message = f"🚫 Ошибка при выполнении команды '{command}' (код возврата: {e.returncode})."
         log_local_bot_event(error_message)
         return error_message
     except subprocess.TimeoutExpired:
-        error_message = f"Command '{command}' timed out."
+        error_message = f"⏳ Команда '{command}' выполнялась слишком долго и была остановлена."
         log_local_bot_event(error_message)
         return error_message
     except Exception as e:
-        error_message = f"An unexpected error occurred while running command '{command}': {str(e)}"
+        error_message = f"💥 Произошла непредвиденная ошибка при выполнении команды '{command}': {str(e)}"
         log_local_bot_event(error_message)
         return error_message
 
@@ -118,35 +125,36 @@ def handle_text_message(message):
 
     for field, expected_type in required_fields.items():
         if field not in command_data:
-            error_msg = f"Error: Missing required field '{field}'."
+            error_msg = f"Ошибка: отсутствует обязательное поле '{field}'."
             bot.reply_to(message, error_msg)
-            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Original Text: {text})")
             return
         # isinstance check for the field's type
         # For 'id', it can be str or int. For others, it's a single type.
         if field == "id":
             if not any(isinstance(command_data[field], t) for t in expected_type):
-                error_msg = f"Error: Field '{field}' must be type {' or '.join(t.__name__ for t in expected_type)}. Got value '{command_data[field]}' of type {type(command_data[field]).__name__}."
+                type_names = ' или '.join(t.__name__ for t in expected_type)
+                error_msg = f"Ошибка: поле '{field}' должно быть типа {type_names}. Получено значение '{command_data[field]}' типа {type(command_data[field]).__name__}."
                 bot.reply_to(message, error_msg)
-                log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+                log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Original Text: {text})")
                 return
         elif not isinstance(command_data[field], expected_type):
-            error_msg = f"Error: Field '{field}' must be type {expected_type.__name__}. Got value '{command_data[field]}' of type {type(command_data[field]).__name__}."
+            error_msg = f"Ошибка: поле '{field}' должно быть типа {expected_type.__name__}. Получено значение '{command_data[field]}' типа {type(command_data[field]).__name__}."
             bot.reply_to(message, error_msg)
-            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Original Text: {text})")
             return
 
     # Additional validation for 'module' and 'type' fields
     if not command_data['module'].strip():
-        error_msg = f"Error: Field 'module' must be a non-empty string. Got value '{command_data['module']}'."
+        error_msg = f"Ошибка: поле 'module' должно быть непустой строкой. Получено значение '{command_data['module']}'."
         bot.reply_to(message, error_msg)
-        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Original Text: {text})")
         return
 
     if not command_data['type'].strip():
-        error_msg = f"Error: Field 'type' must be a non-empty string. Got value '{command_data['type']}'."
+        error_msg = f"Ошибка: поле 'type' должно быть непустой строкой. Получено значение '{command_data['type']}'."
         bot.reply_to(message, error_msg)
-        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Original Text: {text})")
         return
 
     # Log successful validation
@@ -157,11 +165,11 @@ def handle_text_message(message):
 
     if command_type == "log_event":
         handle_log_event(command_data, chat_id)
-        bot.reply_to(message, "✅ 'log_event' processed (placeholder).")
+        bot.reply_to(message, "✅ Команда 'log_event' обработана (заглушка).")
         return
     elif command_type == "mind_clearing":
         handle_mind_clearing(command_data, chat_id)
-        bot.reply_to(message, "✅ 'mind_clearing' processed (placeholder).")
+        bot.reply_to(message, "✅ Команда 'mind_clearing' обработана (заглушка).")
         return
 
     # If type is not matched, proceed with default behavior (saving)
@@ -180,7 +188,7 @@ def handle_text_message(message):
     with open(command_file_path, "w", encoding="utf-8") as f:
         json.dump(command_data, f, ensure_ascii=False, indent=2)
 
-    bot.reply_to(message, f"✅ Command received and saved as `{command_file_path}`.")
+    bot.reply_to(message, f"✅ JSON-команда получена и сохранена как `{command_file_path}`.")
     log_local_bot_event(f"Saved command from {chat_id} to {command_file_path}")
 
 if __name__ == '__main__':

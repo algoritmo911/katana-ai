@@ -103,5 +103,38 @@ def test_module_interpret_respects_initial_env():
 #     assert interpret("покажи файлы на диске") == "df -h" # or "ls -al" depending on order
 #     pass
 
+# --- Tests for /run syntax in basic_interpret ---
+def test_basic_interpret_run_uptime():
+    assert basic_interpret("/run uptime") == "uptime"
+    assert basic_interpret("/run UPTIME") == "uptime" # Known command, so output is normalized
+    assert basic_interpret("/RUN uptime") == "uptime" # /RUN prefix should also work
+
+def test_basic_interpret_run_df():
+    assert basic_interpret("/run df -h") == "df -h"
+    assert basic_interpret("/run DF -H") == "df -h" # Known command
+
+def test_basic_interpret_run_ls():
+    assert basic_interpret("/run ls -al") == "ls -al"
+
+def test_basic_interpret_run_passthrough_arbitrary_command():
+    assert basic_interpret("/run echo hello world") == "echo hello world"
+    assert basic_interpret("/run MyScript.sh --arg value") == "MyScript.sh --arg value"
+    assert basic_interpret("/run /usr/bin/custom_tool --version") == "/usr/bin/custom_tool --version"
+
+def test_basic_interpret_run_with_extra_spaces():
+    assert basic_interpret("/run   uptime  ") == "uptime"
+    assert basic_interpret("/run   echo hello  ") == "echo hello"
+
+def test_basic_interpret_run_empty_command():
+    assert basic_interpret("/run ") is None
+    assert basic_interpret("/run    ") is None
+
+def test_basic_interpret_run_no_passthrough_if_only_keyword_for_other_rule():
+    # E.g. "/run диск" should not map to "df -h" via the /run rule,
+    # but it also shouldn't map via the "диск" rule because /run implies direct command.
+    # The current implementation will pass "диск" as the command.
+    assert basic_interpret("/run диск") == "диск"
+    # This is different from just "диск", which would be "df -h".
+
 if __name__ == "__main__":
     pytest.main()
