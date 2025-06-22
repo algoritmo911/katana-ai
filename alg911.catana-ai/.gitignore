@@ -1,0 +1,21 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Katana AI specific files
+katana_keys.json
+katana_memory.json
+katana.commands.json
+katana.history.json
+sync_status.json
+
+# Log files
+*.log
+
+# Editor swap files
+*.swp
+*.swo
+
+# OS-specific files
+.DS_Store
+Thumbs.db

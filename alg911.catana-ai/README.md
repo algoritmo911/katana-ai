@@ -18,7 +18,10 @@ Katana aims to integrate several key areas:
 - **`katana.commands.json`**: Stores structured commands for Katana, interaction requests, and pending tasks. This is a primary interface for programmatic interaction.
 - **`tasklist.md`**: A markdown file for tracking broader development tasks and ideas for Katana.
 - **`katana_events.log`**: A plain text log file recording system events, agent actions, and simulated interactions.
-- **`katana_agent.py`**: A Python script representing the initial Katana Agent SDK. It processes commands from `katana.commands.json` and logs its actions.
+- **`katana_memory.json`**: Stores persistent memory for the agent. It includes sections for `core_profile`, `conversation_history`, `knowledge_base`, `user_preferences`, and `transient_memory`.
+- **`katana_agent.py`**: The main Python script for the Katana Agent. It initializes the agent's environment, manages its core memory structures, and will eventually process commands. It also integrates with the `katana_key_manager.py` for handling sensitive credentials.
+- **`katana_key_manager.py`**: A module responsible for managing API keys and other sensitive credentials. It stores this data in `katana_keys.json`.
+  - **`katana_keys.json`**: Stores API keys and other credentials. **IMPORTANT SECURITY NOTE:** This file contains sensitive information and is configured to be ignored by Git (via `.gitignore`). It should NEVER be committed to version control. For production environments, consider encrypting this file at rest or using a dedicated secrets management service.
 - **`rclone.conf`**: A placeholder configuration file for rclone, intended for cloud synchronization of this directory.
 - **`sync_to_cloud.sh`**: A shell script to (simulate) synchronize this directory's contents to a cloud provider using rclone.
 

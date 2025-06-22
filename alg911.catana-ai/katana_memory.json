@@ -1,3 +1,11 @@
 {
-  "name": "Katana V2"
+  "core_profile": {
+    "agent_name": "Katana",
+    "agent_version": "0.1.0",
+    "status": "nominal"
+  },
+  "conversation_history": [],
+  "knowledge_base": {},
+  "user_preferences": {},
+  "transient_memory": {}
 }

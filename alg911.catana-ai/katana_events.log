@@ -629,3 +629,154 @@ drwxr-xr-x 2 jules root 4096 Jun 16 08:30 neuro_refueling
 [2025-06-16T13:39:07.184980+00:00] INFO: [KatanaAgent_MCP_v1] Katana data file initialization/verification complete.
 [2025-06-16T13:39:07.185022+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: File initialization complete.
 [2025-06-16T13:39:07.185186+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Current memory state: {"name": "Katana V2"}
+[2025-06-22T09:41:42.380849+00:00] INFO: [KatanaKeyManager] katana_key_manager.py self-test started.
+[2025-06-22T09:41:42.381464+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:41:42.381554+00:00] INFO: [KatanaKeyManager] Self-test: Initialized empty /app/alg911.catana-ai/katana_keys.json for testing.
+[2025-06-22T09:41:42.381779+00:00] INFO: [KatanaKeyManager] Self-test: Testing set_key...
+[2025-06-22T09:41:42.382384+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:41:42.382465+00:00] INFO: [KatanaKeyManager] Key 'api_key' set for service 'TestService1'.
+[2025-06-22T09:41:42.383048+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:41:42.383305+00:00] INFO: [KatanaKeyManager] Key 'secret_key' set for service 'TestService1'.
+[2025-06-22T09:41:42.383778+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:41:42.383867+00:00] INFO: [KatanaKeyManager] Key 'client_id' set for service 'TestService2'.
+[2025-06-22T09:41:42.383915+00:00] ERROR: [KatanaKeyManager] Service name and key name cannot be empty.
+[2025-06-22T09:41:42.383958+00:00] ERROR: [KatanaKeyManager] Service name and key name cannot be empty.
+[2025-06-22T09:41:42.384000+00:00] INFO: [KatanaKeyManager] Self-test: Testing get_key...
+[2025-06-22T09:41:42.384109+00:00] DEBUG: [KatanaKeyManager] Key 'api_key' retrieved for service 'TestService1'.
+[2025-06-22T09:41:42.384157+00:00] INFO: [KatanaKeyManager] Self-test: Retrieved api_key for TestService1: test_value_123
+[2025-06-22T09:41:42.384248+00:00] WARNING: [KatanaKeyManager] Key 'non_existent' not found for service 'TestService1'.
+[2025-06-22T09:41:42.384344+00:00] INFO: [KatanaKeyManager] Self-test: Retrieving non_existent_key for TestService1: None
+[2025-06-22T09:41:42.384438+00:00] WARNING: [KatanaKeyManager] Key 'some_key' not found for service ''.
+[2025-06-22T09:41:42.384485+00:00] INFO: [KatanaKeyManager] Self-test: Retrieving key_from_empty_service: None
+[2025-06-22T09:41:42.384526+00:00] INFO: [KatanaKeyManager] Self-test: Testing list_services...
+[2025-06-22T09:41:42.384628+00:00] DEBUG: [KatanaKeyManager] Retrieved list of services: ['TestService1', 'TestService2']
+[2025-06-22T09:41:42.384677+00:00] INFO: [KatanaKeyManager] Self-test: Available services: ['TestService1', 'TestService2']
+[2025-06-22T09:41:42.384719+00:00] INFO: [KatanaKeyManager] Self-test: Testing list_keys...
+[2025-06-22T09:41:42.384805+00:00] DEBUG: [KatanaKeyManager] Retrieved list of keys for service 'TestService1': ['api_key', 'secret_key']
+[2025-06-22T09:41:42.384851+00:00] INFO: [KatanaKeyManager] Self-test: Keys for TestService1: ['api_key', 'secret_key']
+[2025-06-22T09:41:42.384933+00:00] WARNING: [KatanaKeyManager] Service 'NonExistentService' not found for listing keys.
+[2025-06-22T09:41:42.384977+00:00] INFO: [KatanaKeyManager] Self-test: Keys for NonExistentService: None
+[2025-06-22T09:41:42.385019+00:00] INFO: [KatanaKeyManager] Self-test: Testing delete_key...
+[2025-06-22T09:41:42.385292+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:41:42.385511+00:00] INFO: [KatanaKeyManager] Key 'secret_key' deleted for service 'TestService1'.
+[2025-06-22T09:41:42.385649+00:00] DEBUG: [KatanaKeyManager] Retrieved list of keys for service 'TestService1': ['api_key']
+[2025-06-22T09:41:42.385700+00:00] INFO: [KatanaKeyManager] Self-test: Keys for TestService1 after deleting 'secret_key': ['api_key']
+[2025-06-22T09:41:42.385961+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:41:42.386169+00:00] INFO: [KatanaKeyManager] Key 'client_id' deleted for service 'TestService2'.
+[2025-06-22T09:41:42.386324+00:00] DEBUG: [KatanaKeyManager] Retrieved list of services: ['TestService1']
+[2025-06-22T09:41:42.386453+00:00] INFO: [KatanaKeyManager] Self-test: Available services after deleting TestService2's only key: ['TestService1']
+[2025-06-22T09:41:42.386557+00:00] INFO: [KatanaKeyManager] Key 'non_existent_key' not found for service 'TestService1', no deletion needed.
+[2025-06-22T09:41:42.386601+00:00] INFO: [KatanaKeyManager] katana_key_manager.py self-test completed.
+[2025-06-22T09:41:51.414720+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Initializing files...
+[2025-06-22T09:41:51.414867+00:00] INFO: [KatanaAgent_MCP_v1] Initializing/Verifying Katana data files for MCP_v1...
+[2025-06-22T09:41:51.415126+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.commands.json exists and appears valid.
+[2025-06-22T09:41:51.415334+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.history.json exists and appears valid.
+[2025-06-22T09:41:51.415491+00:00] WARNING: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana_memory.json is missing essential keys. Re-initializing with default structure.
+[2025-06-22T09:41:51.415996+00:00] INFO: [KatanaAgent_MCP_v1] [InitMemory] Successfully saved JSON to /app/alg911.catana-ai/katana_memory.json.
+[2025-06-22T09:41:51.416402+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/sync_status.json exists and appears valid.
+[2025-06-22T09:41:51.416656+00:00] INFO: [KatanaAgent_MCP_v1] [InitKeys] Successfully saved JSON to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:41:51.416720+00:00] INFO: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana_keys.json initialized.
+[2025-06-22T09:41:51.416825+00:00] INFO: [KatanaAgent_MCP_v1] Katana data file initialization/verification complete.
+[2025-06-22T09:41:51.416871+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: File initialization complete.
+[2025-06-22T09:41:51.416990+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Current memory state after load: {"core_profile": {"agent_name": "Katana", "agent_version": "0.1.0", "status": "nominal"}, "conversation_history": [], "knowledge_base": {}, "user_preferences": {}, "transient_memory": {}}
+[2025-06-22T09:41:51.417038+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Testing Key Manager integration...
+[2025-06-22T09:41:51.417079+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Setting a dummy key 'agent_api_key' for service 'TestServiceExternal'...
+[2025-06-22T09:41:51.417399+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:41:51.417478+00:00] INFO: [KatanaKeyManager] Key 'agent_api_key' set for service 'TestServiceExternal'.
+[2025-06-22T09:41:51.417692+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Retrieving key 'agent_api_key' for service 'TestServiceExternal'...
+[2025-06-22T09:41:51.417812+00:00] DEBUG: [KatanaKeyManager] Key 'agent_api_key' retrieved for service 'TestServiceExternal'.
+[2025-06-22T09:41:51.417858+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Retrieved key value: dummy_agent_key_value_456
+[2025-06-22T09:41:51.417898+00:00] WARNING: [KatanaAgent_MCP_v1] katana_agent.py self-test: WARNING - Key value logged for demonstration purposes ONLY. Do NOT log real keys!
+[2025-06-22T09:41:51.417938+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Deleting key 'agent_api_key' for service 'TestServiceExternal'...
+[2025-06-22T09:41:51.418176+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:41:51.418279+00:00] INFO: [KatanaKeyManager] Key 'agent_api_key' deleted for service 'TestServiceExternal'.
+[2025-06-22T09:41:51.418579+00:00] WARNING: [KatanaKeyManager] Key 'agent_api_key' not found for service 'TestServiceExternal'.
+[2025-06-22T09:41:51.418639+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Key 'agent_api_key' successfully deleted (or was not there).
+[2025-06-22T09:41:51.418681+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Key Manager integration test complete.
+[2025-06-22T09:42:58.888604+00:00] INFO: [KatanaKeyManager] katana_key_manager.py self-test started.
+[2025-06-22T09:42:58.889093+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:42:58.889205+00:00] INFO: [KatanaKeyManager] Self-test: Initialized empty alg911.catana-ai/katana_keys.json for testing.
+[2025-06-22T09:42:58.889256+00:00] INFO: [KatanaKeyManager] Self-test: Testing set_key...
+[2025-06-22T09:42:58.889704+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:42:58.889791+00:00] INFO: [KatanaKeyManager] Key 'api_key' set for service 'TestService1'.
+[2025-06-22T09:42:58.890510+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:42:58.890585+00:00] INFO: [KatanaKeyManager] Key 'secret_key' set for service 'TestService1'.
+[2025-06-22T09:42:58.890942+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:42:58.891013+00:00] INFO: [KatanaKeyManager] Key 'client_id' set for service 'TestService2'.
+[2025-06-22T09:42:58.891066+00:00] ERROR: [KatanaKeyManager] Service name and key name cannot be empty.
+[2025-06-22T09:42:58.891107+00:00] ERROR: [KatanaKeyManager] Service name and key name cannot be empty.
+[2025-06-22T09:42:58.891454+00:00] INFO: [KatanaKeyManager] Self-test: Testing get_key...
+[2025-06-22T09:42:58.891937+00:00] DEBUG: [KatanaKeyManager] Key 'api_key' retrieved for service 'TestService1'.
+[2025-06-22T09:42:58.892036+00:00] INFO: [KatanaKeyManager] Self-test: Retrieved api_key for TestService1: test_value_123
+[2025-06-22T09:42:58.892190+00:00] WARNING: [KatanaKeyManager] Key 'non_existent' not found for service 'TestService1'.
+[2025-06-22T09:42:58.892251+00:00] INFO: [KatanaKeyManager] Self-test: Retrieving non_existent_key for TestService1: None
+[2025-06-22T09:42:58.892341+00:00] WARNING: [KatanaKeyManager] Key 'some_key' not found for service ''.
+[2025-06-22T09:42:58.892385+00:00] INFO: [KatanaKeyManager] Self-test: Retrieving key_from_empty_service: None
+[2025-06-22T09:42:58.892425+00:00] INFO: [KatanaKeyManager] Self-test: Testing list_services...
+[2025-06-22T09:42:58.892517+00:00] DEBUG: [KatanaKeyManager] Retrieved list of services: ['TestService1', 'TestService2']
+[2025-06-22T09:42:58.892562+00:00] INFO: [KatanaKeyManager] Self-test: Available services: ['TestService1', 'TestService2']
+[2025-06-22T09:42:58.892606+00:00] INFO: [KatanaKeyManager] Self-test: Testing list_keys...
+[2025-06-22T09:42:58.892917+00:00] DEBUG: [KatanaKeyManager] Retrieved list of keys for service 'TestService1': ['api_key', 'secret_key']
+[2025-06-22T09:42:58.892997+00:00] INFO: [KatanaKeyManager] Self-test: Keys for TestService1: ['api_key', 'secret_key']
+[2025-06-22T09:42:58.893099+00:00] WARNING: [KatanaKeyManager] Service 'NonExistentService' not found for listing keys.
+[2025-06-22T09:42:58.893231+00:00] INFO: [KatanaKeyManager] Self-test: Keys for NonExistentService: None
+[2025-06-22T09:42:58.893286+00:00] INFO: [KatanaKeyManager] Self-test: Testing delete_key...
+[2025-06-22T09:42:58.893628+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:42:58.893741+00:00] INFO: [KatanaKeyManager] Key 'secret_key' deleted for service 'TestService1'.
+[2025-06-22T09:42:58.893846+00:00] DEBUG: [KatanaKeyManager] Retrieved list of keys for service 'TestService1': ['api_key']
+[2025-06-22T09:42:58.893896+00:00] INFO: [KatanaKeyManager] Self-test: Keys for TestService1 after deleting 'secret_key': ['api_key']
+[2025-06-22T09:42:58.894280+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:42:58.894358+00:00] INFO: [KatanaKeyManager] Key 'client_id' deleted for service 'TestService2'.
+[2025-06-22T09:42:58.894457+00:00] DEBUG: [KatanaKeyManager] Retrieved list of services: ['TestService1']
+[2025-06-22T09:42:58.894502+00:00] INFO: [KatanaKeyManager] Self-test: Available services after deleting TestService2's only key: ['TestService1']
+[2025-06-22T09:42:58.894877+00:00] INFO: [KatanaKeyManager] Key 'non_existent_key' not found for service 'TestService1', no deletion needed.
+[2025-06-22T09:42:58.895073+00:00] INFO: [KatanaKeyManager] katana_key_manager.py self-test completed.
+[2025-06-22T09:43:07.810375+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Initializing files...
+[2025-06-22T09:43:07.810500+00:00] INFO: [KatanaAgent_MCP_v1] Initializing/Verifying Katana data files for MCP_v1...
+[2025-06-22T09:43:07.810647+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.commands.json exists and appears valid.
+[2025-06-22T09:43:07.810752+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.history.json exists and appears valid.
+[2025-06-22T09:43:07.810853+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana_memory.json exists and appears valid.
+[2025-06-22T09:43:07.810961+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/sync_status.json exists and appears valid.
+[2025-06-22T09:43:07.811364+00:00] INFO: [KatanaAgent_MCP_v1] [InitKeys] Successfully saved JSON to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:43:07.811458+00:00] INFO: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana_keys.json initialized.
+[2025-06-22T09:43:07.811590+00:00] INFO: [KatanaAgent_MCP_v1] Katana data file initialization/verification complete.
+[2025-06-22T09:43:07.811964+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: File initialization complete.
+[2025-06-22T09:43:07.812209+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Current memory state after load: {"core_profile": {"agent_name": "Katana", "agent_version": "0.1.0", "status": "nominal"}, "conversation_history": [], "knowledge_base": {}, "user_preferences": {}, "transient_memory": {}}
+[2025-06-22T09:43:07.812279+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Testing Key Manager integration...
+[2025-06-22T09:43:07.812325+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Setting a dummy key 'agent_api_key' for service 'TestServiceExternal'...
+[2025-06-22T09:43:07.812621+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:43:07.812692+00:00] INFO: [KatanaKeyManager] Key 'agent_api_key' set for service 'TestServiceExternal'.
+[2025-06-22T09:43:07.812741+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Retrieving key 'agent_api_key' for service 'TestServiceExternal'...
+[2025-06-22T09:43:07.812849+00:00] DEBUG: [KatanaKeyManager] Key 'agent_api_key' retrieved for service 'TestServiceExternal'.
+[2025-06-22T09:43:07.812893+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Retrieved key value: dummy_agent_key_value_456
+[2025-06-22T09:43:07.812934+00:00] WARNING: [KatanaAgent_MCP_v1] katana_agent.py self-test: WARNING - Key value logged for demonstration purposes ONLY. Do NOT log real keys!
+[2025-06-22T09:43:07.812974+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Deleting key 'agent_api_key' for service 'TestServiceExternal'...
+[2025-06-22T09:43:07.813254+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:43:07.813321+00:00] INFO: [KatanaKeyManager] Key 'agent_api_key' deleted for service 'TestServiceExternal'.
+[2025-06-22T09:43:07.813415+00:00] WARNING: [KatanaKeyManager] Key 'agent_api_key' not found for service 'TestServiceExternal'.
+[2025-06-22T09:43:07.813457+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Key 'agent_api_key' successfully deleted (or was not there).
+[2025-06-22T09:43:07.813498+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Key Manager integration test complete.
+[2025-06-22T09:44:06.995786+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Initializing files...
+[2025-06-22T09:44:06.995892+00:00] INFO: [KatanaAgent_MCP_v1] Initializing/Verifying Katana data files for MCP_v1...
+[2025-06-22T09:44:06.996070+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.commands.json exists and appears valid.
+[2025-06-22T09:44:06.996194+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.history.json exists and appears valid.
+[2025-06-22T09:44:06.996301+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana_memory.json exists and appears valid.
+[2025-06-22T09:44:06.996401+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/sync_status.json exists and appears valid.
+[2025-06-22T09:44:06.996494+00:00] INFO: [KatanaAgent_MCP_v1] Katana data file initialization/verification complete.
+[2025-06-22T09:44:06.996538+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: File initialization complete.
+[2025-06-22T09:44:06.996654+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Current memory state after load: {"core_profile": {"agent_name": "Katana", "agent_version": "0.1.0", "status": "nominal"}, "conversation_history": [], "knowledge_base": {}, "user_preferences": {}, "transient_memory": {}}
+[2025-06-22T09:44:06.996702+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Testing Key Manager integration...
+[2025-06-22T09:44:06.996743+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Setting a dummy key 'agent_api_key' for service 'TestServiceExternal'...
+[2025-06-22T09:44:06.996803+00:00] INFO: [KatanaKeyManager] Keys file not found: /app/alg911.catana-ai/katana_keys.json. Returning empty data.
+[2025-06-22T09:44:06.996955+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:44:06.997049+00:00] INFO: [KatanaKeyManager] Key 'agent_api_key' set for service 'TestServiceExternal'.
+[2025-06-22T09:44:06.997102+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Retrieving key 'agent_api_key' for service 'TestServiceExternal'...
+[2025-06-22T09:44:06.997197+00:00] DEBUG: [KatanaKeyManager] Key 'agent_api_key' retrieved for service 'TestServiceExternal'.
+[2025-06-22T09:44:06.997240+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Retrieved key value: dummy_agent_key_value_456
+[2025-06-22T09:44:06.997279+00:00] WARNING: [KatanaAgent_MCP_v1] katana_agent.py self-test: WARNING - Key value logged for demonstration purposes ONLY. Do NOT log real keys!
+[2025-06-22T09:44:06.997318+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Deleting key 'agent_api_key' for service 'TestServiceExternal'...
+[2025-06-22T09:44:06.997571+00:00] INFO: [KatanaKeyManager] Successfully saved keys data to /app/alg911.catana-ai/katana_keys.json.
+[2025-06-22T09:44:06.997646+00:00] INFO: [KatanaKeyManager] Key 'agent_api_key' deleted for service 'TestServiceExternal'.
+[2025-06-22T09:44:06.997736+00:00] WARNING: [KatanaKeyManager] Key 'agent_api_key' not found for service 'TestServiceExternal'.
+[2025-06-22T09:44:06.997778+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Key 'agent_api_key' successfully deleted (or was not there).
+[2025-06-22T09:44:06.997817+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Key Manager integration test complete.
