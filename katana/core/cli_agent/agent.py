@@ -6,26 +6,32 @@
 # and katana_core/__init__.py to exist)
 
 # If running from within katana_core/ (e.g. cd katana_core; python agent.py):
-from katana import KatanaCore
+# from katana import KatanaCore # Old import
+from katana.core.cli_agent.katana import KatanaCore # Corrected absolute import
 # Pathlib and other imports are handled by katana.py if needed by KatanaCore itself.
 
 import logging
-from katana.logging_config import setup_logging, get_logger
+from katana.logging_config import setup_logging, get_logger # This should be correct if run with /app in PYTHONPATH
 
 logger = get_logger(__name__)
 
 def main():
-    setup_logging(log_level=logging.INFO)
-    logger.info("Initializing Katana Core Agent...")
+    setup_logging(log_level=logging.INFO) # This setup is global for the logger instance
+
+    agent_init_context = {'user_id': 'cli_agent_system', 'chat_id': 'agent_lifecycle', 'message_id': 'agent_initializing'}
+    logger.info("Initializing Katana Core Agent...", extra=agent_init_context)
+
     # KatanaCore's core_dir_path_str defaults to ".", which means it expects
     # commands.json, etc., in the Current Working Directory from where agent.py is run.
-    # If agent.py is in /app/katana_core/ and run from there (cd /app/katana_core; python agent.py),
-    # then "." is /app/katana_core/, which is correct.
-    katana_instance = KatanaCore(core_dir_path_str=".")
+    # If agent.py is in /app/katana_core/cli_agent/ and run from there,
+    # then "." is /app/katana_core/cli_agent/, which is correct if data files are there.
+    # KatanaCore itself (in katana.py) will log its own initialization with its own context.
+    katana_instance = KatanaCore(core_dir_path_str=".") # Assumes data files are in CWD or structure handled by KatanaCore
 
-    katana_instance.run()
+    katana_instance.run() # KatanaCore.run() has its own detailed logging
 
-    logger.info("Katana Core Agent terminated.")
+    agent_term_context = {'user_id': 'cli_agent_system', 'chat_id': 'agent_lifecycle', 'message_id': 'agent_terminated'}
+    logger.info("Katana Core Agent terminated.", extra=agent_term_context)
 
 if __name__ == "__main__":
     # This structure allows the script to be run directly.

@@ -1,2 +1,0 @@
-WARNING 2025-06-20 15:42:38 - test_logging_config - Testing console warning output.
-ERROR 2025-06-20 15:42:38 - test_logging_config - Testing log format with an error message.

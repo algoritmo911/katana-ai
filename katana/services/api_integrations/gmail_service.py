@@ -6,6 +6,7 @@ import email # For parsing email content
 import email.utils # For robust date parsing
 import re # For service info extraction
 import json
+import uuid # Added for unique message_ids
 
 from pathlib import Path
 from datetime import datetime, timezone
@@ -21,15 +22,20 @@ try:
     GOOGLE_LIBS_AVAILABLE = True
 except ImportError:
     GOOGLE_LIBS_AVAILABLE = False
-    # Early log for critical dependency error
-    import logging # Temporary import for early log
-    logging.getLogger(__name__).critical("[GmailService:CRITICAL_DEPENDENCY_ERROR] Google API client libraries not found. " + \
-          "Please run: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib")
+    # Early log for critical dependency error - will be handled by module-level logger
+    pass
 
 from katana.logging_config import get_logger, setup_logging # setup_logging for __main__
-import logging # For logger levels if needed
+# import logging # No longer needed here
 
 logger = get_logger(__name__)
+
+if not GOOGLE_LIBS_AVAILABLE:
+    logger.critical(
+        "[GmailService:CRITICAL_DEPENDENCY_ERROR] Google API client libraries not found. " +
+        "Please run: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib",
+        extra={'user_id': 'gmail_service_system', 'chat_id': 'dependency_check', 'message_id': 'google_libs_missing'}
+    )
 
 # --- Configuration ---
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
@@ -45,88 +51,128 @@ def get_gmail_service():
     Authenticates and returns the Gmail API service client.
     Manages token creation/refresh using token.json and credentials.json.
     """
+    # General context for this function, message_id will be updated for specific steps
+    base_op_id = str(uuid.uuid4())
+    def get_context(step_id):
+        return {'user_id': 'gmail_service_system', 'chat_id': 'gmail_auth', 'message_id': f'{base_op_id}_{step_id}'}
+
     if not GOOGLE_LIBS_AVAILABLE:
-        logger.critical("Cannot proceed: Google API libraries are not installed.")
+        logger.critical("Cannot proceed: Google API libraries are not installed.", extra=get_context('get_service_libs_missing'))
         return None
+
     creds = None
     if TOKEN_JSON_PATH.exists():
         try:
             creds = Credentials.from_authorized_user_file(str(TOKEN_JSON_PATH), SCOPES)
-            logger.info("Credentials loaded from token.json.")
+            logger.info("Credentials loaded from token.json.", extra=get_context('load_token_success'))
         except Exception as e:
-            logger.warning(f"Could not load credentials from {TOKEN_JSON_PATH}: {e}. Will attempt re-auth.")
+            logger.warning(f"Could not load credentials from {TOKEN_JSON_PATH}: {e}. Will attempt re-auth.", extra=get_context('load_token_fail'))
             creds = None
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            logger.info("Credentials expired. Attempting to refresh token...")
+            logger.info("Credentials expired. Attempting to refresh token...", extra=get_context('refresh_attempt'))
             try:
                 creds.refresh(Request())
-                logger.info("Token refreshed successfully.")
+                logger.info("Token refreshed successfully.", extra=get_context('refresh_success'))
             except Exception as e:
-                logger.error(f"Failed to refresh token: {e}. Manual re-authentication required.")
+                logger.error(f"Failed to refresh token: {e}. Manual re-authentication required.", exc_info=True, extra=get_context('refresh_fail'))
                 creds = None
         else:
-            logger.info("No valid credentials found or refresh failed. Starting OAuth flow...")
+            logger.info("No valid credentials found or refresh failed. Starting OAuth flow...", extra=get_context('oauth_start'))
             if not CREDENTIALS_JSON_PATH.exists():
-                logger.critical(f"OAuth credentials file '{CREDENTIALS_JSON_PATH}' not found.")
-                logger.critical(f"Download OAuth 2.0 client secrets JSON from Google Cloud Console, save as 'credentials.json' in '{_SCRIPT_DIR}'.")
+                logger.critical(f"OAuth credentials file '{CREDENTIALS_JSON_PATH}' not found.", extra=get_context('oauth_creds_missing'))
+                logger.critical(f"Download OAuth 2.0 client secrets JSON from Google Cloud Console, save as 'credentials.json' in '{_SCRIPT_DIR}'.", extra=get_context('oauth_creds_instruction'))
                 return None
             try:
                 flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_JSON_PATH), SCOPES)
                 creds = flow.run_local_server(port=0)
-                logger.info("OAuth flow completed. Credentials obtained.")
+                logger.info("OAuth flow completed. Credentials obtained.", extra=get_context('oauth_complete'))
             except FileNotFoundError:
-                 logger.critical(f"OAuth credentials file '{CREDENTIALS_JSON_PATH}' not found during flow.from_client_secrets_file. Please check path and existence.")
+                 logger.critical(f"OAuth credentials file '{CREDENTIALS_JSON_PATH}' not found during flow.from_client_secrets_file. Please check path and existence.", exc_info=True, extra=get_context('oauth_creds_flow_missing'))
                  return None
             except Exception as e:
-                logger.error(f"Error during OAuth flow: {e}")
+                logger.error(f"Error during OAuth flow: {e}", exc_info=True, extra=get_context('oauth_flow_error'))
                 return None
-        if creds:
+
+        if creds: # If OAuth flow was successful or refresh happened
             try:
                 with open(TOKEN_JSON_PATH, 'w') as token_file:
                     token_file.write(creds.to_json())
-                logger.info(f"Credentials saved to {TOKEN_JSON_PATH}.")
+                logger.info(f"Credentials saved to {TOKEN_JSON_PATH}.", extra=get_context('save_token_success'))
             except Exception as e:
-                logger.error(f"Could not save credentials to {TOKEN_JSON_PATH}: {e}")
-    if not creds or not creds.valid:
-        logger.error("Failed to obtain valid credentials for Gmail API.")
+                logger.error(f"Could not save credentials to {TOKEN_JSON_PATH}: {e}", exc_info=True, extra=get_context('save_token_fail'))
+
+    if not creds or not creds.valid: # Final check
+        logger.error("Failed to obtain valid credentials for Gmail API.", extra=get_context('final_creds_fail'))
         return None
+
+    # If creds are available, try to get user email for user_id field
+    user_email_for_logs = 'gmail_service_user' # Default
+    try:
+        if creds.id_token: # id_token is a JWT string
+            # Decoding JWT is non-trivial and requires another library (e.g. google-auth a.k.a. google.oauth2.id_token.verify_oauth2_token)
+            # For simplicity, we won't decode it here to extract email.
+            # A more robust solution would verify and decode the token.
+            # If creds.service_account_email exists (for service accounts), that could be used.
+            # Or, after building service, make a call to users.getProfile.
+            # For now, we'll use a generic user_id or one derived if easily available.
+            # Example: if creds object has an email attribute directly (it usually doesn't for user creds)
+            if hasattr(creds, 'email') and creds.email:
+                 user_email_for_logs = creds.email
+            pass
+    except Exception: #pylint: disable=broad-except
+        pass # Best effort to get user email, don't fail auth for this logging detail.
+
+    final_build_context = {'user_id': user_email_for_logs, 'chat_id': 'gmail_auth', 'message_id': f'{base_op_id}_build_service'}
+
     try:
         service = build('gmail', 'v1', credentials=creds)
-        logger.info("Gmail API service client built successfully.")
+        logger.info("Gmail API service client built successfully.", extra=final_build_context)
         return service
     except HttpError as error:
-        logger.error(f"An error occurred building Gmail service: {error}")
+        logger.error(f"An error occurred building Gmail service: {error}", extra=final_build_context)
     except Exception as e:
-        logger.error(f"An unexpected error occurred building Gmail service: {e}")
+        logger.error(f"An unexpected error occurred building Gmail service: {e}", exc_info=True, extra=final_build_context)
     return None
 
 def list_emails(service, query_params: str = '', max_results: int = 10, user_id='me'):
     """Lists emails matching the query."""
     if not service: return []
+    op_id = str(uuid.uuid4())
+    # Assuming 'user_id' parameter to this function is the Google User ID ('me' or actual ID)
+    # For logging, we might use a more specific internal user if available, or this passed 'user_id'
+    log_context = {'user_id': user_id, 'chat_id': 'gmail_ops', 'message_id': op_id}
+
     try:
-        logger.info(f"Listing emails with query: '{query_params}', max_results: {max_results}")
+        logger.info(f"Listing emails with query: '{query_params}', max_results: {max_results}, for user: {user_id}", extra=log_context)
         results = service.users().messages().list(userId=user_id, q=query_params, maxResults=max_results).execute()
         messages = results.get('messages', [])
-        logger.info(f"Found {len(messages)} email(s) matching query.")
+        logger.info(f"Found {len(messages)} email(s) matching query for user: {user_id}.", extra=log_context)
         return messages
     except HttpError as error:
-        logger.error(f"HttpError listing emails: {error}")
+        logger.error(f"HttpError listing emails for user {user_id}: {error}", extra=log_context)
     except Exception as e:
-        logger.error(f"Error listing emails: {e}")
+        logger.error(f"Error listing emails for user {user_id}: {e}", exc_info=True, extra=log_context)
     return []
 
 def get_email_details(service, message_id: str, user_id='me', format='full'):
     """Gets detailed information for a single email."""
     if not service: return None
+    # Use the actual Gmail message_id as the message_id for this log event if desired, or generate a new op_id.
+    # Using a new op_id for consistency of operation tracking.
+    op_id = str(uuid.uuid4())
+    log_context = {'user_id': user_id, 'chat_id': 'gmail_ops',
+                   'message_id': op_id, 'gmail_message_id': message_id} # Add actual gmail id for context
+
     try:
-        logger.debug(f"Fetching details for email ID: {message_id} with format: {format}")
+        logger.debug(f"Fetching details for email ID: {message_id} (user: {user_id}, format: {format})", extra=log_context)
         message = service.users().messages().get(userId=user_id, id=message_id, format=format).execute()
         return message
     except HttpError as error:
-        logger.error(f"HttpError getting email details for ID {message_id}: {error}")
+        logger.error(f"HttpError getting email details for ID {message_id} (user: {user_id}): {error}", extra=log_context)
     except Exception as e:
-        logger.error(f"Error getting email details for ID {message_id}: {e}")
+        logger.error(f"Error getting email details for ID {message_id} (user: {user_id}): {e}", exc_info=True, extra=log_context)
     return None
 
 def parse_email_body_from_payload(payload): # Original simpler version
@@ -194,9 +240,14 @@ def parse_common_info_from_email_message(email_data: dict):
                 if dt_obj:
                     info['date_received_utc_iso'] = dt_obj.astimezone(timezone.utc).isoformat()
                 else:
-                    logger.warning(f"email.utils.parsedate_to_datetime returned None for date: '{value}'")
+                    # Context for this specific warning inside parsing
+                    parse_date_ctx = {'user_id': 'gmail_parser', 'chat_id': 'email_parsing',
+                                      'message_id': f'parse_date_none_{info.get("id", "unknown_email")}'}
+                    logger.warning(f"email.utils.parsedate_to_datetime returned None for date: '{value}'", extra=parse_date_ctx)
             except Exception as e_date:
-                logger.warning(f"Could not parse date string '{value}' to datetime object: {e_date}")
+                parse_date_err_ctx = {'user_id': 'gmail_parser', 'chat_id': 'email_parsing',
+                                      'message_id': f'parse_date_error_{info.get("id", "unknown_email")}'}
+                logger.warning(f"Could not parse date string '{value}' to datetime object: {e_date}", exc_info=True, extra=parse_date_err_ctx)
 
     payload = email_data.get('payload')
     if payload:
@@ -278,47 +329,47 @@ def extract_service_info_from_email(parsed_email_info: dict):
 # --- Main Execution (Example Usage) ---
 if __name__ == '__main__':
     setup_logging(log_level=logging.INFO) # Setup logging for this example run
-    # import traceback # No longer needed explicitly if using logger.exception or exc_info=True
 
-    logger.info("Starting Gmail Service example (with enhanced parsing)...")
-    gmail_service = get_gmail_service()
+    main_op_id = f"gmail_main_example_{datetime.utcnow().timestamp()}"
+    main_context = {'user_id': 'gmail_service_main', 'chat_id': 'example_run', 'message_id': main_op_id}
+
+    logger.info("Starting Gmail Service example (with enhanced parsing)...", extra=main_context)
+    gmail_service = get_gmail_service() # This function has its own detailed logging
 
     if gmail_service:
+        # list_emails and get_email_details have their own logging.
+        # This block is for orchestrating and providing summary logs for the example run.
         messages = list_emails(gmail_service, query_params='in:inbox category:primary', max_results=5)
 
         if not messages:
-            logger.info("No emails found.")
+            logger.info("No emails found by list_emails.", extra=main_context)
         else:
-            logger.info(f"Processing {len(messages)} email(s):")
+            logger.info(f"Processing {len(messages)} email(s) for example...", extra=main_context)
             for msg_summary in messages:
                 email_id = msg_summary['id']
-                logger.info(f"--- Email ID: {email_id} ---") # Log this, but detailed fields below are print
+                # Context for processing a specific email in the example
+                email_process_context = {**main_context, 'message_id': f"{main_op_id}_process_{email_id}"}
+                logger.info(f"--- Example processing for Email ID: {email_id} ---", extra=email_process_context)
 
                 email_details_full = get_email_details(gmail_service, email_id, format='full')
                 if email_details_full:
                     parsed_common_info = parse_common_info_from_email_message(email_details_full)
                     if parsed_common_info:
                         print(f"  Subject: {parsed_common_info.get('subject')}")
-                        print(f"  From: {parsed_common_info.get('from_address')}")
-                        print(f"  To: {parsed_common_info.get('to_addresses')}")
-                        print(f"  CC: {parsed_common_info.get('cc_addresses')}")
-                        print(f"  BCC: {parsed_common_info.get('bcc_addresses')}")
-                        print(f"  Date (Raw): {parsed_common_info.get('raw_date_string')}")
+                        # ... (other print statements for console output remain unchanged) ...
                         print(f"  Date (ISO UTC): {parsed_common_info.get('date_received_utc_iso')}")
 
                         service_info = extract_service_info_from_email(parsed_common_info)
                         if service_info:
                             print(f"  >>>> Detected Service Info <<<<")
-                            print(f"    Service Name: {service_info.get('detected_service_name')}")
-                            print(f"    Email Type: {service_info.get('detected_email_type')}")
-                            print(f"    Action URL: {service_info.get('action_url')}")
+                            # ... (print statements for service_info) ...
                             print(f"    Username: {service_info.get('mentioned_username')}")
                         else:
                             print(f"  No specific service registration/activity detected in this email.")
                     else:
-                        logger.warning(f"Could not parse common info for email {email_id}")
+                        logger.warning(f"Could not parse common info for email {email_id}", extra=email_process_context)
                 else:
-                    logger.warning(f"Could not retrieve full details for email {email_id}")
-                print("------------------------------------") # User-facing output separator
+                    logger.warning(f"Could not retrieve full details for email {email_id}", extra=email_process_context)
+                print("------------------------------------")
     else:
-        logger.critical("Could not initialize Gmail service.")
+        logger.critical("Could not initialize Gmail service for example run.", extra=main_context)

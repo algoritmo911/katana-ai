@@ -1,5 +1,7 @@
 import logging
 import re
+import json # Added
+import uuid # Added
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -65,33 +67,63 @@ async def get_logs(
     Reads and returns paginated log entries from the Katana application log file.
     Log entries are returned newest first by default after parsing all lines.
     """
+    request_id = str(uuid.uuid4())
+    api_context = {'user_id': 'api_user', 'chat_id': 'api_session', 'message_id': request_id}
+
     if not LOG_FILE_PATH.exists():
-        api_server_logger.error(f"Log file not found: {LOG_FILE_PATH}")
+        api_server_logger.error(f"Log file not found: {LOG_FILE_PATH}", extra=api_context)
         raise HTTPException(status_code=404, detail=f"Log file not found: {LOG_FILE_PATH}")
 
     try:
         with open(LOG_FILE_PATH, "r", encoding="utf-8") as f:
             lines = f.readlines()
     except Exception as e:
-        api_server_logger.error(f"Could not read log file {LOG_FILE_PATH}: {e}", exc_info=True)
+        api_server_logger.error(f"Could not read log file {LOG_FILE_PATH}: {e}", exc_info=True, extra=api_context)
         raise HTTPException(status_code=500, detail=f"Could not read log file: {str(e)}")
 
     all_parsed_logs: List[Dict[str, str]] = []
+    # Note: The LOG_LINE_REGEX is for parsing the old string format.
+    # Now that logs are JSON, this parsing logic will need to change if this endpoint reads its own output.
+    # For now, assuming it reads katana_events.log which is now JSON.
+    # The parsing logic below will fail for JSON lines.
+    # This endpoint needs to be updated to parse JSON log lines.
+    # For this step, I'm only updating the logger calls *made by this server*.
+    # The logic of *reading and parsing* the log file by this endpoint is a separate concern.
+    # However, the logger.debug call below for unparsable lines should be updated.
+
     for line_number, line_content in enumerate(lines, start=1):
         line_content = line_content.strip()
-        match = LOG_LINE_REGEX.match(line_content)
-        if match:
-            log_level, timestamp, module, message = match.groups()
+        if not line_content: # Skip empty lines
+            continue
+        try:
+            # Attempt to parse as JSON first
+            log_entry = json.loads(line_content)
+            # Ensure it has the fields we expect for display, even if it's a generic JSON log
             all_parsed_logs.append({
-                "timestamp": timestamp,
-                "level": log_level,
-                "module": module,
-                "message": message.strip()
+                "timestamp": log_entry.get("timestamp", "N/A"),
+                "level": log_entry.get("level", log_entry.get("levelname", "N/A")), # Handle old levelname too
+                "module": log_entry.get("module", "N/A"),
+                "message": log_entry.get("message", str(log_entry)), # Fallback to string of whole log
+                # Potentially add user_id, chat_id, message_id if they should be displayed
             })
-        elif line_content:
-            api_server_logger.debug( # Changed to debug to be less noisy for occasional malformed lines
-                f"Could not parse log line {line_number} from {LOG_FILE_PATH}: '{line_content[:100]}...'"
-            )
+        except json.JSONDecodeError:
+            # Fallback to regex for old format or non-JSON lines, if any might still exist
+            match = LOG_LINE_REGEX.match(line_content)
+            if match:
+                log_level_old, timestamp_old, module_old, message_old = match.groups()
+                all_parsed_logs.append({
+                    "timestamp": timestamp_old,
+                    "level": log_level_old,
+                    "module": module_old,
+                    "message": message_old.strip()
+                })
+            elif line_content: # If it's not JSON and not matching old regex, log a debug message.
+                # Use a more specific message_id for these parsing issues.
+                parse_fail_ctx = {**api_context, 'message_id': f'{request_id}_parse_fail_line_{line_number}'}
+                api_server_logger.debug(
+                    f"Could not parse log line {line_number} as JSON or old format from {LOG_FILE_PATH}: '{line_content[:100]}...'",
+                    extra=parse_fail_ctx
+                )
 
     # Reverse logs to have newest first - apply after parsing and before filtering
     all_parsed_logs.reverse()
@@ -123,7 +155,8 @@ async def get_logs(
     api_server_logger.info(
         f"Serving {len(paginated_logs)} log entries. Page: {page}, Limit: {limit}, "
         f"Level Filter: {level or 'None'}, Search Filter: {search or 'None'}. "
-        f"Total matched before pagination: {len(filtered_logs)}."
+        f"Total matched before pagination: {len(filtered_logs)}.",
+        extra=api_context # Use the same request_id for this summary log
     )
     return paginated_logs
 
@@ -133,10 +166,13 @@ async def set_log_level(request: LogLevelRequest):
     Sets the logging level for the Katana application.
     """
     requested_level_str = request.level.upper()
+    request_id = str(uuid.uuid4())
+    api_context = {'user_id': 'api_user', 'chat_id': 'api_set_level', 'message_id': request_id}
+
 
     # Validate if the provided level string is a valid log level name
     if requested_level_str not in logging._nameToLevel:
-        api_server_logger.warning(f"Invalid log level requested: {request.level}")
+        api_server_logger.warning(f"Invalid log level requested: {request.level}", extra=api_context)
         raise HTTPException(
             status_code=400,
             detail=f"Invalid log level '{request.level}'. Valid levels are: {list(logging._nameToLevel.keys())}"
@@ -145,31 +181,27 @@ async def set_log_level(request: LogLevelRequest):
     numeric_level = logging.getLevelName(requested_level_str)
 
     try:
-        # Call setup_katana_logging to reconfigure with the new level.
-        # This will also update the file path if it were part of the parameters,
-        # but here we only change the level.
-        # It also ensures handlers are reset correctly.
-        current_log_file_path = LOG_FILE_PATH # Preserve current log file path setting
+        current_log_file_path = LOG_FILE_PATH
         if 'log_file_path' in setup_katana_logging.__code__.co_varnames:
              setup_katana_logging(log_level=numeric_level, log_file_path=str(current_log_file_path))
-        else: # Fallback if the signature was somehow reverted or not as expected.
+        else:
              setup_katana_logging(log_level=numeric_level)
 
-
-        api_server_logger.info(f"Application log level set to {requested_level_str} by API request.")
+        api_server_logger.info(f"Application log level set to {requested_level_str} by API request.", extra=api_context)
         return {"message": f"Log level set to {requested_level_str}"}
     except Exception as e:
-        api_server_logger.error(f"Failed to set log level to {requested_level_str}: {e}", exc_info=True)
+        api_server_logger.error(f"Failed to set log level to {requested_level_str}: {e}", exc_info=True, extra=api_context)
         raise HTTPException(status_code=500, detail=f"Failed to set log level: {str(e)}")
 
 
 if __name__ == "__main__":
     # The setup_katana_logging() call at global scope ensures the file handler for katana_events.log
     # is attached early. FastAPI/Uvicorn have their own logging for HTTP requests etc.
-    # No need to call setup_katana_logging() again here if already done globally.
+    # The api_server_logger is already an instance of the configured katana_logger.
 
-    api_server_logger.info(f"Katana API server starting. Log file expected at: {LOG_FILE_PATH.resolve()}")
-    api_server_logger.info("Access API documentation at http://localhost:8000/docs or http://localhost:8000/redoc")
+    main_run_context = {'user_id': 'api_system', 'chat_id': 'api_startup', 'message_id': 'server_main_start'}
+    api_server_logger.info(f"Katana API server starting. Log file expected at: {LOG_FILE_PATH.resolve()}", extra=main_run_context)
+    api_server_logger.info("Access API documentation at http://localhost:8000/docs or http://localhost:8000/redoc", extra=main_run_context)
 
     # Uvicorn's log_level controls its own access logs, not Katana application logs.
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
