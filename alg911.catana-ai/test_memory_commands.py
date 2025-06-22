@@ -26,6 +26,7 @@ try:
         load_memory, save_memory,
         load_history, save_history,
         handle_save_state, handle_load_state, handle_clear_state,
+        handle_user_chat_message, get_contextual_nlp_response, # Added new functions
         initialize_katana_files, # May need to call this to ensure agent_memory_state is initialized
         MEMORY_FILE as AGENT_MEMORY_FILE, # Capture original paths
         HISTORY_FILE as AGENT_HISTORY_FILE,
@@ -237,6 +238,72 @@ class TestMemoryCommands(unittest.TestCase):
             cleared_history = json.load(f)
         self.assertEqual(cleared_history, [])
 
+    # Tests for user-friendly error message propagation
+    @mock.patch('katana_agent.save_json_file')
+    def test_handle_save_state_error_messages(self, mock_save_json):
+        # Test general save failure
+        mock_save_json.return_value = False # Simulate MEMORY_FILE save failure
+        result = handle_save_state()
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["message"], "Sorry, I couldn't save your settings and history. Please try again. If the problem continues, please let support know.")
+
+        # Test history save failure (partial success)
+        # save_memory() -> save_json_file (first call, for memory) -> True
+        # save_history() -> save_json_file (second call, for history) -> False
+        mock_save_json.side_effect = [True, False]
+        result = handle_save_state()
+        self.assertEqual(result["status"], "partial_success")
+        self.assertEqual(result["message"], "Your settings were saved, but there was an issue saving the conversation history details. Please try again or contact support if this persists.")
+
+        # Test unexpected exception
+        mock_save_json.side_effect = Exception("Unexpected disk full!")
+        result = handle_save_state()
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["message"], "An unexpected problem occurred while trying to save your state. Please try again.")
+
+
+    @mock.patch('katana_agent.load_json_file')
+    @mock.patch('katana_agent.save_json_file') # For save_history and the emergency save_memory in load_state
+    def test_handle_load_state_error_messages(self, mock_save_json, mock_load_json):
+        # Test history sync failure (partial success)
+        mock_load_json.return_value = {"name": "TestLoad", "dialog_history": [{"role":"user", "content":"hi"}]} # Successful memory load
+        mock_save_json.return_value = False # Simulate history sync failure
+        result = handle_load_state()
+        self.assertEqual(result["status"], "partial_success")
+        self.assertEqual(result["message"], "Your settings were loaded, but there was an issue synchronizing the conversation history. Some past messages might not be up to date.")
+
+        # Test unexpected exception during load
+        mock_load_json.side_effect = Exception("Cannot read from disk!")
+        # save_memory in except block of handle_load_state will call save_json_file
+        mock_save_json.side_effect = [True] # Allow emergency save to succeed
+        result = handle_load_state()
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["message"], "An unexpected problem occurred while trying to load your state. Some settings or history might be missing. Please try again or initialize a new state if needed.")
+
+
+    @mock.patch('katana_agent.save_json_file')
+    def test_handle_clear_state_error_messages(self, mock_save_json):
+        # Test failure to save cleared state
+        # First call to save_json_file is for memory (agent_memory_state)
+        # Second call is for history file
+        mock_save_json.side_effect = [False, True] # Fail memory save, succeed history save (though history would be from unclear memory)
+        result = handle_clear_state()
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["message"], "Sorry, I couldn't save the cleared state. Some settings or history might not be fully cleared. Please try again.")
+
+        # Test failure to clear history file (partial success)
+        mock_save_json.side_effect = [True, False] # Succeed memory save, fail history save
+        result = handle_clear_state()
+        self.assertEqual(result["status"], "partial_success")
+        self.assertEqual(result["message"], "Your settings were cleared, but there was an issue clearing the conversation history details. Some past messages might still appear temporarily.")
+
+        # Test unexpected exception
+        mock_save_json.side_effect = Exception("Something broke!")
+        result = handle_clear_state()
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["message"], "An unexpected problem occurred while trying to clear your state. Please try again.")
+
+
     def test_handle_save_state_when_dialog_history_is_missing_in_memory(self):
         global agent_memory_state
         agent_memory_state.clear() # Start with a completely empty memory state
@@ -290,3 +357,113 @@ if __name__ == '__main__':
     # runner.run(suite)
 
     unittest.main(argv=['first-arg-is-ignored'], exit=False)
+
+
+class TestHandleUserChatMessage(unittest.TestCase):
+    def setUp(self):
+        self.mock_memory_file = mock.patch('katana_agent.MEMORY_FILE', TEST_MEMORY_FILE)
+        self.mock_history_file = mock.patch('katana_agent.HISTORY_FILE', TEST_HISTORY_FILE)
+        self.mock_memory_file.start()
+        self.mock_history_file.start()
+
+        self.patcher_log_event = mock.patch('katana_agent.log_event')
+        self.mocked_log_event = self.patcher_log_event.start()
+
+        # Mock save_state to inspect calls without actual file I/O during these specific tests,
+        # and to prevent it from interfering with assertions on agent_memory_state before explicit save checks.
+        self.patcher_handle_save_state = mock.patch('katana_agent.handle_save_state', return_value={"status": "success", "message": "Mocked save."})
+        self.mocked_handle_save_state = self.patcher_handle_save_state.start()
+
+        global agent_memory_state
+        agent_memory_state.clear()
+        agent_memory_state.update({
+            "name": "Katana Chat Test",
+            "user_settings": {},
+            "dialog_history": []
+        })
+        if os.path.exists(TEST_MEMORY_FILE): os.remove(TEST_MEMORY_FILE)
+        if os.path.exists(TEST_HISTORY_FILE): os.remove(TEST_HISTORY_FILE)
+
+    def tearDown(self):
+        self.mock_memory_file.stop()
+        self.mock_history_file.stop()
+        self.patcher_log_event.stop()
+        self.patcher_handle_save_state.stop()
+
+        global agent_memory_state
+        agent_memory_state.clear()
+        if os.path.exists(TEST_MEMORY_FILE): os.remove(TEST_MEMORY_FILE)
+        if os.path.exists(TEST_HISTORY_FILE): os.remove(TEST_HISTORY_FILE)
+
+    def test_chat_message_appends_history_and_calls_save(self):
+        global agent_memory_state
+        user_id = "test_user_123"
+        message1 = "Hello Katana"
+
+        response1 = handle_user_chat_message(user_id, message1)
+
+        self.assertEqual(len(agent_memory_state["dialog_history"]), 2) # user msg + bot response
+        self.assertEqual(agent_memory_state["dialog_history"][0]["role"], "user")
+        self.assertEqual(agent_memory_state["dialog_history"][0]["content"], message1)
+        self.assertEqual(agent_memory_state["dialog_history"][0]["id"], user_id)
+        self.assertEqual(agent_memory_state["dialog_history"][1]["role"], "assistant")
+        self.assertTrue(isinstance(response1, str))
+        self.mocked_handle_save_state.assert_called_once()
+
+        message2 = "How are you?"
+        self.mocked_handle_save_state.reset_mock() # Reset mock for the next call
+        response2 = handle_user_chat_message(user_id, message2)
+
+        self.assertEqual(len(agent_memory_state["dialog_history"]), 4)
+        self.assertEqual(agent_memory_state["dialog_history"][2]["content"], message2)
+        self.mocked_handle_save_state.assert_called_once()
+
+    def test_chat_message_contextual_responses(self):
+        global agent_memory_state
+        user_id = "context_user"
+
+        # Test greeting
+        response_hello = handle_user_chat_message(user_id, "Hello")
+        self.assertEqual(response_hello, "Hello there! How can I help you today?")
+
+        # Test repeated greeting
+        response_hello_again = handle_user_chat_message(user_id, "Hi again")
+        self.assertEqual(response_hello_again, "Hello again! What can I do for you?")
+
+        # Test remember last message
+        # History now: user:Hello, assist:Hello there..., user:Hi again, assist:Hello again...
+        _ = handle_user_chat_message(user_id, "My previous message was about greetings.") # User message 1
+        response_recall = handle_user_chat_message(user_id, "What was my last message?") # User message 2
+        self.assertIn("My previous message was about greetings.", response_recall)
+
+        # Test remember name
+        response_remember_name = handle_user_chat_message(user_id, "Remember my name is Jules.")
+        self.assertEqual(response_remember_name, "Got it, I'll try to remember your name is Jules!")
+        self.assertEqual(agent_memory_state["user_settings"].get("user_name"), "Jules")
+
+        # Test recall name
+        response_what_is_name = handle_user_chat_message(user_id, "What is my name?")
+        self.assertEqual(response_what_is_name, "If I remember correctly, your name is Jules.")
+
+        # Test thank you with name
+        response_thank_you = handle_user_chat_message(user_id, "Thank you very much.")
+        self.assertEqual(response_thank_you, "You're welcome, Jules!")
+
+    def test_chat_message_autosave_failure_logged(self):
+        # Test that if handle_save_state fails, it's logged (mocked_log_event will capture this)
+        self.patcher_handle_save_state.stop() # Stop the successful mock
+        self.mocked_handle_save_state = None # Invalidate old mock object
+
+        # Make handle_save_state simulate a failure
+        failing_save_patcher = mock.patch('katana_agent.handle_save_state', return_value={"status": "error", "message": "Simulated save error."})
+        mocked_failing_save = failing_save_patcher.start()
+
+        handle_user_chat_message("autosave_fail_user", "Test message")
+
+        self.mocked_log_event.assert_any_call(
+            "Failed to automatically save state after chat message: Simulated save error.",
+            "error"
+        )
+        failing_save_patcher.stop()
+        # Restore the original successful mock for other tests if any in this class (though none currently follow)
+        self.mocked_handle_save_state = self.patcher_handle_save_state.start()

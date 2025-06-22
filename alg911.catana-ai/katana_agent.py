@@ -156,16 +156,16 @@ def handle_save_state(command_params=None):
             # Also save the dialog_history part to katana.history.json for consistency or external use
             if save_history(agent_memory_state.get("dialog_history", [])):
                 log_event("Successfully saved agent state and synchronized history file.", "info")
-                return {"status": "success", "message": "Agent state saved successfully."}
+                return {"status": "success", "message": "Your settings and conversation history have been saved."}
             else:
                 log_event("Saved agent memory, but failed to save history file.", "warning")
-                return {"status": "partial_success", "message": "Agent state saved, but history file update failed."}
+                return {"status": "partial_success", "message": "Your settings were saved, but there was an issue saving the conversation history details. Please try again or contact support if this persists."}
         else:
             log_event("Failed to save agent memory state.", "error")
-            return {"status": "error", "message": "Failed to save agent state."}
+            return {"status": "error", "message": "Sorry, I couldn't save your settings and history. Please try again. If the problem continues, please let support know."}
     except Exception as e:
         log_event(f"Error during save_state: {str(e)}", "error")
-        return {"status": "error", "message": f"An unexpected error occurred: {str(e)}"}
+        return {"status": "error", "message": "An unexpected problem occurred while trying to save your state. Please try again."}
 
 def handle_load_state(command_params=None):
     """Loads agent_memory_state from MEMORY_FILE and updates HISTORY_FILE."""
@@ -180,20 +180,23 @@ def handle_load_state(command_params=None):
         # agent_memory_state.get("dialog_history", []) is safe because load_memory ensures the key.
         if save_history(agent_memory_state["dialog_history"]):
             log_event("Successfully loaded agent state and synchronized history file.", "info")
-            return {"status": "success", "message": "Agent state loaded successfully."}
+            return {"status": "success", "message": "Your settings and conversation history have been loaded."}
         else:
             log_event("Loaded agent memory, but failed to update history file from loaded state.", "warning")
-            return {"status": "partial_success", "message": "Agent state loaded, but history file synchronization failed."}
+            return {"status": "partial_success", "message": "Your settings were loaded, but there was an issue synchronizing the conversation history. Some past messages might not be up to date."}
 
     except Exception as e:
         log_event(f"Error during load_state: {str(e)}", "error")
         # In case of error, try to ensure agent_memory_state is at least a valid dict
-        if not isinstance(agent_memory_state, dict):
+        # load_memory called at the start of the try block should have already ensured agent_memory_state is a dict
+        # and has essential keys. The save_memory() call here is a last resort if something truly unexpected happened.
+        if not isinstance(agent_memory_state, dict): # Should ideally not be needed
             agent_memory_state = {}
-        if "dialog_history" not in agent_memory_state: agent_memory_state["dialog_history"] = []
-        if "user_settings" not in agent_memory_state: agent_memory_state["user_settings"] = {}
-        save_memory() # Try to save a minimal valid state
-        return {"status": "error", "message": f"An unexpected error occurred during state load: {str(e)}"}
+            agent_memory_state.setdefault("dialog_history", [])
+            agent_memory_state.setdefault("user_settings", {})
+
+        save_memory() # Try to save a minimal valid state to prevent further issues on next load.
+        return {"status": "error", "message": "An unexpected problem occurred while trying to load your state. Some settings or history might be missing. Please try again or initialize a new state if needed."}
 
 def handle_clear_state(command_params=None):
     """Clears dialog history and user settings from agent_memory_state and corresponding files."""
@@ -219,16 +222,16 @@ def handle_clear_state(command_params=None):
         if save_memory(): # Save the modified agent_memory_state
             if save_history([]): # Clear the history file as well
                 log_event("Successfully cleared agent state (history and user settings).", "info")
-                return {"status": "success", "message": "Agent state cleared successfully."}
+                return {"status": "success", "message": "Your settings and conversation history have been cleared."}
             else:
                 log_event("Cleared agent memory state, but failed to clear history file.", "warning")
-                return {"status": "partial_success", "message": "Agent state cleared, but history file clearing failed."}
+                return {"status": "partial_success", "message": "Your settings were cleared, but there was an issue clearing the conversation history details. Some past messages might still appear temporarily."}
         else:
             log_event("Failed to save cleared agent memory state.", "error")
-            return {"status": "error", "message": "Failed to save cleared agent state."}
+            return {"status": "error", "message": "Sorry, I couldn't save the cleared state. Some settings or history might not be fully cleared. Please try again."}
     except Exception as e:
         log_event(f"Error during clear_state: {str(e)}", "error")
-        return {"status": "error", "message": f"An unexpected error occurred: {str(e)}"}
+        return {"status": "error", "message": "An unexpected problem occurred while trying to clear your state. Please try again."}
 
 # --- Existing Agent Command Handlers ---
 def handle_agent_get_config(command_params=None):
@@ -314,13 +317,181 @@ def process_agent_command(command_object):
     log_event(f"Agent processing finished for command: {command_id}. Result status: {result.get('status')}", "info")
     return result
 
+# --- NLP Placeholder & Integration Point ---
+def get_contextual_nlp_response(user_message_text, dialog_history):
+    """
+    Placeholder for NLP processing.
+    Uses dialog_history for context to generate a response.
+    """
+    log_event(f"NLP processing message: '{user_message_text}' with history length: {len(dialog_history)}", "debug")
+
+    # More advanced placeholder logic using history:
+    user_message_lower = user_message_text.lower()
+    name_identified_this_turn = None
+
+    # Check for name identification patterns
+    patterns_name_is = ["my name is ", "i am ", "call me "]
+    patterns_remember_name = ["remember my name is "]
+
+    all_name_patterns = patterns_remember_name + patterns_name_is
+
+    for pattern in all_name_patterns:
+        if pattern in user_message_lower:
+            try:
+                start_index_in_lower = user_message_lower.find(pattern)
+                name_part = user_message_text[start_index_in_lower + len(pattern):].strip()
+
+                if name_part.endswith("."): name = name_part[:-1].strip()
+                else: name = name_part.strip()
+
+                if name:
+                    agent_memory_state.setdefault("user_settings", {})["user_name"] = name
+                    name_identified_this_turn = name
+                    log_event(f"NLP identified user name: {name} via pattern '{pattern}'. Updated user_settings.", "info")
+                    # For "remember my name is", the response is slightly different
+                    if pattern in patterns_remember_name:
+                        return f"Got it, I'll try to remember your name is {name}!"
+                    else:
+                        return f"Nice to meet you, {name}!"
+            except Exception as e:
+                log_event(f"Error parsing name with pattern '{pattern}': {e}", "warning")
+                # Potentially return a message about confusion, or just fall through
+
+    # Check for recent greetings
+    greeted_recently = False
+    if len(dialog_history) > 1: # Need at least one previous message (the current user message is already added)
+        # Check last few messages for a greeting from the bot
+        for entry in reversed(dialog_history[:-1]): # Exclude current user message
+            if entry["role"] == "assistant" and "hello" in entry["content"].lower():
+                greeted_recently = True
+                break
+            if entry["role"] == "user": # Stop if we hit a previous user message without finding bot greeting
+                break
+
+    if "hello" in user_message_lower or "hi" in user_message_lower:
+        if greeted_recently:
+            return "Hello again! What can I do for you?"
+        else:
+            return "Hello there! How can I help you today?"
+
+    if "what was my last message" in user_message_lower:
+        # The dialog_history passed INCLUDES the current user's message at the end.
+        # So, user's own last message (before the current one) is at dialog_history[-2].
+        # And the message before that (if any) is dialog_history[-3].
+        if len(dialog_history) >= 3: # current user msg, bot response, previous user msg
+             # find the last message by user_id that isn't the current one.
+            user_messages = [m["content"] for m in dialog_history[:-1] if m["role"] == "user"]
+            if user_messages:
+                 return f"Looking back... your last message to me was: '{user_messages[-1]}'"
+            else: # Should not happen if history has user messages
+                 return "I don't see a previous message from you in our recent chat."
+        elif len(dialog_history) == 2: # Current user message + one previous (must be bot or system)
+             return "It looks like this is our first exchange in this session, or I don't remember your very last message."
+        else: # Only current user message in history
+             return "This is your first message to me in this conversation!"
+
+
+    # This block is now covered by the loop above, but the response might differ slightly.
+    # The loop provides "Nice to meet you, {name}!" or "Got it, I'll try to remember..."
+    # If a specific response for "remember my name is" is still desired *after* the loop (e.g. if it failed), it could be here.
+    # For now, the loop handles it. If name_identified_this_turn has a value, we've already responded.
+    if name_identified_this_turn: # If name was identified and responded to, we can exit early.
+        pass # Already returned from the loop
+
+    current_user_name = agent_memory_state.get("user_settings", {}).get("user_name")
+    if current_user_name:
+        if "what is my name" in user_message_lower:
+            return f"If I remember correctly, your name is {current_user_name}."
+        if "thank you" in user_message_lower: # and not name_identified_this_turn:
+             # Avoid saying "You're welcome, Bob!" if they just said "My name is Bob" and bot said "Nice to meet you Bob"
+            if not name_identified_this_turn : # only if name wasn't just set this turn
+                return f"You're welcome, {current_user_name}!"
+            else: # if name was just set, a simple "You're welcome!" is better.
+                 return "You're welcome!"
+        # If user said "thanks" and also their name in the same message, this logic might need refinement
+        # e.g. "Thanks, my name is Dave" -> "Nice to meet you, Dave!" (from name logic)
+        # vs "You're welcome, Dave!" (from here). The first one to match would respond.
+
+
+    # Default fallback if no specific contextual rule matched
+    previous_bot_responses = [entry["content"] for entry in dialog_history if entry["role"] == "assistant"]
+    if previous_bot_responses and previous_bot_responses[-1] == f"Katana echoes: {user_message_text}":
+        return "I seem to be repeating myself. Perhaps we can talk about something else?"
+
+    return f"Katana processes: {user_message_text} (History items: {len(dialog_history)})"
+
+
+# --- Main Chat Message Handling Logic ---
+def handle_user_chat_message(user_id, user_message_text):
+    """
+    Handles an incoming chat message from a user, updates dialog history,
+    and (currently) echoes the message. This is where NLP would be integrated.
+    """
+    global agent_memory_state
+    log_event(f"Received chat message from user {user_id}: '{user_message_text}'", "info")
+
+    # 1. Add user message to history
+    # Ensure dialog_history is initialized (should be by load_memory)
+    if "dialog_history" not in agent_memory_state: # Should be redundant due to load_memory
+        agent_memory_state["dialog_history"] = []
+
+    current_dialog_history = agent_memory_state["dialog_history"]
+    current_dialog_history.append({
+        "role": "user",
+        "id": user_id,
+        "content": user_message_text,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+    })
+
+    # 2. Process message with NLP, providing current dialog history for context
+    bot_response_text = get_contextual_nlp_response(user_message_text, current_dialog_history)
+
+    log_event(f"Generated bot response: '{bot_response_text}'", "info")
+
+    # 3. Add bot response to history
+    current_dialog_history.append({
+        "role": "assistant",
+        "content": bot_response_text,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+    })
+
+    # 4. Save state (includes history)
+    save_result = handle_save_state() # This calls save_memory() and save_history()
+    if save_result["status"] != "success":
+        log_event(f"Failed to automatically save state after chat message: {save_result.get('message')}", "error")
+        # Depending on policy, we might want to inform the user or just log
+
+    return bot_response_text
+
+
 if __name__ == '__main__':
-    log_event("katana_agent.py self-test: Initializing files...", "info")
-    initialize_katana_files()
-    log_event("katana_agent.py self-test: File initialization complete.", "info")
-    log_event("katana_agent.py self-test: Current memory state: " + json.dumps(agent_memory_state), "debug")
-    # To verify, after running this, one would check katana_events.log and the content of the .json files.
-    # Example: Create a dummy corrupted file to test re-initialization
-    # with open(COMMANDS_FILE, 'w') as f: f.write("corrupted")
-    # initialize_katana_files() # Should detect and fix
-    # print(load_commands())
+    log_event("katana_agent.py self-test: Initializing files and loading memory...", "info")
+    initialize_katana_files() # This calls load_memory()
+    log_event("katana_agent.py self-test: File initialization and memory load complete.", "info")
+
+    initial_memory_snapshot = json.dumps(agent_memory_state, indent=2)
+    log_event(f"katana_agent.py self-test: Initial memory state:\n{initial_memory_snapshot}", "debug")
+
+    # Example of processing a command
+    # test_command = {"action": "get_agent_config", "command_id": "test-cmd-123"}
+    # log_event(f"Simulating command processing: {test_command}", "info")
+    # command_result = process_agent_command(test_command)
+    # log_event(f"Command processing result: {command_result}", "info")
+
+    # Example of processing a user chat message
+    log_event("Simulating user chat message processing...", "info")
+    user_id_example = "user_alpha_001"
+
+    chat_response_1 = handle_user_chat_message(user_id_example, "Hello Katana!")
+    log_event(f"Chat response to user: {chat_response_1}", "info")
+
+    chat_response_2 = handle_user_chat_message(user_id_example, "What was my last message?")
+    log_event(f"Chat response to user: {chat_response_2}", "info")
+
+    chat_response_3 = handle_user_chat_message(user_id_example, "This is a new message.")
+    log_event(f"Chat response to user: {chat_response_3}", "info")
+
+    final_memory_snapshot = json.dumps(agent_memory_state, indent=2)
+    log_event(f"katana_agent.py self-test: Final memory state after interactions:\n{final_memory_snapshot}", "debug")
+
+    log_event("katana_agent.py self-test: Run complete. Check katana_events.log, katana_memory.json, and katana.history.json.", "info")
