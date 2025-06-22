@@ -1,0 +1,4 @@
+# Add project dependencies here
+# For example:
+# Flask==2.0.1
+# spacy==3.0.6
