@@ -20,12 +20,24 @@ logger = logging.getLogger(__name__)
 
 # --- Environment Variables & Bot Initialization ---
 API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN')
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', "dummy_anthropic_key_env") # Provide a default for local dev if not set
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', "dummy_openai_key_env") # Provide a default for local dev if not set
-
-if not API_TOKEN or ':' not in API_TOKEN:
-    logger.error("❌ Invalid or missing Telegram API token. Please set KATANA_TELEGRAM_TOKEN env variable.")
+if API_TOKEN and ':' in API_TOKEN:
+    logger.info("✅ Telegram API token loaded successfully.")
+else:
+    logger.error("❌ Invalid or missing Telegram API token. Please set KATANA_TELEGRAM_TOKEN env variable with format '123456:ABCDEF'.")
     raise ValueError("❌ Invalid or missing Telegram API token. Please set KATANA_TELEGRAM_TOKEN env variable with format '123456:ABCDEF'.")
+
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', "dummy_anthropic_key_env")
+if ANTHROPIC_API_KEY == "dummy_anthropic_key_env":
+    logger.warning("⚠️ Anthropic API key is using the default dummy value. Set ANTHROPIC_API_KEY for actual use.")
+else:
+    logger.info("✅ Anthropic API key loaded.")
+
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', "dummy_openai_key_env")
+if OPENAI_API_KEY == "dummy_openai_key_env":
+    logger.warning("⚠️ OpenAI API key is using the default dummy value. Set OPENAI_API_KEY for actual use.")
+else:
+    logger.info("✅ OpenAI API key loaded.")
+
 
 bot = telebot.TeleBot(API_TOKEN)
 
@@ -116,11 +128,13 @@ def handle_message(message):
 
     logger.info(f"Received message from {chat_id}: {command_text}")
 
-    try:
-        command_data = json.loads(command_text)
-    except json.JSONDecodeError:
-        bot.reply_to(message, "❌ Error: Invalid JSON format.")
-        logger.warning(f"Invalid JSON from {chat_id}: {command_text}", exc_info=True)
+    try: # Top-level try-except for the entire message handling logic
+        try:
+            command_data = json.loads(command_text)
+        except json.JSONDecodeError:
+            reply_text = "❌ Error: Invalid JSON format."
+        bot.reply_to(message, reply_text)
+        logger.warning(f"Invalid JSON from {chat_id}: {command_text}. Replied: '{reply_text}'", exc_info=True)
         return
 
     required_fields = {
@@ -157,31 +171,39 @@ def handle_message(message):
     # If so, delegate to `get_nlp_response` which handles specific module validation and client calls.
     if command_type == "nlp_query": # "nlp_query" is the designated type for NLP actions.
         if not module_name: # Module name is essential for routing to the correct NLP client.
-            error_msg = "❌ Error: Missing 'module' field for NLP command."
-            bot.reply_to(message, error_msg)
-            logger.warning(f"NLP command validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+            reply_text = "❌ Error: Missing 'module' field for NLP command."
+            bot.reply_to(message, reply_text)
+            logger.warning(f"NLP command validation failed for {chat_id}: {reply_text} (Command: {command_text})")
             return
 
         user_prompt = command_data.get("args", {}).get("prompt")
         if not user_prompt or not isinstance(user_prompt, str):
-            error_msg = "❌ Error: Missing 'prompt' in 'args' for NLP command or it's not a string."
-            bot.reply_to(message, error_msg)
-            logger.warning(f"NLP command validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+            reply_text = "❌ Error: Missing 'prompt' in 'args' for NLP command or it's not a string."
+            bot.reply_to(message, reply_text)
+            logger.warning(f"NLP command validation failed for {chat_id}: {reply_text} (Command: {command_text})")
             return
 
         nlp_response = get_nlp_response(user_prompt, module_name)
         bot.reply_to(message, nlp_response)
-        logger.info(f"Sent NLP response to {chat_id} for module {module_name}.")
+        # Log based on whether nlp_response indicates an error (starts with ❌) or success
+        if nlp_response.startswith("❌"):
+            logger.warning(f"Sent NLP error reply to {chat_id} for module {module_name}. Reply: '{nlp_response}'")
+        else:
+            logger.info(f"Sent NLP success reply to {chat_id} for module {module_name}. Reply: '{nlp_response[:100]}...'")
         return
 
     # --- Existing Command Type Handling (Non-NLP) ---
     if command_type == "log_event":
         handle_log_event(command_data, chat_id)
-        bot.reply_to(message, "✅ 'log_event' processed (placeholder).")
+        reply_text = "✅ 'log_event' processed (placeholder)."
+        bot.reply_to(message, reply_text)
+        logger.info(f"Sent '{command_type}' confirmation to {chat_id}. Reply: '{reply_text}'")
         return
     elif command_type == "mind_clearing":
         handle_mind_clearing(command_data, chat_id)
-        bot.reply_to(message, "✅ 'mind_clearing' processed (placeholder).")
+        reply_text = "✅ 'mind_clearing' processed (placeholder)."
+        bot.reply_to(message, reply_text)
+        logger.info(f"Sent '{command_type}' confirmation to {chat_id}. Reply: '{reply_text}'")
         return
 
     # --- Default: Save command to file (if not an NLP module and not other specific types) ---
@@ -199,18 +221,43 @@ def handle_message(message):
     try:
         with open(command_file_path, "w", encoding="utf-8") as f:
             json.dump(command_data, f, ensure_ascii=False, indent=2)
-        bot.reply_to(message, f"✅ Command received and saved as `{command_file_path}`.")
-        logger.info(f"Saved command from {chat_id} to {command_file_path}")
+        reply_text = f"✅ Command received and saved as `{command_file_path}`."
+        bot.reply_to(message, reply_text)
+        logger.info(f"Saved command from {chat_id} to {command_file_path}. Replied: '{reply_text}'")
     except Exception as e:
         logger.error(f"Error saving command file for {chat_id} to {command_file_path}: {e}", exc_info=True)
-        bot.reply_to(message, "❌ Error: Could not save your command due to a server-side issue.")
+        reply_text = "❌ Error: Could not save your command due to a server-side issue."
+        bot.reply_to(message, reply_text)
+        logger.error(f"Sent file save error reply to {chat_id}. Reply: '{reply_text}'")
 
-
-if __name__ == '__main__':
-    logger.info("Bot starting...")
-    try:
-        bot.polling()
     except Exception as e:
-        logger.critical(f"Bot polling failed critically: {e}", exc_info=True)
+        # Catch-all for any other unhandled exception during message processing
+        logger.critical(
+            f"Unhandled exception in handle_message for chat_id {chat_id}. Command: '{command_text}'. Error: {e}",
+            exc_info=True
+        )
+        reply_text = "🤖 Ой, что-то пошло не так на моей стороне. Я уже разбираюсь. Попробуйте свой запрос чуть позже."
+        try:
+            bot.reply_to(message, reply_text)
+            logger.info(f"Sent generic error reply to {chat_id} due to unhandled exception. Reply: '{reply_text}'")
+        except Exception as reply_e:
+            # If even replying fails, log that too.
+            logger.error(f"Failed to send generic error reply to {chat_id}. Error during reply: {reply_e}", exc_info=True)
+
+def main():
+    """Starts the KatanaBot."""
+    logger.info("🚀 KatanaBot starting up...")
+    logger.info("Polling mode: continuous (none_stop=True)")
+    try:
+        # none_stop=True ensures the bot keeps running even after some errors,
+        # attempting to reconnect and continue polling.
+        bot.polling(none_stop=True)
+    except Exception as e:
+        # This will typically catch errors if none_stop=False, or critical setup/library errors.
+        # With none_stop=True, most operational errors are handled internally by telebot or should be caught in handlers.
+        logger.critical(f"Bot polling loop exited critically: {e}", exc_info=True)
     finally:
         logger.info("Bot stopped.")
+
+if __name__ == '__main__':
+    main()
