@@ -282,3 +282,36 @@ if __name__ == '__main__':
     # Ensure 'katana_core/commands.json', etc. can be created/read in CWD or specified path.
     # kc = KatanaCore(core_dir_path_str=str(current_file_dir)) # Assumes data files are in the same dir as katana.py
     # kc.run()
+
+# New function for programmatic command execution
+import subprocess
+
+def execute_core_command(command: str) -> dict:
+    """
+    Executes a shell command and captures its output.
+    Args:
+        command: The command string to execute.
+    Returns:
+        A dictionary containing stdout, stderr, and return code.
+    """
+    try:
+        # Using shell=True can be a security risk if the command string is from an untrusted source.
+        # Ensure commands are validated or constructed safely if they involve external input.
+        result = subprocess.run(command, capture_output=True, text=True, shell=True, check=False)
+        return {
+            "stdout": result.stdout.strip() if result.stdout else "",
+            "stderr": result.stderr.strip() if result.stderr else "",
+            "code": result.returncode
+        }
+    except Exception as e:
+        # Log this exception if a logger is available globally or passed in.
+        # For now, returning it in stderr.
+        # Consider how to log this within KatanaCore's context if used by it,
+        # or if this function is purely a utility.
+        # If a global/module logger is set up for katana_core.katana, it could be used here.
+        # For now, direct return:
+        return {
+            "stdout": "",
+            "stderr": f"Exception during command execution: {str(e)}",
+            "code": -1 # Indicate failure due to exception
+        }
