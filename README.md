@@ -254,6 +254,17 @@ To monitor if the bot is actively running and processing, a heartbeat mechanism 
     *   Or, use a monitoring system that can interpret the script's exit codes and output to manage alerts.
 
 This heartbeat mechanism provides a simple yet effective way to monitor the bot's liveness.
+    For actual alert notifications, the `send_telegram_alert` function (or a similar custom function for email/other services) in `tools/check_heartbeat.py` needs to be implemented and configured with necessary API tokens and recipient details (e.g., via `ALERT_TELEGRAM_BOT_TOKEN` and `ALERT_TELEGRAM_CHAT_ID` environment variables).
+
+## Deployment Guide
+
+For a comprehensive, step-by-step guide to deploying the bot on a new server, including environment setup, configuration, and service management, please refer to the [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) file.
+
+## Graceful Shutdown
+
+The bot includes mechanisms for a basic graceful shutdown:
+- When the bot is stopped (e.g., via `Ctrl+C` or `systemctl stop`), the heartbeat thread is signaled to stop and is joined before the application fully exits. This is handled in `run_bot_locally.py` and the `if __name__ == '__main__'` block of `bot/katana_bot.py`.
+- **Further Considerations**: True graceful shutdown of active message handlers (ensuring they complete processing before exit) is more complex with the current `pyTelegramBotAPI` polling model. For applications requiring this, a different approach to message processing (e.g., a queue and worker threads) might be needed.
 
 ### Supervisor
 

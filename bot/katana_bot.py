@@ -318,5 +318,9 @@ if __name__ == '__main__':
     except Exception as e:
         logger.error(f"💥 An unexpected error occurred while running the bot directly: {e}", exc_info=True)
     finally:
+        logger.info("Initiating shutdown sequence (when run directly)...")
         stop_heartbeat_thread()  # Stop heartbeat when run directly
+        # Considerations for further graceful shutdown:
+        # - Similar to run_bot_locally.py, true graceful handling of active message
+        #   processors would require a more complex setup if using pyTelegramBotAPI's polling.
         logger.info("🛑 Katana Bot (run directly) has shut down.")

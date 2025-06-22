@@ -76,5 +76,11 @@ if __name__ == '__main__':
         # Но на всякий случай, если ошибка произойдет на уровне самого polling или инициализации.
         logger.error(f"💥 An unexpected error occurred while running the bot: {e}", exc_info=True)
     finally:
+        logger.info("Initiating shutdown sequence...")
         stop_heartbeat_thread() # Stop the heartbeat thread
+        # Considerations for further graceful shutdown:
+        # - If message handlers were run in separate threads managed by this application,
+        #   we could signal them to complete and join them here.
+        # - For pyTelegramBotAPI's default polling, active handlers might be interrupted.
+        # - Ensure any external resources (DB connections, files) are closed if opened directly.
         logger.info("🛑 Katana Bot has shut down.")

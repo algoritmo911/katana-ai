@@ -58,13 +58,47 @@ def main():
         sys.exit(1) # Nagios WARNING state
 
     if age_seconds > args.max_age:
-        print(f"CRITICAL: Heartbeat is stale! Last update was {age_seconds:.2f} seconds ago (max allowed: {args.max_age}s).")
-        # In a real scenario, trigger an alert here (e.g., email, Telegram message)
-        # print("Placeholder for sending Telegram/Email alert: Bot heartbeat is stale!")
+        critical_message = f"CRITICAL: Katana Bot heartbeat is stale! Last update was {age_seconds:.2f} seconds ago (max allowed: {args.max_age}s)."
+        print(critical_message)
+        # --- Alerting Integration Placeholder ---
+        # In a real scenario, trigger an alert here.
+        # Example: send_telegram_alert(critical_message)
+        #          send_email_alert("Katana Bot Alert", critical_message)
+        # See function `send_telegram_alert` below for a conceptual example.
+        # --------------------------------------
         sys.exit(2) # Nagios CRITICAL state
 
-    print(f"OK: Heartbeat is current. Last update was {age_seconds:.2f} seconds ago.")
+    ok_message = f"OK: Heartbeat is current. Last update was {age_seconds:.2f} seconds ago."
+    if args.verbose: # Only print OK message if verbose, to keep cron logs clean on success
+        print(ok_message)
     sys.exit(0) # Nagios OK state
+
+def send_telegram_alert(message: str):
+    """
+    Conceptual function to send an alert message via a Telegram bot.
+    Requires environment variables:
+    - ALERT_TELEGRAM_BOT_TOKEN: Token for the bot that sends alerts.
+    - ALERT_TELEGRAM_CHAT_ID: Chat ID to send the alert to.
+    """
+    bot_token = os.getenv('ALERT_TELEGRAM_BOT_TOKEN')
+    chat_id = os.getenv('ALERT_TELEGRAM_CHAT_ID')
+
+    if not bot_token or not chat_id:
+        print("WARNING: Telegram alert variables (ALERT_TELEGRAM_BOT_TOKEN, ALERT_TELEGRAM_CHAT_ID) not set. Cannot send alert.")
+        return
+
+    # This is a simplified example. A real implementation would use a library like `requests` or `python-telegram-bot`.
+    # import requests
+    # url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    # payload = {"chat_id": chat_id, "text": message}
+    # try:
+    #     response = requests.post(url, data=payload, timeout=10)
+    #     response.raise_for_status() # Raise an exception for HTTP errors
+    #     print(f"Successfully sent Telegram alert to chat_id {chat_id}.")
+    # except Exception as e:
+    #     print(f"ERROR: Failed to send Telegram alert: {e}")
+    print(f"CONCEPTUAL ALERT (Telegram): To ChatID {chat_id} - Message: {message}")
+
 
 if __name__ == "__main__":
     main()
