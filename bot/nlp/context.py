@@ -41,22 +41,78 @@ def update_context(current_context, nlp_result, processed_intents_info):
     # Сначала очистим сущности, если текущее распознанное намерение не предполагает их использование из прошлого.
     # Это очень упрощенная логика. В идеале нужно знать, какие сущности релевантны для каких интентов.
     # Например, если новый интент - "расскажи анекдот", старый город из "погоды" уже не нужен.
-    if new_context.get("last_recognized_intent") not in ["get_weather", "clarify_city_for_weather"] and \
-       new_context.get("last_processed_intent") not in ["get_weather", "clarify_city_for_weather"]:
-        if "city" in new_context["entities"]: # Очищаем город, если он не относится к погоде
-            del new_context["entities"]["city"]
+
+    # Определяем, нужно ли очищать предыдущие сущности.
+    # Мы очищаем сущности, если текущий главный обработанный интент
+    # не является продолжением предыдущего контекста (например, уточнение).
+    # Это помогает избежать "залипания" старых сущностей.
+
+    previous_intent = current_context.get("last_processed_intent")
+    current_main_intent = new_context.get("last_processed_intent") # Уже обновлен выше
+
+    # Список интентов, которые обычно являются частью последовательности и сохраняют контекст
+    STICKY_INTENT_PAIRS = {
+        # предыдущий интент: [список последующих интентов, которые продолжают контекст]
+        "get_weather": ["clarify_city_for_weather"], # Если спросили погоду, а потом уточняют город
+        "clarify_city_for_weather": ["get_weather"], # Если спросили город, а потом дают город для погоды
+        # Можно добавить другие пары, например, для многошаговых диалогов
+    }
+
+    # Категории интентов (упрощенно)
+    INTENT_CATEGORIES = {
+        "get_weather": "task",
+        "clarify_city_for_weather": "task_clarification",
+        "get_time": "task",
+        "tell_joke": "chitchat",
+        "get_fact": "chitchat",
+        "greeting": "chitchat",
+        "goodbye": "chitchat",
+        "fallback": "system",
+        "fallback_after_clarification_fail": "system"
+    }
+
+    # Получаем категории предыдущего и текущего интентов
+    prev_category = INTENT_CATEGORIES.get(previous_intent, "unknown")
+    current_category = INTENT_CATEGORIES.get(current_main_intent, "unknown")
+
+    should_clear_entities = True
+    if previous_intent and current_main_intent:
+        # Не очищаем, если это "липкая" пара
+        if previous_intent in STICKY_INTENT_PAIRS and \
+           current_main_intent in STICKY_INTENT_PAIRS[previous_intent]:
+            should_clear_entities = False
+        # Не очищаем, если категория та же и это не chitchat (chitchat каждый раз новый)
+        # и не системный (fallback)
+        elif prev_category == current_category and \
+             prev_category not in ["chitchat", "system", "unknown", "task_clarification"]:
+            should_clear_entities = False
+        # Если предыдущий был уточнением, а текущий - задача (например, clarify_city -> get_weather)
+        elif prev_category == "task_clarification" and current_category == "task":
+             # Здесь мы уже проверили STICKY_INTENT_PAIRS, так что если это не та пара, то чистим
+             # Однако, если clarify_city_for_weather -> get_weather, то это уже обработано STICKY_INTENT_PAIRS
+             # Это условие на случай, если есть другие task_clarification -> task, не указанные в STICKY_INTENT_PAIRS,
+             # но для них мы пока что будем очищать сущности, если они не "липкие".
+             # По сути, если мы дошли сюда, и предыдущий был task_clarification, а текущий task,
+             # и они не в STICKY_INTENT_PAIRS, то лучше очистить.
+             pass # should_clear_entities остается True
+
+    if should_clear_entities:
+        # print(f"DEBUG: Clearing entities. Prev: {previous_intent}, Curr: {current_main_intent}")
+        new_context["entities"] = {}
+    # else:
+        # print(f"DEBUG: NOT clearing entities. Prev: {previous_intent}, Curr: {current_main_intent}")
+
 
     # Теперь добавляем/обновляем сущности из текущего nlp_result
     if nlp_result.get("entities"):
         new_context["entities"].update(nlp_result.get("entities", {}))
 
-    # Если было уточнение clarify_city_for_weather и оно привело к get_weather,
-    # и город теперь есть в сущностях, то last_recognized_intent должен стать get_weather.
-    # Это должно было произойти еще на этапе nlp_parser.
-    # Здесь мы просто убеждаемся, что контекст это отражает.
+
+    # Синхронизация last_recognized_intent если clarify_city_for_weather успешно привел к get_weather
+    # Эта логика уже была, но теперь она работает с потенциально очищенными/обновленными new_context["entities"]
     if new_context.get("last_processed_intent") == "get_weather" and \
        current_context.get("last_recognized_intent") == "clarify_city_for_weather" and \
-       new_context["entities"].get("city"):
-        new_context["last_recognized_intent"] = "get_weather" # Синхронизируем
+       new_context["entities"].get("city"): # Убедимся что город есть ПОСЛЕ обновления сущностей
+        new_context["last_recognized_intent"] = "get_weather"
 
     return new_context

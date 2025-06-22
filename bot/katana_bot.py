@@ -21,7 +21,41 @@ COMMAND_FILE_DIR = Path('commands')
 COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 
 # In-memory хранилище для контекста и истории пользователей
-user_memory = {}
+# user_memory = {} # Заменено на загрузку из файла
+
+# --- Управление состоянием пользователя ---
+USER_STATE_FILE = Path('user_state.json')
+user_memory = {} # Будет загружено из файла
+
+def load_user_state():
+    """Загружает состояние пользователей из файла."""
+    global user_memory
+    if USER_STATE_FILE.exists():
+        try:
+            with open(USER_STATE_FILE, 'r', encoding='utf-8') as f:
+                user_memory = json.load(f)
+                # Ключи в JSON всегда строки, преобразуем chat_id обратно в int, если это возможно
+                user_memory = {int(k) if k.isdigit() else k: v for k, v in user_memory.items()}
+                log_local_bot_event(f"User state loaded from {USER_STATE_FILE}")
+        except (json.JSONDecodeError, IOError) as e:
+            log_local_bot_event(f"Error loading user state from {USER_STATE_FILE}: {e}. Starting with empty state.")
+            user_memory = {}
+    else:
+        log_local_bot_event(f"User state file {USER_STATE_FILE} not found. Starting with empty state.")
+        user_memory = {}
+
+def save_user_state():
+    """Сохраняет текущее состояние пользователей в файл."""
+    global user_memory
+    try:
+        with open(USER_STATE_FILE, 'w', encoding='utf-8') as f:
+            # Конвертируем числовые chat_id в строки для совместимости с JSON
+            memory_to_save = {str(k): v for k, v in user_memory.items()}
+            json.dump(memory_to_save, f, ensure_ascii=False, indent=4)
+            log_local_bot_event(f"User state saved to {USER_STATE_FILE}")
+    except IOError as e:
+        log_local_bot_event(f"Error saving user state to {USER_STATE_FILE}: {e}")
+
 
 def log_local_bot_event(message_text):
     """Вывод лога события в консоль."""
@@ -29,6 +63,7 @@ def log_local_bot_event(message_text):
 
 # --- Заглушки для обработки намерений ---
 def handle_intent_get_weather(chat_id, entities, current_context):
+    log_local_bot_event(f"[get_weather] Received entities: {entities}, Current context entities: {current_context.get('entities')}")
     city = entities.get("city")
     if city:
         return f"☀️ Погода в городе {city} отличная! (но это не точно)"
@@ -99,8 +134,10 @@ def handle_start_help(message):
     if chat_id not in user_memory:
         user_memory[chat_id] = {
             "context": nlp_context.get_initial_context(),
-            "history": []
+            "history": [],
+            "settings": {} # Добавляем placeholder для настроек пользователя
         }
+        log_local_bot_event(f"Initialized new memory structure for chat_id {chat_id} including settings.")
 
     bot.reply_to(message, "Привет! Я Katana, ваш умный ассистент. Спросите меня что-нибудь, например:\n"
                           "- Какая погода в Москве?\n"
@@ -120,10 +157,16 @@ def handle_user_chat_message(message):
     if chat_id not in user_memory:
         user_memory[chat_id] = {
             "context": nlp_context.get_initial_context(),
-            "history": []
+            "history": [],
+            "settings": {} # Добавляем placeholder для настроек пользователя
         }
+        log_local_bot_event(f"Initialized new memory structure for chat_id {chat_id} including settings.")
 
     current_session_memory = user_memory[chat_id]
+    # Убедимся, что у существующих пользователей тоже есть поле settings, если оно было добавлено после их создания
+    if "settings" not in current_session_memory:
+        current_session_memory["settings"] = {}
+        log_local_bot_event(f"Added missing 'settings' field to existing user data for chat_id {chat_id}.")
     current_context = current_session_memory["context"]
 
     # Анализируем текст с помощью NLP
@@ -170,6 +213,7 @@ def handle_user_chat_message(message):
     current_session_memory["history"] = current_session_memory["history"][-20:]
 
     log_local_bot_event(f"Updated memory for {chat_id}: {json.dumps(current_session_memory, ensure_ascii=False, indent=2)}")
+    save_user_state() # Сохраняем состояние после каждого сообщения
 
 
 # --- Старая логика обработки JSON-команд (пока оставим, но она не будет вызываться обычными текстовыми сообщениями) ---
@@ -249,8 +293,13 @@ def handle_json_command_message(message):
 
 if __name__ == '__main__':
     log_local_bot_event("Bot starting with NLP capabilities...")
+    load_user_state() # Загружаем состояние при старте
     # bot.polling() # Запуск бота будет осуществляться другим способом при тестировании
     # Для локального запуска можно раскомментировать:
-    # bot.infinity_polling(logger_level=None) # Используем infinity_polling для более стабильной работы
-    # log_local_bot_event("Bot stopped.")
-    print("Bot initialized. To run, call bot.infinity_polling()")
+    # try:
+    #     bot.infinity_polling(logger_level=None) # Используем infinity_polling для более стабильной работы
+    # finally:
+    #     save_user_state() # Сохраняем состояние при штатном завершении
+    #     log_local_bot_event("Bot stopped and user state saved.")
+    print("Bot initialized. To run, call bot.infinity_polling() after ensuring load_user_state() is called.")
+    print("Make sure to handle graceful shutdown to save state if running polling.")

@@ -162,6 +162,84 @@ class TestKatanaBotNLP(unittest.TestCase):
         self.assertEqual(katana_bot.user_memory[chat_id]["history"][0]["user"], "Сообщение номер 6") # Check first message after limit
         self.assertEqual(katana_bot.user_memory[chat_id]["history"][-1]["user"], "Сообщение номер 25") # Check last message
 
+    def test_user_state_persistence_and_settings_field(self):
+        chat_id = 777
+
+        # 1. Initial message to create user state
+        # Ensure user_memory for this chat_id is clean before starting
+        if chat_id in katana_bot.user_memory:
+            del katana_bot.user_memory[chat_id]
+
+        mock_message1 = self._create_mock_message("Первое сообщение для состояния", chat_id=chat_id)
+        # Patch nlp_parser.analyze_text for predictable output
+        with patch('bot.katana_bot.nlp_parser.analyze_text') as mock_analyze:
+            mock_analyze.return_value = {
+                "intents": [{"name": "test_intent", "confidence": 1.0}],
+                "entities": {"test_entity": "value1"},
+                "original_text": "Первое сообщение для состояния"
+            }
+            katana_bot.handle_user_chat_message(mock_message1)
+
+        # Check initial state includes settings
+        self.assertIn(chat_id, katana_bot.user_memory)
+        self.assertIn("settings", katana_bot.user_memory[chat_id])
+        self.assertEqual(katana_bot.user_memory[chat_id]["settings"], {})
+        self.assertEqual(len(katana_bot.user_memory[chat_id]["history"]), 1)
+        # Make a deep copy of the specific user's data for later comparison
+        original_user_data_before_save = copy.deepcopy(katana_bot.user_memory[chat_id])
+
+        # 2. Save state
+        temp_state_file = Path("test_user_state_temp.json")
+        original_user_state_file_val = katana_bot.USER_STATE_FILE # Store the original Path object
+        katana_bot.USER_STATE_FILE = temp_state_file
+
+        try:
+            katana_bot.save_user_state()
+            self.assertTrue(temp_state_file.exists(), "State file was not created.")
+
+            # 3. Clear in-memory state for the specific user to simulate reload
+            # We need to preserve other users' states if any, so just delete the specific chat_id
+            if chat_id in katana_bot.user_memory:
+                 del katana_bot.user_memory[chat_id]
+            self.assertNotIn(chat_id, katana_bot.user_memory)
+
+            # If user_memory becomes empty, load_user_state might re-initialize it as {}
+            # To ensure load_user_state actually loads from file, we can set user_memory to a marker
+            katana_bot.user_memory = {"marker_for_test": "value"}
+
+
+            # 4. Load state
+            katana_bot.load_user_state() # This should reload from temp_state_file
+            self.assertIn(chat_id, katana_bot.user_memory, "User state was not loaded.")
+            self.assertNotIn("marker_for_test", katana_bot.user_memory, "User memory was not fully replaced by loaded data.")
+
+
+            # 5. Verify loaded state matches original
+            loaded_user_data = katana_bot.user_memory[chat_id]
+
+            # Compare settings
+            self.assertEqual(loaded_user_data.get("settings"), original_user_data_before_save.get("settings"), "Settings mismatch.")
+
+            # Compare history (ensure it's a list and contents match)
+            self.assertIsInstance(loaded_user_data.get("history"), list, "Loaded history is not a list.")
+            self.assertEqual(len(loaded_user_data.get("history", [])), len(original_user_data_before_save.get("history", [])), "History length mismatch.")
+            if original_user_data_before_save.get("history"): # Only compare if original history existed
+                 self.assertEqual(loaded_user_data["history"], original_user_data_before_save["history"], "History content mismatch.")
+
+            # Compare context (selected fields)
+            self.assertIsInstance(loaded_user_data.get("context"), dict, "Loaded context is not a dict.")
+            self.assertEqual(loaded_user_data.get("context", {}).get("last_recognized_intent"),
+                             original_user_data_before_save.get("context", {}).get("last_recognized_intent"), "last_recognized_intent mismatch.")
+            self.assertEqual(loaded_user_data.get("context", {}).get("entities"),
+                             original_user_data_before_save.get("context", {}).get("entities"), "Entities mismatch.")
+            self.assertEqual(loaded_user_data.get("context", {}).get("last_processed_intent"), "test_intent") # From mock_analyze
+
+        finally:
+            # Clean up: restore original USER_STATE_FILE and delete temp file
+            katana_bot.USER_STATE_FILE = original_user_state_file_val
+            if temp_state_file.exists():
+                temp_state_file.unlink()
+
 
 # --- Old tests for JSON command handling (can be adapted or removed if JSON interface is deprecated) ---
 # class TestBotJSON(unittest.TestCase):
