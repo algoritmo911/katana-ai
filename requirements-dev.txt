@@ -1,0 +1,8 @@
+pytest
+httpx
+pytest-asyncio # For testing async FastAPI/httpx code
+respx # For mocking HTTPX requests, useful if we were to mock at HTTP level for NLPService
+# For now, we'll mock NLPService directly, but respx is good to note.
+# We might not need respx if we patch NLPService effectively.
+# Let's stick to mocking NLPService for now.
+# unittest.mock is part of Python's standard library, so no need to add it.

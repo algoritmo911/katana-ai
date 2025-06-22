@@ -1,0 +1,8 @@
+openai
+tenacity
+gTTS
+fastapi
+uvicorn[standard] # For running the FastAPI server
+pydantic # Already a dependency of openai, but good to be explicit for FastAPI
+python-multipart # For form data, if needed by FastAPI (not strictly for this JSON API but good practice)
+prometheus_client # For exposing metrics
