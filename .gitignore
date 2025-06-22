@@ -7,3 +7,6 @@ node_modules/
 logs/
 secrets/
 .vscode/
+
+# AI SDK API Keys configuration file
+ai_keys.json

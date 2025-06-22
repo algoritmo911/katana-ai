@@ -1,0 +1,44 @@
+{
+  "//": "This is an example configuration file for API keys used by the AIClient.",
+  "//": "Copy this file to 'ai_keys.json' and fill in your actual API keys.",
+  "//": "'ai_keys.json' is listed in .gitignore to prevent accidental commits of sensitive data.",
+  "//": "The top-level keys are provider names (e.g., 'openai', 'anthropic').",
+  "//": "Each provider should have a list of keys. Keys can be simple strings or objects.",
+
+  "openai": [
+    "sk-YOUR_OPENAI_API_KEY_1",
+    {
+      "key": "sk-YOUR_OPENAI_API_KEY_2",
+      "details": {
+        "description": "Secondary key, maybe different model limits or billing.",
+        "model_preferences": ["gpt-4", "gpt-3.5-turbo"]
+      }
+    }
+  ],
+  "anthropic": [
+    "anthropic-YOUR_ANTHROPIC_API_KEY_1"
+  ],
+  "huggingface": [
+    {
+      "key": "hf_YOUR_HUGGINGFACE_API_TOKEN_1",
+      "details": {
+        "note": "Used for HuggingFace Inference API (usually models hosted on HF)."
+      }
+    }
+  ],
+  "//": "Example for a custom or less common provider:",
+  "custom_provider_example": [
+    {
+        "key": "custom_key_value_12345",
+        "//": "Provider name here should match what's used in AIClient and bot commands",
+        "details": {
+            "api_endpoint": "https://api.customllm.com/v1/generate",
+            "rate_limit_per_minute": 100,
+            "models_supported": ["model-a", "model-b"],
+            "//": "Any other relevant details for this key or provider can be added here."
+        }
+    }
+  ],
+  "//": "Provider with no keys (will result in 'no key available' messages if used):",
+  "another_provider_no_keys": []
+}
