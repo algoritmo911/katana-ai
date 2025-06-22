@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
+import subprocess # Added for run_katana_command
+from nlp_mapper import interpret # Added for NLP
 
 # TODO: Get API token from environment variable or secrets manager
 # Using a format-valid dummy token for testing purposes if no env var is set.
@@ -14,9 +16,50 @@ bot = telebot.TeleBot(API_TOKEN)
 COMMAND_FILE_DIR = Path('commands')
 COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 
+# --- Logging Setup ---
+LOG_DIR = Path('logs')
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+TELEGRAM_LOG_FILE = LOG_DIR / 'telegram.log'
+
+def log_to_file(message, filename=TELEGRAM_LOG_FILE):
+    """Appends a message to the specified log file."""
+    with open(filename, 'a', encoding='utf-8') as f:
+        f.write(f"{datetime.utcnow().isoformat()} | {message}\n")
+
 def log_local_bot_event(message):
-    """Logs an event to the console."""
+    """Logs an event to the console and to the telegram.log file."""
     print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
+    log_to_file(f"[BOT_EVENT] {message}")
+
+# --- Katana Command Execution ---
+def run_katana_command(command: str) -> str:
+    """
+    Executes a shell command and returns its output.
+    This is a simplified placeholder. In a real scenario, this would interact
+    with a more complex 'katana_agent' or similar.
+    """
+    log_local_bot_event(f"Running katana command: {command}")
+    try:
+        # Using shell=True for simplicity with complex commands like pipes.
+        # Be cautious with shell=True in production due to security risks.
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, check=True, timeout=30)
+        output = result.stdout.strip()
+        if result.stderr.strip():
+            output += f"\nStderr:\n{result.stderr.strip()}"
+        log_local_bot_event(f"Command output: {output}")
+        return output
+    except subprocess.CalledProcessError as e:
+        error_message = f"Error executing command '{command}': {e.stderr.strip()}"
+        log_local_bot_event(error_message)
+        return error_message
+    except subprocess.TimeoutExpired:
+        error_message = f"Command '{command}' timed out."
+        log_local_bot_event(error_message)
+        return error_message
+    except Exception as e:
+        error_message = f"An unexpected error occurred while running command '{command}': {str(e)}"
+        log_local_bot_event(error_message)
+        return error_message
 
 def handle_log_event(command_data, chat_id):
     """Placeholder for handling 'log_event' commands."""
@@ -34,21 +77,37 @@ def handle_mind_clearing(command_data, chat_id):
     log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
     # bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
-    """Handles incoming messages."""
+# This will be the new text handler
+@bot.message_handler(func=lambda message: True, content_types=['text'])
+def handle_text_message(message):
+    """Handles incoming text messages, attempting NLP interpretation first."""
     chat_id = message.chat.id
-    command_text = message.text
+    text = message.text
 
-    log_local_bot_event(f"Received message from {chat_id}: {command_text}")
+    log_local_bot_event(f"Received text message from {chat_id}: {text}")
 
-    try:
-        command_data = json.loads(command_text)
-    except json.JSONDecodeError:
-        bot.reply_to(message, "Error: Invalid JSON format.")
-        log_local_bot_event(f"Invalid JSON from {chat_id}: {command_text}")
+    # Attempt to interpret the text as a natural language command
+    nlp_command = interpret(text)
+
+    if nlp_command:
+        log_to_file(f'[NLU] "{text}" → "{nlp_command}"') # Logging interpretation
+        output = run_katana_command(nlp_command)
+        bot.send_message(chat_id, f"🧠 Понял. Выполняю:\n`{nlp_command}`\n\n{output}", parse_mode="Markdown")
         return
 
+    # If not an NLP command, try to parse as JSON (old behavior)
+    log_local_bot_event(f"No NLP command interpreted from '{text}'. Attempting JSON parse.")
+    try:
+        command_data = json.loads(text)
+    except json.JSONDecodeError:
+        # If it's not JSON either, then it's an unrecognized command
+        bot.reply_to(message, "🤖 Не понял команду. Попробуй переформулировать или отправь JSON-команду.")
+        log_local_bot_event(f"Invalid JSON and not an NLP command from {chat_id}: {text}")
+        return
+
+    # --- Existing JSON command processing logic starts here ---
+    # (Copied and adapted from the original handle_message)
+    # log_local_bot_event(f"Attempting to process as JSON command from {chat_id}: {text}") # Already logged above
     # Validate command_data fields
     required_fields = {
         "type": str,
