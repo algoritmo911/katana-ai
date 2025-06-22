@@ -1,1 +1,3 @@
 pytest
+pyTelegramBotAPI
+python-dotenv
