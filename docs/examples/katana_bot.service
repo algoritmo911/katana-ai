@@ -1,0 +1,51 @@
+[Unit]
+Description=Katana Telegram Bot
+After=network.target
+
+[Service]
+# User and Group the bot should run as
+# Replace 'your_user' and 'your_group' with appropriate values
+User=your_user
+Group=your_group
+
+# Working directory for the bot (project root)
+# Replace '/path/to/your/katana-bot-project' with the actual absolute path
+WorkingDirectory=/path/to/your/katana-bot-project
+
+# Command to start the bot
+# Assumes a Python virtual environment 'venv' in the project root
+# Adjust Python path if not using a venv or if venv is named differently/elsewhere
+# ExecStart=/path/to/your/katana-bot-project/venv/bin/python bot/katana_bot.py
+# If Python is in PATH and no venv is used, or venv is activated by user profile:
+ExecStart=/usr/bin/env python3 bot/katana_bot.py
+
+# Environment variables
+# Option 1: Specify directly (less secure for secrets if file is world-readable)
+# Environment="KATANA_TELEGRAM_TOKEN=your_telegram_token"
+# Environment="ANTHROPIC_API_KEY=your_anthropic_key"
+# Environment="OPENAI_API_KEY=your_openai_key"
+
+# Option 2: Load from an environment file (recommended for secrets)
+# Create a file e.g., /etc/katana_bot/environment or /path/to/your/katana-bot-project/.env
+# Ensure this file is secured (e.g., chmod 600, owned by your_user)
+# EnvironmentFile=/path/to/your/katana-bot-project/.env
+# The .env file should contain lines like:
+# KATANA_TELEGRAM_TOKEN=your_telegram_token
+# ANTHROPIC_API_KEY=your_anthropic_key
+# OPENAI_API_KEY=your_openai_key
+
+# Restart policy
+Restart=always
+RestartSec=30
+
+# Standard output and error logging
+# By default, systemd captures stdout and stderr, viewable with `journalctl -u katana_bot.service`
+# StandardOutput=journal
+# StandardError=journal
+# Alternatively, redirect to files (ensure 'your_user' has write permissions):
+# StandardOutput=append:/var/log/katana_bot/katana_bot.log
+# StandardError=append:/var/log/katana_bot/katana_bot_error.log
+# If redirecting to files, ensure the directory /var/log/katana_bot exists and has correct permissions.
+
+[Install]
+WantedBy=multi-user.target

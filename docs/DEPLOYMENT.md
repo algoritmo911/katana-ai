@@ -105,4 +105,113 @@ This document provides instructions for deploying and running the Katana Bot.
     *   For server deployments, set environment variables in the shell profile of the user running the bot, or use systemd service files with `Environment=` directives, or tools like `direnv`.
 *   **Do not commit `.env` files (if used for local development) to version control.** Add `.env` to your `.gitignore` file.
 *   **Regularly review and rotate API keys** if suspicious activity is detected or as part of a security policy.
+
+## Running as a Service (Production)
+
+For production deployments, it's highly recommended to run the Katana Bot as a managed service to ensure it restarts automatically on failure or after a server reboot. Below are examples for `systemd` (common on modern Linux distributions) and `supervisor`.
+
+### Using systemd
+
+1.  **Create a service file:**
+    Create a file named `katana_bot.service` in `/etc/systemd/system/`.
+    You can use the example file `docs/examples/katana_bot.service` as a template. Copy it and modify the paths and user settings:
+    ```bash
+    sudo cp docs/examples/katana_bot.service /etc/systemd/system/katana_bot.service
+    sudo nano /etc/systemd/system/katana_bot.service # Edit paths and user
+    ```
+    Ensure you set `User`, `Group`, `WorkingDirectory`, and `ExecStart` correctly. Also, choose a method for providing environment variables (direct `Environment=` lines or `EnvironmentFile=`). If using `EnvironmentFile`, ensure it's secured.
+
+2.  **Reload systemd daemon:**
+    ```bash
+    sudo systemctl daemon-reload
+    ```
+
+3.  **Enable the service (to start on boot):**
+    ```bash
+    sudo systemctl enable katana_bot.service
+    ```
+
+4.  **Start the service:**
+    ```bash
+    sudo systemctl start katana_bot.service
+    ```
+
+5.  **Check service status:**
+    ```bash
+    sudo systemctl status katana_bot.service
+    journalctl -u katana_bot.service -f # To follow logs
+    ```
+
+### Using Supervisor
+
+1.  **Install Supervisor:**
+    ```bash
+    sudo apt-get install supervisor # Debian/Ubuntu
+    # Or using pip: pip install supervisor
+    ```
+
+2.  **Create a configuration file:**
+    Create a file named `katana_bot.conf` in Supervisor's configuration directory (e.g., `/etc/supervisor/conf.d/katana_bot.conf`).
+    Use the example file `docs/examples/katana_bot.conf` as a template. Copy and modify paths, user, and environment settings:
+    ```bash
+    sudo cp docs/examples/katana_bot.conf /etc/supervisor/conf.d/katana_bot.conf
+    sudo nano /etc/supervisor/conf.d/katana_bot.conf # Edit paths, user, command, environment
+    ```
+    Ensure log file paths are writable by the specified user.
+
+3.  **Update Supervisor:**
+    Tell Supervisor to read the new configuration and update:
+    ```bash
+    sudo supervisorctl reread
+    sudo supervisorctl update
+    ```
+
+4.  **Check process status:**
+    ```bash
+    sudo supervisorctl status katana_bot
+    sudo supervisorctl tail -f katana_bot stdout # To follow stdout logs
+    sudo supervisorctl tail -f katana_bot stderr # To follow stderr logs
+    ```
+
+## Monitoring
+
+### Heartbeat Mechanism
+
+The Katana Bot implements a simple file-based heartbeat to indicate it's running.
+*   The bot (specifically `bot/katana_bot.py`) attempts to write the current timestamp to a file named `katana_heartbeat.txt` in the project's root directory each time its main polling loop starts or restarts.
+*   If this file is not updated regularly, it might indicate that the bot process has crashed in a way that systemd/supervisor didn't restart it, or that the polling loop itself is hung (though the current heartbeat implementation primarily signals loop *restarts* rather than continuous liveness within a single blocking poll).
+
+### Heartbeat Check Script
+
+A script `tools/check_heartbeat.py` is provided to check the freshness of the heartbeat file.
+
+**Usage:**
+```bash
+python tools/check_heartbeat.py [--file /path/to/katana_heartbeat.txt] [--threshold SECONDS]
+```
+*   `--file`: Path to the `katana_heartbeat.txt` file. Defaults to `../katana_heartbeat.txt` (assuming run from `tools/` relative to project root).
+*   `--threshold`: Maximum allowed age of the heartbeat in seconds. Defaults to 120 seconds.
+
+The script will:
+*   Print an "OK" message and exit with status 0 if the heartbeat is fresh.
+*   Print a "CRITICAL" message to stderr and exit with status 1 if the heartbeat file is not found, empty, unreadable, or stale.
+
+**Automated Checking (Cron Example):**
+You can schedule this script to run periodically using cron to monitor the bot's health.
+Open your crontab for editing:
+```bash
+crontab -e
+```
+Add a line like this to run the check every 5 minutes:
+```cron
+*/5 * * * * /usr/bin/python3 /path/to/your/katana-bot-project/tools/check_heartbeat.py --file /path/to/your/katana-bot-project/katana_heartbeat.txt --threshold 300 >> /var/log/katana_bot/heartbeat_check.log 2>&1
+```
+*   Adjust paths and the Python interpreter path as needed.
+*   The threshold (e.g., 300 seconds = 5 minutes) should be greater than the heartbeat update interval plus some buffer.
+*   This example logs the output of the check script. For active alerting, you would modify `check_heartbeat.py` or pipe its output to a notification service.
+
+### Extending for Active Notifications
+The `check_heartbeat.py` script currently logs to stderr on failure. To implement active notifications (e.g., email, Telegram message):
+1.  Modify `check_heartbeat.py` to include logic for sending notifications using appropriate libraries (e.g., `smtplib` for email, or `python-telegram-bot` to send a message via another bot).
+2.  Ensure the script has the necessary configurations (SMTP server details, Telegram bot token for notifications, recipient addresses/chat IDs). These should also be managed securely.
 ```

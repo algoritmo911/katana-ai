@@ -226,9 +226,26 @@ if __name__ == '__main__':
     # log_local_bot_event("Bot starting...") # Already logged by logger.info("Initializing Katana Bot...")
     logger.info("Attempting to start bot polling...")
 
+    heartbeat_file_path = project_root / "katana_heartbeat.txt" # Heartbeat file in project root
+    heartbeat_interval_seconds = 60 # How often to update heartbeat if we had an active loop
+    last_heartbeat_time = 0
+
     while True:
         try:
+            # Update heartbeat at the start of each polling attempt/iteration
+            current_time = time.time()
+            try:
+                with open(heartbeat_file_path, "w") as f:
+                    f.write(str(current_time))
+                # Log less frequently for heartbeat, e.g., if it's part of a more active loop
+                # For this setup, it logs on each polling restart/start.
+                logger.info(f"Heartbeat updated at {heartbeat_file_path} with timestamp {current_time}")
+            except IOError as ioe:
+                logger.error(f"Failed to write heartbeat to {heartbeat_file_path}: {ioe}", exc_info=True)
+
             logger.info("Bot polling started with none_stop=True.")
+            # In a real threaded scenario, the heartbeat write would be in a loop here too.
+            # For now, it just means the polling *attempt* started.
             bot.polling(none_stop=True, interval=0) # interval=0 is default, can be omitted or tuned
         except Exception as e:
             logger.error(f"Bot polling encountered an error: {e}", exc_info=True)
