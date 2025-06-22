@@ -2,303 +2,231 @@ import unittest
 from unittest.mock import MagicMock, patch, call
 import json
 from pathlib import Path
-import shutil # For robust directory removal
+import shutil
 
-# Assuming bot.py is in the same directory or accessible in PYTHONPATH
-# import bot # Старый импорт, который может вызывать проблемы при тестировании
-from bot import katana_bot # Импортируем конкретный файл/модуль с логикой бота
-# Это позволяет избежать запуска всего bot.py как скрипта при импорте
+from bot import katana_bot # Assuming katana_bot.py is in the 'bot' directory and runnable
+# from bot.katana_state import ChatHistory # Not strictly needed for mocking katana_state object
 
-# Попытка импортировать nlp_processor, если он существует (для будущей интеграции)
+# Try to import nlp_processor, if it exists (for future integration)
 try:
-    from bot import nlp_processor # Предполагаемое имя для NLP модуля/объекта
+    from bot import nlp_processor
 except ImportError:
-    nlp_processor = None # Если его нет, то None
+    nlp_processor = None
 
 
-class TestBot(unittest.TestCase):
+class TestBotWithKatanaState(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        # Set a dummy token BEFORE katana_bot is imported by test discovery/methods
+        # This prevents the ValueError during module import if tests are run in a way
+        # that causes katana_bot to be loaded before patches can be applied.
+        import os
+        os.environ['KATANA_TELEGRAM_TOKEN'] = '123456:ABCDEF_test_token'
+
+
+    @classmethod
+    def tearDownClass(cls):
+        import os
+        del os.environ['KATANA_TELEGRAM_TOKEN']
 
     def setUp(self):
-        # Create a dummy commands directory for testing
-        self.test_commands_dir = Path("test_commands_temp_dir") # Using a more unique name
+        # Create a dummy commands directory for testing (for file saving part)
+        self.test_commands_dir = Path("test_commands_temp_dir_katana")
         self.test_commands_dir.mkdir(parents=True, exist_ok=True)
 
         # Store original and set to test
         self.original_command_file_dir = katana_bot.COMMAND_FILE_DIR
         katana_bot.COMMAND_FILE_DIR = self.test_commands_dir
 
-        # Mock the bot object and its methods
-        self.mock_bot_instance = MagicMock()
-        # Patch the bot instance within the 'katana_bot' module
-        self.bot_patcher = patch('bot.katana_bot.bot', self.mock_bot_instance) # Указываем полный путь к объекту bot
-        self.mock_bot_module_instance = self.bot_patcher.start()
+        # Mock the telebot.TeleBot instance used by katana_bot
+        self.mock_telebot_instance = MagicMock()
+        self.telebot_patcher = patch('bot.katana_bot.bot', self.mock_telebot_instance)
+        self.mock_telebot_instance_patched = self.telebot_patcher.start()
 
         # Mock datetime to control timestamps in filenames
-        self.mock_datetime_patcher = patch('bot.katana_bot.datetime') # Указываем полный путь к datetime
+        self.mock_datetime_patcher = patch('bot.katana_bot.datetime')
         self.mock_datetime = self.mock_datetime_patcher.start()
         self.mock_datetime.utcnow.return_value.strftime.return_value = "YYYYMMDD_HHMMSS_ffffff"
 
+        # --- KatanaState Mocking ---
+        # Mock the KatanaState instance directly within the katana_bot module
+        self.mock_katana_state_global_instance = MagicMock()
+        self.katana_state_patcher = patch('bot.katana_bot.katana_state', self.mock_katana_state_global_instance)
+        self.mock_katana_state_global_instance_patched = self.katana_state_patcher.start()
+        # --- End KatanaState Mocking ---
 
     def tearDown(self):
-        # Stop patchers
-        self.bot_patcher.stop()
+        self.telebot_patcher.stop()
         self.mock_datetime_patcher.stop()
+        self.katana_state_patcher.stop()
 
-        # Clean up: remove dummy directory and its contents
         if self.test_commands_dir.exists():
-            shutil.rmtree(self.test_commands_dir) # shutil.rmtree is more robust for non-empty dirs
-
-        # Restore original
+            shutil.rmtree(self.test_commands_dir)
         katana_bot.COMMAND_FILE_DIR = self.original_command_file_dir
 
-
-    def _create_mock_message(self, text_payload):
+    def _create_mock_message(self, text_payload, chat_id=12345):
         mock_message = MagicMock()
-        mock_message.chat.id = 12345
-        mock_message.text = json.dumps(text_payload)
+        # telebot message.chat.id is an int. katana_bot internally converts it to str for state keys.
+        mock_message.chat.id = int(chat_id)
+        if isinstance(text_payload, dict):
+            mock_message.text = json.dumps(text_payload)
+        else:
+            mock_message.text = text_payload
         return mock_message
 
-    # --- Test Command Validation ---
-    def test_valid_command_gets_saved(self):
-        command = {"type": "test_type", "module": "test_module", "args": {}, "id": "test_id"}
-        mock_message = self._create_mock_message(command)
-        
-        katana_bot.handle_message(mock_message) # Используем katana_bot.handle_message
-        
-        # Check file creation
-        expected_module_dir = self.test_commands_dir / "telegram_mod_test_module"
-        self.assertTrue(expected_module_dir.exists())
-        
-        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
-        expected_file_path = expected_module_dir / expected_filename
-        self.assertTrue(expected_file_path.exists())
+    # --- Test Basic Commands with KatanaState ---
 
-        with open(expected_file_path, "r") as f:
-            saved_data = json.load(f)
-        self.assertEqual(saved_data, command)
+    def test_start_command(self):
+        """ Test /start command - should not interact with KatanaState history directly, but bot should reply."""
+        chat_id = 789
+        mock_message = self._create_mock_message("/start", chat_id=chat_id)
+        # Note: handle_start is a separate handler in telebot, not part of the main handle_message
+        katana_bot.handle_start_impl(mock_message) # Call the implementation
+        self.mock_telebot_instance_patched.reply_to.assert_called_with(mock_message, "Привет! Я — Katana. Отправь JSON-команду, чтобы начать.")
+        # Ensure no history calls for /start itself
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_not_called()
 
-        # Check reply
-        self.mock_bot_module_instance.reply_to.assert_called_once()
-        args, kwargs = self.mock_bot_module_instance.reply_to.call_args
-        self.assertEqual(args[0], mock_message)
-        self.assertTrue(args[1].startswith("✅ Command received and saved as"))
-        self.assertIn(str(expected_file_path), args[1])
+    # --- Test Message Handling with KatanaState ---
 
+    def test_invalid_json_format_records_history(self):
+        chat_id = 123
+        mock_message = self._create_mock_message("not a valid json", chat_id=chat_id)
+        chat_id_str = str(chat_id)
 
-    def test_invalid_json_format(self):
-        mock_message = MagicMock() # Simpler mock for this case
-        mock_message.chat.id = 123
-        mock_message.text = "not a valid json"
-        katana_bot.handle_message(mock_message) # Используем katana_bot.handle_message
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "❌ Error: Invalid JSON format.")
+        katana_bot.handle_message_impl(mock_message) # Call the implementation
 
-    def test_missing_type_field(self):
+        expected_reply = "❌ Error: Invalid JSON format. Please send commands in correct JSON."
+        self.mock_telebot_instance_patched.reply_to.assert_called_with(mock_message, expected_reply)
+
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "user", mock_message.text)
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "katana", expected_reply)
+
+    def test_missing_field_records_history(self):
+        chat_id = 456
         command = {"module": "test_module", "args": {}, "id": "test_id"} # type is missing
-        mock_message = self._create_mock_message(command)
-        katana_bot.handle_message(mock_message) # Используем katana_bot.handle_message
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "❌ Error: Missing required field 'type'.")
+        mock_message = self._create_mock_message(command, chat_id=chat_id)
+        chat_id_str = str(chat_id)
 
-    def test_invalid_args_type(self):
-        command = {"type": "test_type", "module": "test_module", "args": "not_a_dict", "id": "test_id"}
-        mock_message = self._create_mock_message(command)
-        katana_bot.handle_message(mock_message) # Используем katana_bot.handle_message
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "❌ Error: Field 'args' must be type dict. Got str.")
+        katana_bot.handle_message_impl(mock_message) # Call the implementation
 
-    def test_invalid_id_type(self):
-        command = {"type": "test_type", "module": "test_module", "args": {}, "id": [1,2,3]} # id is a list
-        mock_message = self._create_mock_message(command)
-        katana_bot.handle_message(mock_message) # Используем katana_bot.handle_message
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "❌ Error: Field 'id' must be type str or int. Got list.")
+        expected_reply = "❌ Error: Missing required field 'type'."
+        self.mock_telebot_instance_patched.reply_to.assert_called_with(mock_message, expected_reply)
 
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "user", mock_message.text)
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "katana", expected_reply)
 
-    # --- Test Command Routing ---
-    @patch('bot.katana_bot.handle_log_event') # Указываем полный путь
-    def test_routing_log_event(self, mock_handle_log_event_func):
-        command = {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
-        mock_message = self._create_mock_message(command)
+    def test_general_command_placeholder_response_and_history(self):
+        chat_id = 111
+        command = {"type": "general_command", "module": "test_general", "args": {"data": "example"}, "id": "gen001"}
+        mock_message = self._create_mock_message(command, chat_id=chat_id)
+        chat_id_str = str(chat_id)
 
-        katana_bot.handle_message(mock_message) # Используем katana_bot.handle_message
+        mock_history_obj = MagicMock()
+        mock_history_obj.messages = [{"sender": "user", "text": "previous message", "timestamp": "ts"}]
+        self.mock_katana_state_global_instance_patched.get_chat_history.return_value = mock_history_obj
 
-        mock_handle_log_event_func.assert_called_once_with(command, mock_message.chat.id)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
+        katana_bot.handle_message_impl(mock_message) # Call the implementation
 
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "user", mock_message.text)
+        self.mock_katana_state_global_instance_patched.get_chat_history.assert_called_with(chat_id_str)
 
-    @patch('bot.katana_bot.handle_mind_clearing') # Указываем полный путь
-    def test_routing_mind_clearing(self, mock_handle_mind_clearing_func):
-        command = {"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}
-        mock_message = self._create_mock_message(command)
-
-        katana_bot.handle_message(mock_message) # Используем katana_bot.handle_message
-        
-        mock_handle_mind_clearing_func.assert_called_once_with(command, mock_message.chat.id)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'mind_clearing' processed (placeholder).")
-
-    # --- Test NLP and Logging Integration (Initial Structure) ---
-
-    @patch('bot.katana_bot.log_local_bot_event') # Mocking the logger to check calls
-    @patch('bot.katana_bot.handle_nlp_command', create=True) # Мокаем гипотетический обработчик NLP команд, создаем если нет
-    def test_nlp_command_integration(self, mock_handle_nlp_command, mock_log_local_bot_event):
-        # Предположим, что команда с type="nlp_process" будет обрабатываться функцией handle_nlp_command
-        # Эту функцию нужно будет создать в katana_bot.py
-        # katana_bot.py нужно будет доработать, чтобы иметь nlp_processor (или вызывать соответствующий сервис)
-
-        # mock_handle_nlp_command - это мок для функции, которая должна была бы обработать NLP команду.
-        # На данный момент мы не будем настраивать его return_value, так как
-        # основная цель этого теста - проверить, что он НЕ вызывается,
-        # пока соответствующая логика маршрутизации не добавлена в katana_bot.py.
-        # Позже, когда логика будет добавлена, мы будем проверять его вызов и результат.
-
-        command_text = "Проанализируй этот текст" # Этот текст пока не используется напрямую в этом тесте
-        command_payload = {
-            "type": "nlp_process",
-            "module": "nlp",
-            "args": {"text": command_text},
-            "id": "nlp001"
-        }
-        mock_message = self._create_mock_message(command_payload)
-
-        # Предположим, что handle_message будет вызывать nlp_processor.process_text
-        # и затем отвечать результатом. Это потребует изменений в bot.py
-
-        # Для этого теста, мы сначала проверим, что если такой тип команды НЕ обработан специально,
-        # он сохранится как обычно. Позже, когда bot.py будет обновлен, этот тест изменится.
-        # Сейчас мы просто проверяем, что nlp_processor и logger вызываются (гипотетически).
-
-        # --- Начало секции, которая будет изменена после обновления bot.py ---
-        # В текущей реализации bot.py, любая неизвестная команда просто сохраняется.
-        # Поэтому мы ожидаем такое поведение СЕЙЧАС.
-
-        # Для имитации того, что NLP модуль будет вызван, и логгер тоже,
-        # мы сделаем mock-вызовы внутри этого теста, как если бы katana_bot.py их делал.
-        # Это не идеальный интеграционный тест, но он готовит почву.
-
-        # Если бы katana_bot.py был обновлен для обработки 'nlp_process' и вызывал handle_nlp_command:
-        # katana_bot.handle_message(mock_message)
-        # mock_handle_nlp_command.assert_called_once_with(command_payload, mock_message.chat.id)
-        # # Дальнейшие проверки ответа и логов, специфичных для NLP
-        # --- Конец секции ---
-
-        # ТЕКУЩЕЕ ПОВЕДЕНИЕ:
-        # Поскольку katana_bot.py ЕЩЕ НЕ ИМЕЕТ специального обработчика для 'nlp_process'
-        # и не вызывает гипотетический 'handle_nlp_command',
-        # команда 'nlp_process' будет обработана как неизвестная команда и просто сохранена.
-        # Поэтому mock_handle_nlp_command НЕ БУДЕТ вызван.
-        katana_bot.handle_message(mock_message)
-
-        # Проверяем, что команда была сохранена (текущее поведение)
-        expected_module_dir = self.test_commands_dir / "telegram_mod_nlp"
-        self.assertTrue(expected_module_dir.exists(), "Директория для NLP модуля должна быть создана")
-        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
-        expected_file_path = expected_module_dir / expected_filename
-        self.assertTrue(expected_file_path.exists(), "Файл команды NLP должен быть сохранен")
-
-        with open(expected_file_path, "r") as f:
-            saved_data = json.load(f)
-        self.assertEqual(saved_data, command_payload, "Сохраненные данные команды NLP не совпадают")
-
-        # Проверяем, что бот ответил о сохранении
-        self.mock_bot_module_instance.reply_to.assert_called_with(
-            mock_message,
-            f"✅ Command received and saved as `{str(expected_file_path)}`."
-        )
-
-        # Убедимся, что mock_handle_nlp_command НЕ был вызван, так как логика еще не добавлена в katana_bot.py
-        mock_handle_nlp_command.assert_not_called()
-
-        # Проверим основные логи (получение сообщения, сохранение)
-        # Это дублирует часть test_logging_on_standard_command, но здесь в контексте NLP команды,
-        # которая пока обрабатывается по стандартному пути.
-        actual_log_calls = [call_item[0][0] for call_item in mock_log_local_bot_event.call_args_list if call_item[0]]
-        self.assertIn(f"Received message from {mock_message.chat.id}: {mock_message.text}", actual_log_calls)
-        self.assertIn(f"Command type 'nlp_process' not specifically handled, proceeding with default save.", actual_log_calls)
-        self.assertIn(f"Saved command from {mock_message.chat.id} to {str(expected_file_path)}", actual_log_calls)
-
-
-    @patch('bot.katana_bot.log_local_bot_event') # Указываем полный путь
-    def test_logging_on_standard_command(self, mock_log_local_bot_event):
-        command = {"type": "test_log", "module": "logging_test", "args": {}, "id": "log_test_001"}
-        mock_message = self._create_mock_message(command)
-
-        katana_bot.handle_message(mock_message) # Используем katana_bot.handle_message
-
-        # Проверяем, что основные лог-сообщения вызываются
-        # Первое сообщение - получение сообщения
-        # Второе - валидация (если бы были ошибки, были бы другие сообщения)
-        # Третье - о сохранении команды
-        # Четвертое (возможно) - о том, что тип команды не обработан специально (если это так)
-
-        # Точные вызовы зависят от пути выполнения в handle_message.
-        # Мы ожидаем как минимум лог о получении и лог о сохранении.
-
-        # Примерные ожидаемые вызовы (нужно будет уточнить на основе реальных логов bot.py)
-        expected_calls = [
-            call(f"Received message from {mock_message.chat.id}: {mock_message.text}"),
-            call(f"Command type 'test_log' not specifically handled, proceeding with default save."),
-            call(f"Saved command from {mock_message.chat.id} to {self.test_commands_dir / 'telegram_mod_logging_test' / f'YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json'}")
-        ]
-
-        # Проверяем, что эти вызовы были среди всех вызовов к логгеру
-        # Используем list(mock_log_local_bot_event.mock_calls) для отладки если нужно
-        # print(list(mock_log_local_bot_event.mock_calls))
-
-        # Проверим, что определенные вызовы были сделаны. Порядок может иметь значение.
-        # В данном случае, мы знаем, что `log_local_bot_event` вызывается несколько раз.
-        # Мы проверим, что ожидаемые вызовы присутствуют.
-
-        # Чтобы сделать проверку более надежной, можно проверить наличие подстрок в вызовах,
-        # если точные сообщения могут немного меняться.
-
-        # На данный момент, проверим, что бот ответил о сохранении (это косвенно говорит о пути выполнения)
-        expected_module_dir = self.test_commands_dir / "telegram_mod_logging_test"
-        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
-        expected_file_path = expected_module_dir / expected_filename
-        self.assertTrue(expected_file_path.exists()) # Убедимся, что файл сохранен
-
-        self.mock_bot_module_instance.reply_to.assert_called_once()
-        args, kwargs = self.mock_bot_module_instance.reply_to.call_args
-        self.assertTrue(args[1].startswith("✅ Command received and saved as"))
-
-        # Проверка вызовов логгера:
-        # Мы должны увидеть лог о получении сообщения и лог о сохранении.
-        # Также лог о том, что команда не обработана специфично.
-
-        # Отладочный вывод
-        # print("mock_log_local_bot_event.call_args_list:", mock_log_local_bot_event.call_args_list)
-        # print("mock_log_local_bot_event.mock_calls:", mock_log_local_bot_event.mock_calls)
-
-        # Получаем все фактические вызовы к моку
-        actual_log_calls = [call_item[0][0] for call_item in mock_log_local_bot_event.call_args_list if call_item[0]]
-
-        self.assertIn(f"Received message from {mock_message.chat.id}: {mock_message.text}", actual_log_calls)
-        self.assertIn(f"Command type 'test_log' not specifically handled, proceeding with default save.", actual_log_calls)
-        self.assertIn(f"Saved command from {mock_message.chat.id} to {str(expected_file_path)}", actual_log_calls)
-
-
-    def test_unknown_command_type_saves_normally(self):
-        command = {"type": "unknown_type", "module": "custom_module", "args": {}, "id": "custom003"}
-        mock_message = self._create_mock_message(command)
-
-        katana_bot.handle_message(mock_message) # Используем katana_bot.handle_message
-
-        # Check file creation
-        expected_module_dir = self.test_commands_dir / "telegram_mod_custom_module"
-        self.assertTrue(expected_module_dir.exists())
-        
-        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
-        expected_file_path = expected_module_dir / expected_filename
-        self.assertTrue(expected_file_path.exists())
-
-        with open(expected_file_path, "r") as f:
-            saved_data = json.load(f)
-        self.assertEqual(saved_data, command)
-
-        # Check reply
-        self.mock_bot_module_instance.reply_to.assert_called_once()
-        args, kwargs = self.mock_bot_module_instance.reply_to.call_args
+        self.mock_telebot_instance_patched.reply_to.assert_called_once()
+        args, _ = self.mock_telebot_instance_patched.reply_to.call_args
         self.assertEqual(args[0], mock_message)
-        self.assertTrue(args[1].startswith("✅ Command received and saved as"))
-        self.assertIn(str(expected_file_path), args[1])
+        self.assertIn("Katana Placeholder Response", args[1])
+        self.assertIn(f"command '{command['type']}'", args[1])
+        # Based on mock_history_obj.messages having 1 message, get_katana_response gets this list.
+        # num_past_messages = len(current_history_messages) -> 1
+        # phrase: "This is our first command message exchange." because num_past_messages <=1
+        self.assertIn("This is our first command message exchange.", args[1])
 
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "katana", args[1])
+
+        # File saving is no longer expected for commands handled by get_katana_response
+        # as the function now returns after Katana's reply.
+
+    def test_log_event_command_with_katana_state(self):
+        chat_id = 222
+        event_details_text = "System rebooted successfully"
+        command = {"type": "log_event", "module": "system", "args": {"details": event_details_text}, "id": "log002"}
+        mock_message = self._create_mock_message(command, chat_id=chat_id)
+        chat_id_str = str(chat_id)
+
+        katana_bot.handle_message_impl(mock_message) # Call the implementation
+
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "user", mock_message.text)
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "system_event", f"Event logged: {event_details_text}")
+
+        expected_reply = f"✅ Event '{event_details_text}' logged to my memory for chat {chat_id_str}."
+        self.mock_telebot_instance_patched.reply_to.assert_called_with(mock_message, expected_reply)
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "katana", expected_reply)
+
+    def test_mind_clearing_command_with_katana_state(self):
+        chat_id = 333
+        command = {"type": "mind_clearing", "module": "maintenance", "args": {}, "id": "clear003"}
+        mock_message = self._create_mock_message(command, chat_id=chat_id)
+        chat_id_str = str(chat_id)
+
+        katana_bot.handle_message_impl(mock_message) # Call the implementation
+
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "user", mock_message.text)
+        self.mock_katana_state_global_instance_patched.clear_chat_history.assert_called_once_with(chat_id_str)
+
+        expected_reply = f"🧠✨ Katana's mind for chat {chat_id_str} has been cleared. We start anew."
+        self.mock_telebot_instance_patched.reply_to.assert_called_with(mock_message, expected_reply)
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(chat_id_str, "katana", expected_reply)
+
+    # --- Test Context Preservation (Interaction with KatanaState) ---
+    def test_context_preservation_via_get_katana_response(self):
+        chat_id = 555
+        chat_id_str = str(chat_id)
+
+        # --- First message ---
+        command1 = {"type": "query", "module": "knowledge", "args": {"q": "first question"}, "id": "q1"}
+        mock_message1 = self._create_mock_message(command1, chat_id=chat_id)
+
+        # Mock history for first call (empty before this message)
+        history_for_call1 = MagicMock()
+        history_for_call1.messages = []
+        self.mock_katana_state_global_instance_patched.get_chat_history.return_value = history_for_call1
+
+        katana_bot.handle_message_impl(mock_message1) # Call the implementation
+
+        args1, _ = self.mock_telebot_instance_patched.reply_to.call_args
+        self.assertIn("This is our first command message exchange.", args1[1])
+        katana_reply1_text = args1[1] # Save Katana's first reply
+
+        # --- Second message ---
+        self.mock_telebot_instance_patched.reply_to.reset_mock() # Reset for the next call check
+        
+        command2 = {"type": "follow_up", "module": "knowledge", "args": {"q": "second question"}, "id": "q2"}
+        mock_message2 = self._create_mock_message(command2, chat_id=chat_id)
+
+        # Mock history for second call (should contain user's first message and Katana's first reply)
+        history_for_call2 = MagicMock()
+        history_for_call2.messages = [
+            {"sender": "user", "text": mock_message1.text, "timestamp": "ts1"},
+            {"sender": "katana", "text": katana_reply1_text, "timestamp": "ts2"}
+        ]
+        self.mock_katana_state_global_instance_patched.get_chat_history.return_value = history_for_call2
+        
+        katana_bot.handle_message_impl(mock_message2) # Call the implementation
+
+        args2, _ = self.mock_telebot_instance_patched.reply_to.call_args
+        # current_history_messages for get_katana_response will be history_for_call2.messages (length 2)
+        # num_past_messages = 2. Phrase is "I see we have {2-1} prior messages" -> "1 prior messages"
+        self.assertIn("I see we have 1 prior messages", args2[1])
+
+        # Check calls to add_chat_message:
+        # user_msg1, katana_reply1, user_msg2, katana_reply2
+        self.assertEqual(self.mock_katana_state_global_instance_patched.add_chat_message.call_count, 4)
+        calls = self.mock_katana_state_global_instance_patched.add_chat_message.call_args_list
+
+        self.assertEqual(calls[0], call(chat_id_str, "user", mock_message1.text))
+        self.assertEqual(calls[1], call(chat_id_str, "katana", katana_reply1_text))
+        self.assertEqual(calls[2], call(chat_id_str, "user", mock_message2.text))
+        self.assertEqual(calls[3], call(chat_id_str, "katana", args2[1])) # args2[1] is katana_reply2_text
 
 if __name__ == '__main__':
     unittest.main()
