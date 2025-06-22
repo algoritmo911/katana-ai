@@ -33,11 +33,16 @@ class DummyProvider(NLPProvider):
             return {"intent_name": "turn_on_light", "confidence": 0.85}
         elif "book" in text_lower and "flight" in text_lower:
             return {"intent_name": "book_flight", "confidence": 0.8}
-        # General greeting check
-        is_greeting = "hello" in text_lower or "hi" in text_lower
+
+        # General greeting check using regex for word boundaries
+        # This is to avoid "hi" in "this" being True, or similar unexpected substring matches.
+        is_hello = bool(re.search(r"\bhello\b", text_lower))
+        is_hi = bool(re.search(r"\bhi\b", text_lower))
+        is_greeting_candidate = is_hello or is_hi
+
         contains_other_keywords = any(kw in text_lower for kw in ["weather", "light", "lamp", "flight", "book"])
 
-        if is_greeting and not contains_other_keywords:
+        if is_greeting_candidate and not contains_other_keywords:
             return {"intent_name": "greeting", "confidence": 0.99}
 
         # If it's not a clear greeting or if other keywords dominated,

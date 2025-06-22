@@ -1,28 +1,88 @@
 # Configuration for the NLP and AI service connector project
 
-# Active NLP provider.
-# This should correspond to the module name in nlp_providers directory
-# (e.g., 'dummy_provider' for nlp_providers/dummy_provider.py)
-# and the class name (e.g., DummyProvider).
+# Active NLP provider: <module_name>.<ClassName>
+# The <module_name> should also be a key under the 'providers' section below.
 active_nlp_provider: "dummy_provider.DummyProvider"
 
-# Provider-specific configurations
-# Each provider can have its own section here.
-# For example, if you have 'api_key_provider.APIKeyProvider':
-# api_key_provider:
-#   api_key: "YOUR_API_KEY_HERE"
-#   endpoint: "https://api.example.com/nlp"
+# Optional: Global credentials store.
+# Using environment variables directly in provider logic is often preferred for API keys.
+# This section is illustrative if you choose to list env var names or (less securely) keys here.
+# credentials:
+#   openai_api_key_env: "OPENAI_API_KEY"
+#   anthropic_api_key_env: "ANTHROPIC_API_KEY"
+#   huggingface_hub_token_env: "HF_HUB_TOKEN"
 
-dummy_provider:
-  # No specific settings needed for the dummy provider
-  # This section is just for illustration
-  mode: "test"
+providers:
+  # Configuration for DummyProvider (implements base NLPProvider)
+  dummy_provider: # Key matches the module name part of active_nlp_provider
+    # class: "DummyProvider" # Class name within the module (can be inferred or asserted)
+    mode: "test" # Specific setting for DummyProvider
 
-echo_provider:
-  # No specific settings needed for the echo provider
-  prefix: "Echo: "
+  # Configuration for EchoProvider (implements base NLPProvider)
+  echo_provider:
+    # class: "EchoProvider"
+    prefix: "Echo: " # Specific setting for EchoProvider
 
-# Future AI service configurations can be added here
+  # --- Example Configurations for Advanced NLP Providers ---
+  # These would typically implement AdvancedNLPProvider
+
+  example_openai_provider:
+    # class: "ExampleOpenAIProvider" # Assumed to be ExampleOpenAIProvider in example_openai_provider.py
+    api_key_env_var: "OPENAI_API_KEY"  # Name of the environment variable storing the API key
+    # api_key: "sk-..."                # Alternative: direct key (less secure, use with caution)
+    default_model: "gpt-3.5-turbo-instruct" # For completion endpoints
+    # default_model: "gpt-4"                # For chat completion endpoints (structure of calls differ)
+    # model_type: "chat"                    # Could specify 'chat' or 'completion' if provider handles both
+    timeout: 30 # API call timeout in seconds
+    generation_params: # Parameters passed to the generation API call
+      temperature: 0.7
+      max_tokens: 250 # Max tokens to generate
+      # top_p: 1.0
+      # frequency_penalty: 0.0
+      # presence_penalty: 0.0
+
+  example_anthropic_provider:
+    # class: "ExampleAnthropicProvider"
+    api_key_env_var: "ANTHROPIC_API_KEY"
+    default_model: "claude-2.1" # Or "claude-3-opus-20240229", "claude-3-sonnet-20240229" etc.
+    timeout: 45
+    generation_params:
+      max_tokens_to_sample: 300 # Anthropic uses 'max_tokens_to_sample'
+      temperature: 0.8
+      # top_k:
+      # top_p:
+
+  example_hf_provider: # For HuggingFace Inference API or local models
+    # class: "ExampleHFProvider"
+    # For Inference API (public models might not need a token)
+    # For private models or certain tasks, a token is needed.
+    api_token_env_var: "HF_HUB_TOKEN" # Environment variable for Hugging Face Hub token
+    # api_token: "hf_..."             # Direct token (less secure)
+
+    # Option 1: Using HuggingFace Inference API
+    inference_api:
+      default_model_id: "distilbert-base-uncased-finetuned-sst-2-english" # Example model
+      # task: "text-classification" # e.g., "text-generation", "token-classification" (for NER)
+      timeout: 20
+      # generation_params for text-generation tasks:
+      #   max_new_tokens: 250
+      #   temperature: 0.7
+      #   do_sample: true
+
+    # Option 2: Configuration for a locally loaded HuggingFace model (more complex setup)
+    # local_model:
+    #   model_path: "/path/to/local/model_directory_or_hf_model_name"
+    #   tokenizer_path: "/path/to/local/tokenizer_directory_or_hf_model_name"
+    #   task: "text-generation" # Example task
+    #   device: "cpu" # "cuda" if GPU is available/configured
+    #   # Other model loading specific params
+    #   # generation_params for local text-generation:
+    #   #   max_length: 300 # Includes input length for some pipelines
+    #   #   temperature: 0.7
+
+# Future AI service configurations can be added similarly
 # active_ai_service: "some_ai_service.SomeAIService"
-# some_ai_service:
-#   setting1: "value1"
+# ai_services:
+#   some_ai_service:
+#     class: "SomeAIService"
+#     setting1: "value1"

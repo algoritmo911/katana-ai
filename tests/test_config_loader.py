@@ -22,8 +22,12 @@ class TestConfigLoader(unittest.TestCase):
         # Create a controlled settings.yaml for tests
         self.test_settings_content = {
             "active_nlp_provider": "dummy_provider.DummyProvider",
-            "dummy_provider": {"mode": "test"},
-            "echo_provider": {"prefix": "TestEcho: "}
+            "providers": {
+                "dummy_provider": {"mode": "test", "class": "DummyProvider"}, # Ensure class for clarity if needed by tests
+                "echo_provider": {"prefix": "TestEcho: ", "class": "EchoProvider"},
+                # Add other provider stubs if tests try to load them by name directly from 'providers'
+                "non_existent_module": {"class": "SomeProvider"} # For testing invalid module load
+            }
         }
         with open(self.actual_config_path, 'w') as f:
             yaml.dump(self.test_settings_content, f)
@@ -60,7 +64,8 @@ class TestConfigLoader(unittest.TestCase):
         config = load_config()
         self.assertIsNotNone(config)
         self.assertEqual(config.get("active_nlp_provider"), "dummy_provider.DummyProvider")
-        self.assertEqual(config.get("dummy_provider", {}).get("mode"), "test")
+        # Adjust for new structure: config['providers']['dummy_provider']['mode']
+        self.assertEqual(config.get("providers", {}).get("dummy_provider", {}).get("mode"), "test")
 
         if original_loader_config_path: # Restore if it existed
             self.get_config_loader_module().CONFIG_PATH = original_loader_config_path
@@ -117,12 +122,20 @@ class TestConfigLoader(unittest.TestCase):
 
     def test_get_active_nlp_provider_invalid_class(self):
         """Test error handling for invalid class name in existing module."""
-        current_settings = self.test_settings_content.copy()
+        # Modify a copy of the base settings for this specific test
+        current_settings = {k: (v.copy() if isinstance(v, dict) else v) for k, v in self.test_settings_content.items()}
         current_settings["active_nlp_provider"] = "dummy_provider.NonExistentClass"
+
+        # Ensure dummy_provider config does not override the class to an existing one for this test case
+        if "dummy_provider" in current_settings["providers"] and "class" in current_settings["providers"]["dummy_provider"]:
+            del current_settings["providers"]["dummy_provider"]["class"]
+            # Now, class_name_from_path ("NonExistentClass") should be used by the loader
+
         with open(self.actual_config_path, 'w') as f:
             yaml.dump(current_settings, f)
 
-        with self.assertRaisesRegex(ValueError, "Could not find class 'NonExistentClass'"):
+        expected_regex = r"Could not find class 'NonExistentClass' in module 'nlp_providers.dummy_provider'"
+        with self.assertRaisesRegex(ValueError, expected_regex):
             get_active_nlp_provider()
 
     def get_config_loader_module(self):
