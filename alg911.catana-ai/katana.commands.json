@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "action": "save_state",
+    "description": "Saves the current dialog state and user settings.",
+    "parameters": {}
+  },
+  {
+    "action": "load_state",
+    "description": "Loads the dialog state and user settings from memory.",
+    "parameters": {}
+  },
+  {
+    "action": "clear_state",
+    "description": "Clears the current dialog state and user settings.",
+    "parameters": {}
+  },
+  {
+    "action": "get_agent_config",
+    "description": "Retrieves the current agent configuration.",
+    "parameters": {}
+  },
+  {
+    "action": "reload_core_settings",
+    "description": "Reloads core agent settings.",
+    "parameters": {}
+  },
+  {
+    "action": "ping_received_from_ui_backend",
+    "description": "Processes a ping from the UI backend (internal).",
+    "parameters": {}
+  }
+]

@@ -69,13 +69,27 @@ def save_json_file(file_path, data, log_prefix="JSONSave", indent=2):
 
 # --- Katana Data File Specific Functions ---
 def load_memory():
-    global agent_memory_state
-    loaded_data = load_json_file(MEMORY_FILE, {}, "MemoryLoad")
-    # Ensure agent_memory_state is always a dict, even if file was corrupted and load_json_file returned None then {}
-    agent_memory_state = loaded_data if isinstance(loaded_data, dict) else {}
-    if not isinstance(loaded_data, dict):
-         log_event(f"Memory file {MEMORY_FILE} content was not a dictionary. Resetting memory state.", "warning")
-    return agent_memory_state
+    global agent_memory_state  # agent_memory_state is initially {}
+    loaded_data = load_json_file(MEMORY_FILE, {}, "MemoryLoad") # Default to {} if file missing/corrupt
+
+    agent_memory_state.clear() # Clear the existing global dict in-place
+
+    if isinstance(loaded_data, dict):
+        agent_memory_state.update(loaded_data) # Update with new data in-place
+    else:
+        # This case should ideally not be reached if load_json_file always returns a dict or the default_value (which is {} here)
+        # However, as a safeguard:
+        log_event(f"Memory file {MEMORY_FILE} content was not a valid dictionary after loading. State remains empty.", "warning")
+        # agent_memory_state is already empty due to clear()
+
+    # Ensure essential keys are present even if loaded_data was minimal (e.g. just "{}")
+    # This logic is duplicated in handle_load_state, consider centralizing if it grows
+    if "dialog_history" not in agent_memory_state:
+        agent_memory_state["dialog_history"] = []
+    if "user_settings" not in agent_memory_state:
+        agent_memory_state["user_settings"] = {}
+
+    return agent_memory_state # Return reference to the modified global dict
 
 def save_memory():
     global agent_memory_state
@@ -126,6 +140,97 @@ def initialize_katana_files():
 # Note: agent_memory_state is the global dictionary for memory.
 # log_event is the existing logging function.
 
+# --- Memory State Command Handlers ---
+def handle_save_state(command_params=None):
+    """Saves the current agent_memory_state to MEMORY_FILE and updates HISTORY_FILE."""
+    global agent_memory_state
+    log_event("Processing 'save_state' command.", "info")
+    try:
+        # Ensure dialog_history key exists in agent_memory_state
+        if "dialog_history" not in agent_memory_state:
+            agent_memory_state["dialog_history"] = []
+            log_event("'dialog_history' key not found in agent_memory_state, initialized to empty list.", "debug")
+
+        # Save the main memory state
+        if save_memory():
+            # Also save the dialog_history part to katana.history.json for consistency or external use
+            if save_history(agent_memory_state.get("dialog_history", [])):
+                log_event("Successfully saved agent state and synchronized history file.", "info")
+                return {"status": "success", "message": "Agent state saved successfully."}
+            else:
+                log_event("Saved agent memory, but failed to save history file.", "warning")
+                return {"status": "partial_success", "message": "Agent state saved, but history file update failed."}
+        else:
+            log_event("Failed to save agent memory state.", "error")
+            return {"status": "error", "message": "Failed to save agent state."}
+    except Exception as e:
+        log_event(f"Error during save_state: {str(e)}", "error")
+        return {"status": "error", "message": f"An unexpected error occurred: {str(e)}"}
+
+def handle_load_state(command_params=None):
+    """Loads agent_memory_state from MEMORY_FILE and updates HISTORY_FILE."""
+    global agent_memory_state
+    log_event("Processing 'load_state' command.", "info")
+    try:
+        # load_memory() updates the global agent_memory_state, ensures it's a dictionary,
+        # and initializes essential keys like 'dialog_history' and 'user_settings'.
+        load_memory()
+
+        # Synchronize katana.history.json with the loaded dialog history
+        # agent_memory_state.get("dialog_history", []) is safe because load_memory ensures the key.
+        if save_history(agent_memory_state["dialog_history"]):
+            log_event("Successfully loaded agent state and synchronized history file.", "info")
+            return {"status": "success", "message": "Agent state loaded successfully."}
+        else:
+            log_event("Loaded agent memory, but failed to update history file from loaded state.", "warning")
+            return {"status": "partial_success", "message": "Agent state loaded, but history file synchronization failed."}
+
+    except Exception as e:
+        log_event(f"Error during load_state: {str(e)}", "error")
+        # In case of error, try to ensure agent_memory_state is at least a valid dict
+        if not isinstance(agent_memory_state, dict):
+            agent_memory_state = {}
+        if "dialog_history" not in agent_memory_state: agent_memory_state["dialog_history"] = []
+        if "user_settings" not in agent_memory_state: agent_memory_state["user_settings"] = {}
+        save_memory() # Try to save a minimal valid state
+        return {"status": "error", "message": f"An unexpected error occurred during state load: {str(e)}"}
+
+def handle_clear_state(command_params=None):
+    """Clears dialog history and user settings from agent_memory_state and corresponding files."""
+    global agent_memory_state
+    log_event("Processing 'clear_state' command.", "info")
+    try:
+        # Preserve other potentially important keys in agent_memory_state (like 'name', 'katana_config', etc.)
+        # Only clear specific parts: 'dialog_history' and 'user_settings'
+        original_name = agent_memory_state.get("name", "Katana V2") # Preserve name
+        original_config = agent_memory_state.get("katana_config", {}) # Preserve config
+
+        agent_memory_state["dialog_history"] = []
+        agent_memory_state["user_settings"] = {}
+        # Restore preserved keys
+        agent_memory_state["name"] = original_name
+        if original_config: # Only restore if it existed
+             agent_memory_state["katana_config"] = original_config
+
+        # For other keys that might have been added by other processes, we can either list them explicitly
+        # or re-initialize agent_memory_state more carefully.
+        # For now, this targeted clear is safer.
+
+        if save_memory(): # Save the modified agent_memory_state
+            if save_history([]): # Clear the history file as well
+                log_event("Successfully cleared agent state (history and user settings).", "info")
+                return {"status": "success", "message": "Agent state cleared successfully."}
+            else:
+                log_event("Cleared agent memory state, but failed to clear history file.", "warning")
+                return {"status": "partial_success", "message": "Agent state cleared, but history file clearing failed."}
+        else:
+            log_event("Failed to save cleared agent memory state.", "error")
+            return {"status": "error", "message": "Failed to save cleared agent state."}
+    except Exception as e:
+        log_event(f"Error during clear_state: {str(e)}", "error")
+        return {"status": "error", "message": f"An unexpected error occurred: {str(e)}"}
+
+# --- Existing Agent Command Handlers ---
 def handle_agent_get_config(command_params=None):
     # command_params is included for consistency, though not used in this version
     log_event("Processing 'get_agent_config' command internally.", "info")
@@ -196,6 +301,13 @@ def process_agent_command(command_object):
         result = handle_agent_reload_settings(params)
     elif action == "ping_received_from_ui_backend":
         result = handle_agent_ping_received(params)
+    # --- Memory State Commands ---
+    elif action == "save_state":
+        result = handle_save_state(params)
+    elif action == "load_state":
+        result = handle_load_state(params)
+    elif action == "clear_state":
+        result = handle_clear_state(params)
     else:
         log_event(f"Agent received unknown action: '{action}' for command_id: {command_id}", "warning")
 
