@@ -56,109 +56,161 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = (
         update.effective_user.id if update.effective_user else "UnknownUser"
     )
+    user_name = update.effective_user.username if update.effective_user else "UnknownUsername"
+    chat_id = update.effective_chat.id if update.effective_chat else "UnknownChat"
     logger.debug(
-        f"Entering start function for user_id: {user_id}",
-        extra={"user_id": user_id},
+        "Entering start command handler.",
+        extra={"user_id": user_id, "user_name": user_name, "chat_id": chat_id},
     )
+    welcome_message = "⚔️ Katana (AI Chat Mode) is online. Send me a message and I'll try to respond using OpenAI."
     logger.info(
-        "Received /start command", extra={"user_id": user_id}
-    )  # Removed unnecessary f-string
-    await update.message.reply_text(
-        "⚔️ Katana (AI Chat Mode) is online. Send me a message and I'll try to respond using OpenAI."
+        "Received /start command.", extra={"user_id": user_id, "chat_id": chat_id}
+    )
+    await update.message.reply_text(welcome_message)
+    logger.info(
+        "Welcome message sent.",
+        extra={"user_id": user_id, "chat_id": chat_id, "message_length": len(welcome_message)},
     )
     logger.debug(
-        f"Exiting start function for user_id: {user_id}",
-        extra={"user_id": user_id},
+        "Exiting start command handler.",
+        extra={"user_id": user_id, "chat_id": chat_id},
     )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles non-command text messages by sending them to OpenAI GPT."""
-    user_id = (
-        update.effective_user.id if update.effective_user else "UnknownUser"
-    )  # Moved up for earlier logging
+    user_id = update.effective_user.id if update.effective_user else "UnknownUser"
+    user_name = update.effective_user.username if update.effective_user else "UnknownUsername"
+    chat_id = update.effective_chat.id if update.effective_chat else "UnknownChat"
+
     logger.debug(
-        f"Entering handle_message for user_id: {user_id}",
-        extra={"user_id": user_id},
+        "Entering handle_message.",
+        extra={"user_id": user_id, "user_name": user_name, "chat_id": chat_id},
     )
+
     if not update.message or not update.message.text:
-        logger.debug(
-            "Empty message received, exiting.", extra={"user_id": user_id}
+        logger.warning(
+            "Received message with no text content.",
+            extra={"user_id": user_id, "chat_id": chat_id, "update_has_message": bool(update.message)},
         )
+        # Optionally, send a message back to the user, or simply return.
+        # await update.message.reply_text("I received an empty message. Please send some text.")
+        logger.debug("Exiting handle_message: no text content.", extra={"user_id": user_id, "chat_id": chat_id})
         return
 
     user_text = update.message.text
-    logger.info(
-        f"Received message: {user_text[:100]}", extra={"user_id": user_id}
-    )  # Log truncated message
-    logger.debug(f"Full message text: {user_text}", extra={"user_id": user_id})
+    message_id = update.message.message_id
 
-    if not client:  # Check if OpenAI client is initialized
+    logger.info(
+        f"Received message (ID: {message_id}, Length: {len(user_text)}). Preview: '{user_text[:100]}'",
+        extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id, "message_length": len(user_text)},
+    )
+    logger.debug(
+        f"Full message text (ID: {message_id}): {user_text}",
+        extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id},
+    )
+
+    if not client:
         logger.error(
             "OpenAI client not initialized. Cannot process message.",
-            extra={"user_id": user_id},
+            extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id},
         )
         await update.message.reply_text(
             "I apologize, but my connection to the AI core (OpenAI) is not configured. Please contact the administrator."
         )
         logger.debug(
-            "Exiting handle_message due to uninitialized OpenAI client.",
-            extra={"user_id": user_id},
+            "Exiting handle_message: OpenAI client not initialized.",
+            extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id},
         )
         return
 
     try:
+        model_used = "gpt-4"
         logger.debug(
-            f"Attempting to send to OpenAI. Model: gpt-4.",
-            extra={"user_id": user_id, "text_prefix": user_text[:50]},
+            f"Preparing to send user text to OpenAI. Model: {model_used}.",
+            extra={
+                "user_id": user_id,
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "model": model_used,
+                "text_prefix": user_text[:50],
+            },
         )
         logger.info(
-            f"Sending to OpenAI (GPT-4 model): {user_text[:50]}...",
-            extra={"user_id": user_id},
+            f"Sending to OpenAI (model: {model_used}). User text preview: '{user_text[:50]}...'",
+            extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id, "model": model_used},
         )
+
         completion = client.chat.completions.create(
-            model="gpt-4", messages=[{"role": "user", "content": user_text}]
+            model=model_used, messages=[{"role": "user", "content": user_text}]
         )
+        logger.debug(
+            "Received response from OpenAI API.",
+            extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id, "openai_response_id": completion.id if completion else "N/A"},
+        )
+
         ai_reply = completion.choices[0].message.content.strip()
         logger.info(
-            f"OpenAI reply: {ai_reply[:50]}...", extra={"user_id": user_id}
+            f"OpenAI reply received (Length: {len(ai_reply)}). Preview: '{ai_reply[:50]}...'",
+            extra={
+                "user_id": user_id,
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "reply_length": len(ai_reply),
+                "openai_finish_reason": completion.choices[0].finish_reason if completion and completion.choices else "N/A",
+            },
         )
         logger.debug(
-            f"Full OpenAI reply: {ai_reply}", extra={"user_id": user_id}
+            f"Full OpenAI reply: {ai_reply}",
+            extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id},
         )
+
         await update.message.reply_text(ai_reply)
+        logger.info(
+            "Successfully sent AI reply to user.",
+            extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id},
+        )
 
     except AuthenticationError as e:
         logger.error(
-            f"OpenAI Authentication Error: {e}. Check your API key.",
-            extra={"user_id": user_id},
+            f"OpenAI Authentication Error: {e}. Ensure the API key is correctly configured and valid.",
+            exc_info=True, # Adding exc_info for full traceback in logs
+            extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id, "error_type": type(e).__name__},
         )
         await update.message.reply_text(
             "Error: OpenAI authentication failed. Please check the API key configuration with the administrator."
         )
     except RateLimitError as e:
         logger.error(
-            f"OpenAI Rate Limit Error: {e}.", extra={"user_id": user_id}
+            f"OpenAI Rate Limit Error: {e}. The bot may be sending requests too frequently or has exceeded its quota.",
+            exc_info=True,
+            extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id, "error_type": type(e).__name__},
         )
         await update.message.reply_text(
             "Error: OpenAI rate limit exceeded. Please try again later."
         )
     except APIError as e:  # More general API errors from OpenAI v1.x
-        logger.error(f"OpenAI API Error: {e}", extra={"user_id": user_id})
+        logger.error(
+            f"OpenAI API Error: {e}. This could be due to various issues with the OpenAI service or the request.",
+            exc_info=True,
+            extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id, "error_type": type(e).__name__},
+        )
         await update.message.reply_text(
-            f"An error occurred with the OpenAI API: {str(e)}"  # noqa: F541, f-string is used
+            f"An error occurred with the OpenAI API: {str(e)}"
         )
     except Exception as e:
         logger.error(
-            f"An unexpected error occurred in handle_message: {e}",  # noqa: F541, f-string is used
-            extra={"user_id": user_id, "traceback": traceback.format_exc()},
+            f"An unexpected error occurred in handle_message: {e}",
+            exc_info=True, # Ensure traceback is always logged for unexpected errors
+            extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id, "error_type": type(e).__name__},
         )
         await update.message.reply_text(
             "Sorry, an unexpected error occurred while processing your message."
         )
+
     logger.debug(
-        f"Exiting handle_message for user_id: {user_id}",
-        extra={"user_id": user_id},
+        "Exiting handle_message.",
+        extra={"user_id": user_id, "chat_id": chat_id, "message_id": message_id if 'message_id' in locals() else "N/A"},
     )
 
 

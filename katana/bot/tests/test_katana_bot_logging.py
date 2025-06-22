@@ -152,54 +152,112 @@ class TestKatanaBotLogging(unittest.TestCase):
     def test_bot_log_levels_and_structured_fields(self):
         logger = self._configure_bot_logger_for_file_test()
         test_user_id = "test_user_123"
+        test_chat_id = "chat_456"
+        test_message_id = "msg_789"
+        test_user_name = "test_logger_user"
 
-        logger.debug("This is a debug message from test.", extra={"user_id": test_user_id, "custom_field": "debug_val"})
-        logger.info("Test command received.", extra={"user_id": test_user_id, "command_name": "/test_cmd"})
-        logger.warning("This is a test warning.", extra={"user_id": test_user_id, "warn_param": "some_issue"})
-        logger.error("This is a test error without exception.", extra={"user_id": test_user_id, "error_code": 500})
+        # Simulate logs similar to those from katana_bot.py
+        # Debug log from 'start' handler entry
+        logger.debug(
+            "Entering start command handler.",
+            extra={"user_id": test_user_id, "user_name": test_user_name, "chat_id": test_chat_id}
+        )
+        # Info log from 'start' handler after sending message
+        welcome_msg = "Welcome test message"
+        logger.info(
+            "Welcome message sent.",
+            extra={"user_id": test_user_id, "chat_id": test_chat_id, "message_length": len(welcome_msg)}
+        )
+        # Info log from 'handle_message' for received message
+        user_text_preview = "Test user message..."
+        logger.info(
+            f"Received message (ID: {test_message_id}, Length: {len(user_text_preview)}). Preview: '{user_text_preview}'",
+            extra={"user_id": test_user_id, "chat_id": test_chat_id, "message_id": test_message_id, "message_length": len(user_text_preview)}
+        )
+        # Warning log (e.g. empty message)
+        logger.warning(
+            "Received message with no text content.",
+            extra={"user_id": test_user_id, "chat_id": test_chat_id, "update_has_message": True}
+        )
+        # Error log from 'handle_message' (e.g. OpenAI client not init)
+        logger.error(
+            "OpenAI client not initialized. Cannot process message.",
+            extra={"user_id": test_user_id, "chat_id": test_chat_id, "message_id": test_message_id}
+        )
+
 
         for handler in logger.handlers: handler.close() # Flush logs
 
         log_entries = get_json_log_entries(BOT_LOG_FILE)
-        self.assertGreaterEqual(len(log_entries), 4)
+        self.assertGreaterEqual(len(log_entries), 5) # We logged 5 messages
 
-        debug_log = next((le for le in log_entries if le["level"] == "DEBUG"), None)
-        self.assertIsNotNone(debug_log)
-        self.assertEqual(debug_log["message"], "This is a debug message from test.")
+        # Check debug log (simulating start handler entry)
+        debug_log = next((le for le in log_entries if le["level"] == "DEBUG" and "Entering start command" in le["message"]), None)
+        self.assertIsNotNone(debug_log, "Debug log for 'start' command entry not found.")
+        self.assertEqual(debug_log["message"], "Entering start command handler.")
         self.assertEqual(debug_log.get("user_id"), test_user_id)
-        self.assertEqual(debug_log.get("custom_field"), "debug_val")
+        self.assertEqual(debug_log.get("user_name"), test_user_name)
+        self.assertEqual(debug_log.get("chat_id"), test_chat_id)
 
-        info_log = next((le for le in log_entries if le["level"] == "INFO"), None)
-        self.assertIsNotNone(info_log)
-        self.assertEqual(info_log["message"], "Test command received.")
-        self.assertEqual(info_log.get("user_id"), test_user_id)
-        self.assertEqual(info_log.get("command_name"), "/test_cmd")
+        # Check info log (simulating welcome message sent)
+        info_log_welcome = next((le for le in log_entries if le["level"] == "INFO" and "Welcome message sent" in le["message"]), None)
+        self.assertIsNotNone(info_log_welcome, "Info log for 'Welcome message sent' not found.")
+        self.assertEqual(info_log_welcome.get("user_id"), test_user_id)
+        self.assertEqual(info_log_welcome.get("chat_id"), test_chat_id)
+        self.assertEqual(info_log_welcome.get("message_length"), len(welcome_msg))
 
+        # Check info log (simulating received message)
+        info_log_received = next((le for le in log_entries if le["level"] == "INFO" and "Received message" in le["message"]), None)
+        self.assertIsNotNone(info_log_received, "Info log for 'Received message' not found.")
+        self.assertEqual(info_log_received.get("user_id"), test_user_id)
+        self.assertEqual(info_log_received.get("chat_id"), test_chat_id)
+        self.assertEqual(info_log_received.get("message_id"), test_message_id)
+        self.assertEqual(info_log_received.get("message_length"), len(user_text_preview))
+
+
+        # Check warning log
         warning_log = next((le for le in log_entries if le["level"] == "WARNING"), None)
-        self.assertIsNotNone(warning_log)
-        self.assertEqual(warning_log["message"], "This is a test warning.")
+        self.assertIsNotNone(warning_log, "Warning log not found.")
+        self.assertEqual(warning_log["message"], "Received message with no text content.")
         self.assertEqual(warning_log.get("user_id"), test_user_id)
-        self.assertEqual(warning_log.get("warn_param"), "some_issue")
+        self.assertEqual(warning_log.get("chat_id"), test_chat_id)
+        self.assertTrue(warning_log.get("update_has_message"))
 
-        error_log = next((le for le in log_entries if le["level"] == "ERROR" and "without exception" in le["message"]), None)
-        self.assertIsNotNone(error_log)
-        self.assertEqual(error_log["message"], "This is a test error without exception.")
+
+        # Check error log
+        error_log = next((le for le in log_entries if le["level"] == "ERROR" and "OpenAI client not initialized" in le["message"]), None)
+        self.assertIsNotNone(error_log, "Error log for 'OpenAI client not initialized' not found.")
         self.assertEqual(error_log.get("user_id"), test_user_id)
-        self.assertEqual(error_log.get("error_code"), 500)
+        self.assertEqual(error_log.get("chat_id"), test_chat_id)
+        self.assertEqual(error_log.get("message_id"), test_message_id)
 
-        for entry in [debug_log, info_log, warning_log, error_log]:
+
+        for entry in log_entries: # Check all entries for common fields
             if entry: # Ensure entry is not None
-                self.assertEqual(entry["module"], "test_katana_bot_logging")
+                self.assertEqual(entry["module"], "test_katana_bot_logging") # All logs are from this test module
                 self.assertTrue(isinstance(entry["function"], str))
 
 
     def test_bot_exception_logging(self):
         logger = self._configure_bot_logger_for_file_test()
         test_user_id = "user_exception_test"
+        test_chat_id = "chat_exception"
+        test_message_id = "msg_exception"
+        test_error_type = "ValueError"
         try:
             raise ValueError("This is a simulated exception for bot logging.")
-        except ValueError:
-            logger.error("Simulated error occurred.", exc_info=True, extra={"user_id": test_user_id, "detail": "exception_test"})
+        except ValueError as e:
+            logger.error(
+                f"Simulated error occurred: {e}", # Match new bot logging format
+                exc_info=True,
+                extra={
+                    "user_id": test_user_id,
+                    "chat_id": test_chat_id,
+                    "message_id": test_message_id,
+                    "error_type": test_error_type,
+                    "detail": "exception_test_detail_field" # Custom detail for this test
+                }
+            )
 
         for handler in logger.handlers: handler.close()
 
@@ -207,11 +265,15 @@ class TestKatanaBotLogging(unittest.TestCase):
         self.assertEqual(len(log_entries), 1)
         error_log = log_entries[0]
         self.assertEqual(error_log["level"], "ERROR")
-        self.assertEqual(error_log["message"], "Simulated error occurred.")
+        self.assertEqual(error_log["message"], "Simulated error occurred: This is a simulated exception for bot logging.")
         self.assertEqual(error_log.get("user_id"), test_user_id)
-        self.assertEqual(error_log.get("detail"), "exception_test")
+        self.assertEqual(error_log.get("chat_id"), test_chat_id)
+        self.assertEqual(error_log.get("message_id"), test_message_id)
+        self.assertEqual(error_log.get("error_type"), test_error_type)
+        self.assertEqual(error_log.get("detail"), "exception_test_detail_field")
         self.assertIn("exception", error_log)
         self.assertIn("ValueError: This is a simulated exception for bot logging.", error_log["exception"])
+        self.assertEqual(error_log["module"], "test_katana_bot_logging") # Check module for this log too
 
     def test_bot_startup_logging(self):
         logger = self._configure_bot_logger_for_file_test()
