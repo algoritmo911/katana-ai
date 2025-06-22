@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 import logging # Added for better logging
+import time # For sleep in polling loop
 
 # Ensure nlp_services is discoverable
 import sys
@@ -21,13 +22,28 @@ if not logger.hasHandlers():
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+logger.info("Initializing Katana Bot...")
 
 # Получаем токен из переменной окружения
-API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN', 'YOUR_API_TOKEN')
-if not API_TOKEN or ':' not in API_TOKEN:
-    raise ValueError("❌ Invalid or missing Telegram API token. Please set KATANA_TELEGRAM_TOKEN env variable with format '123456:ABCDEF'.")
+API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN') # Removed default to rely on check
 
-bot = telebot.TeleBot(API_TOKEN)
+if not API_TOKEN:
+    logger.critical("FATAL: KATANA_TELEGRAM_TOKEN environment variable not set.")
+    raise ValueError("❌ KATANA_TELEGRAM_TOKEN environment variable not set. Bot cannot start.")
+elif ':' not in API_TOKEN: # Basic format check
+    logger.critical(f"FATAL: KATANA_TELEGRAM_TOKEN format is invalid. Token: {API_TOKEN[:3]}...{API_TOKEN[-3:] if len(API_TOKEN) > 6 else ''}")
+    raise ValueError("❌ Invalid Telegram API token format. Expected format '123456:ABCDEF'.")
+else:
+    masked_token = f"{API_TOKEN.split(':')[0][:3]}...:{API_TOKEN.split(':')[-1][-3:]}" if ':' in API_TOKEN and len(API_TOKEN.split(':')[0]) > 3 and len(API_TOKEN.split(':')[-1]) > 3 else f"{API_TOKEN[:3]}...{API_TOKEN[-3:] if len(API_TOKEN) > 6 else ''}"
+    logger.info(f"Telegram API Token loaded successfully (masked: {masked_token}).")
+
+try:
+    bot = telebot.TeleBot(API_TOKEN)
+    logger.info("TeleBot instance created successfully.")
+except Exception as e:
+    logger.critical(f"FATAL: Failed to create TeleBot instance: {e}", exc_info=True)
+    # Depending on desired behavior, could re-raise or sys.exit()
+    raise # Re-raise to prevent running with a non-functional bot object
 
 # Папка для сохранения команд
 COMMAND_FILE_DIR = Path('commands')
@@ -71,128 +87,157 @@ def handle_start(message):
 def handle_message(message):
     """Главный обработчик входящих сообщений."""
     chat_id = message.chat.id
+    user_id = message.from_user.id if message.from_user else "N/A"
     command_text = message.text
 
-    log_local_bot_event(f"Received message from {chat_id}: {command_text}")
+    log_local_bot_event(f"Received message. ChatID: {chat_id}, UserID: {user_id}, Text: \"{command_text}\"")
 
-    try:
-        command_data = json.loads(command_text)
-    except json.JSONDecodeError:
-        bot.reply_to(message, "❌ Error: Invalid JSON format.")
-        log_local_bot_event(f"Invalid JSON from {chat_id}: {command_text}")
-        return
-
-    required_fields = {
-        "type": str,
-        "module": str,
-        "args": dict,
-        "id": (str, int)
-    }
-
-    for field, expected_type in required_fields.items():
-        if field not in command_data:
-            error_msg = f"❌ Error: Missing required field '{field}'."
-            bot.reply_to(message, error_msg)
-            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+    try: # Outermost try-except for the entire handler
+        try:
+            command_data = json.loads(command_text)
+        except json.JSONDecodeError:
+            bot.reply_to(message, "❌ Error: Invalid JSON format.")
+            log_local_bot_event(f"Invalid JSON from {chat_id}: {command_text}")
             return
-        if field == "id":
-            if not any(isinstance(command_data[field], t) for t in expected_type):
-                error_msg = f"❌ Error: Field '{field}' must be type str or int. Got {type(command_data[field]).__name__}."
+
+        required_fields = {
+            "type": str,
+            "module": str,
+            "args": dict,
+            "id": (str, int)
+        }
+
+        for field, expected_type in required_fields.items():
+            if field not in command_data:
+                error_msg = f"❌ Error: Missing required field '{field}'."
                 bot.reply_to(message, error_msg)
                 log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
                 return
-        elif not isinstance(command_data[field], expected_type):
-            error_msg = f"❌ Error: Field '{field}' must be type {expected_type.__name__}. Got {type(command_data[field]).__name__}."
-            bot.reply_to(message, error_msg)
-            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+            if field == "id":
+                if not any(isinstance(command_data[field], t) for t in expected_type):
+                    error_msg = f"❌ Error: Field '{field}' must be type str or int. Got {type(command_data[field]).__name__}."
+                    bot.reply_to(message, error_msg)
+                    log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+                    return
+            elif not isinstance(command_data[field], expected_type):
+                error_msg = f"❌ Error: Field '{field}' must be type {expected_type.__name__}. Got {type(command_data[field]).__name__}."
+                bot.reply_to(message, error_msg)
+                log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+                return
+
+        command_type = command_data.get("type")
+
+        if command_type == "log_event":
+            handle_log_event(command_data, chat_id)
+            bot.reply_to(message, "✅ 'log_event' processed (placeholder).")
+            return
+        elif command_type == "mind_clearing":
+            handle_mind_clearing(command_data, chat_id)
+            bot.reply_to(message, "✅ 'mind_clearing' processed (placeholder).")
             return
 
-    command_type = command_data.get("type")
+        # Check for NLP modules
+        module_name = command_data.get("module")
 
-    if command_type == "log_event":
-        handle_log_event(command_data, chat_id)
-        bot.reply_to(message, "✅ 'log_event' processed (placeholder).")
-        return
-    elif command_type == "mind_clearing":
-        handle_mind_clearing(command_data, chat_id)
-        bot.reply_to(message, "✅ 'mind_clearing' processed (placeholder).")
-        return
+        if module_name in ["anthropic_chat", "openai_chat"]:
+            args = command_data.get("args", {})
+            prompt = args.get("prompt")
+            history = args.get("history", [])
+            # For model_name, system_prompt, max_tokens, pass None if not provided, client functions have defaults
+            model_name_arg = args.get("model_name") # client functions handle None
+            system_prompt_arg = args.get("system_prompt") # client functions handle None
+            max_tokens_arg = args.get("max_tokens") # client functions handle None
 
-    # Check for NLP modules
-    module_name = command_data.get("module")
+            if not prompt:
+                bot.reply_to(message, f"❌ Error: 'prompt' is a required argument in 'args' for module '{module_name}'.")
+                log_local_bot_event(f"Missing 'prompt' for {module_name} from {chat_id}", level=logging.ERROR)
+                return
 
-    if module_name in ["anthropic_chat", "openai_chat"]:
-        args = command_data.get("args", {})
-        prompt = args.get("prompt")
-        history = args.get("history", [])
-        # For model_name, system_prompt, max_tokens, pass None if not provided, client functions have defaults
-        model_name_arg = args.get("model_name") # client functions handle None
-        system_prompt_arg = args.get("system_prompt") # client functions handle None
-        max_tokens_arg = args.get("max_tokens") # client functions handle None
+            try:
+                log_local_bot_event(f"Processing '{module_name}' for {chat_id}. Prompt: '{prompt[:50]}...'")
+                assistant_response = None
+                if module_name == "anthropic_chat":
+                    assistant_response = get_anthropic_chat_response(
+                        history=history,
+                        user_prompt=prompt,
+                        model_name=model_name_arg if model_name_arg else "claude-3-opus-20240229", # Explicitly pass client default if None
+                        system_prompt=system_prompt_arg,
+                        max_tokens_to_sample=max_tokens_arg if max_tokens_arg is not None else 1024 # Pass client default if arg is None
+                    )
+                elif module_name == "openai_chat":
+                    assistant_response = get_openai_chat_response(
+                        history=history,
+                        user_prompt=prompt,
+                        model_name=model_name_arg if model_name_arg else "gpt-3.5-turbo", # Explicitly pass client default if None
+                        system_prompt=system_prompt_arg,
+                        max_tokens=max_tokens_arg if max_tokens_arg is not None else 1024 # Pass client default if arg is None
+                    )
 
-        if not prompt:
-            bot.reply_to(message, f"❌ Error: 'prompt' is a required argument in 'args' for module '{module_name}'.")
-            log_local_bot_event(f"Missing 'prompt' for {module_name} from {chat_id}", level=logging.ERROR)
-            return
+                bot.reply_to(message, f"🤖: {assistant_response}")
+                log_local_bot_event(f"Successfully replied to '{module_name}' for {chat_id}. Response: '{str(assistant_response)[:50]}...'")
 
+            except NLPServiceError as e:
+                log_local_bot_event(
+                    f"NLP Error for module {module_name} from {chat_id}: {str(e)}. User message: {e.user_message}",
+                    level=logging.ERROR,
+                    exc_info=True if e.original_error else False # Log stack trace if original error exists
+                )
+                bot.reply_to(message, f"🤖⚠️: {e.user_message}")
+            except Exception as e:
+                log_local_bot_event(
+                    f"Unexpected error processing {module_name} for {chat_id}: {str(e)}",
+                    level=logging.ERROR,
+                    exc_info=True
+                )
+                bot.reply_to(message, "🤖⚠️: Произошла внутренняя ошибка при обработке вашего запроса.")
+            return # NLP command processed or errored out
+
+        # Fallback for other modules or if type was not log_event/mind_clearing
+        log_local_bot_event(f"Command type '{command_type}' with module '{module_name}' not specifically handled by NLP, proceeding with default save.")
+
+        # Ensure module_name for file saving uses the actual module name or a default
+        effective_module_name = module_name if module_name else 'telegram_general'
+        timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+        command_file_name = f"{timestamp_str}_{chat_id}.json"
+
+        module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{effective_module_name}" if effective_module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
+        module_command_dir.mkdir(parents=True, exist_ok=True)
+        command_file_path = module_command_dir / command_file_name
+
+        with open(command_file_path, "w", encoding="utf-8") as f:
+            json.dump(command_data, f, ensure_ascii=False, indent=2)
+
+        bot.reply_to(message, f"✅ Command received and saved as `{command_file_path}`.")
+        log_local_bot_event(f"Saved command from {chat_id} to {command_file_path}")
+
+    except Exception as e: # Outermost catch-all for handle_message
+        log_local_bot_event(
+            f"Critical error in handle_message for chat {chat_id}, user {user_id}. Text: \"{command_text}\". Error: {str(e)}",
+            level=logging.CRITICAL, # Use CRITICAL for unhandled errors in message handler
+            exc_info=True
+        )
         try:
-            log_local_bot_event(f"Processing '{module_name}' for {chat_id}. Prompt: '{prompt[:50]}...'")
-            assistant_response = None
-            if module_name == "anthropic_chat":
-                assistant_response = get_anthropic_chat_response(
-                    history=history,
-                    user_prompt=prompt,
-                    model_name=model_name_arg if model_name_arg else "claude-3-opus-20240229", # Explicitly pass client default if None
-                    system_prompt=system_prompt_arg,
-                    max_tokens_to_sample=max_tokens_arg if max_tokens_arg is not None else 1024 # Pass client default if arg is None
-                )
-            elif module_name == "openai_chat":
-                assistant_response = get_openai_chat_response(
-                    history=history,
-                    user_prompt=prompt,
-                    model_name=model_name_arg if model_name_arg else "gpt-3.5-turbo", # Explicitly pass client default if None
-                    system_prompt=system_prompt_arg,
-                    max_tokens=max_tokens_arg if max_tokens_arg is not None else 1024 # Pass client default if arg is None
-                )
+            bot.reply_to(message, "🤖⚠️: Извините, произошла внутренняя ошибка. Попробуйте позже или свяжитесь с администратором.")
+        except Exception as reply_e:
+            logger.critical(f"Failed to send error reply to chat {chat_id}: {reply_e}", exc_info=True)
 
-            bot.reply_to(message, f"🤖: {assistant_response}")
-            log_local_bot_event(f"Successfully replied to '{module_name}' for {chat_id}. Response: '{str(assistant_response)[:50]}...'")
-
-        except NLPServiceError as e:
-            log_local_bot_event(
-                f"NLP Error for module {module_name} from {chat_id}: {str(e)}. User message: {e.user_message}",
-                level=logging.ERROR,
-                exc_info=True if e.original_error else False # Log stack trace if original error exists
-            )
-            bot.reply_to(message, f"🤖⚠️: {e.user_message}")
-        except Exception as e:
-            log_local_bot_event(
-                f"Unexpected error processing {module_name} for {chat_id}: {str(e)}",
-                level=logging.ERROR,
-                exc_info=True
-            )
-            bot.reply_to(message, "🤖⚠️: Произошла внутренняя ошибка при обработке вашего запроса.")
-        return # NLP command processed or errored out
-
-    # Fallback for other modules or if type was not log_event/mind_clearing
-    log_local_bot_event(f"Command type '{command_type}' with module '{module_name}' not specifically handled by NLP, proceeding with default save.")
-
-    # Ensure module_name for file saving uses the actual module name or a default
-    effective_module_name = module_name if module_name else 'telegram_general'
-    timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
-    command_file_name = f"{timestamp_str}_{chat_id}.json"
-    
-    module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{effective_module_name}" if effective_module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
-    module_command_dir.mkdir(parents=True, exist_ok=True)
-    command_file_path = module_command_dir / command_file_name
-
-    with open(command_file_path, "w", encoding="utf-8") as f:
-        json.dump(command_data, f, ensure_ascii=False, indent=2)
-    
-    bot.reply_to(message, f"✅ Command received and saved as `{command_file_path}`.")
-    log_local_bot_event(f"Saved command from {chat_id} to {command_file_path}")
 
 if __name__ == '__main__':
-    log_local_bot_event("Bot starting...")
-    bot.polling()
-    log_local_bot_event("Bot stopped.")
+    # log_local_bot_event("Bot starting...") # Already logged by logger.info("Initializing Katana Bot...")
+    logger.info("Attempting to start bot polling...")
+
+    while True:
+        try:
+            logger.info("Bot polling started with none_stop=True.")
+            bot.polling(none_stop=True, interval=0) # interval=0 is default, can be omitted or tuned
+        except Exception as e:
+            logger.error(f"Bot polling encountered an error: {e}", exc_info=True)
+            logger.info("Restarting polling in 15 seconds...")
+            time.sleep(15)
+        else: # This block executes if the try block completes without an exception (e.g., bot.stop_polling() was called)
+            logger.info("Bot polling exited cleanly. Will restart if in a loop, or exit if stopped intentionally.")
+            # If we want to truly stop on clean exit, we might break the while loop here.
+            # For now, it will restart, which is robust for unexpected clean exits.
+            # Consider adding a flag or condition to break loop if needed.
+            time.sleep(5) # Brief pause before restarting even on clean exit, unless designed to stop.
+    # log_local_bot_event("Bot stopped.") # This line would be unreachable if polling is in an infinite loop.

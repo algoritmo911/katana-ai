@@ -221,8 +221,16 @@ class TestBot(unittest.TestCase):
         # Это дублирует часть test_logging_on_standard_command, но здесь в контексте NLP команды,
         # которая пока обрабатывается по стандартному пути.
         actual_log_calls = [call_item[0][0] for call_item in mock_log_local_bot_event.call_args_list if call_item[0]]
-        self.assertIn(f"Received message from {mock_message.chat.id}: {mock_message.text}", actual_log_calls)
-        self.assertIn(f"Command type 'nlp_process' with module 'nlp' not specifically handled by NLP, proceeding with default save.", actual_log_calls) # Updated expected log
+
+        received_log_found = any(
+            f"Received message. ChatID: {mock_message.chat.id}" in log_msg and
+            f"UserID: " in log_msg and
+            f"Text: \"{mock_message.text}\"" in log_msg
+            for log_msg in actual_log_calls
+        )
+        self.assertTrue(received_log_found, f"Expected initial log with ChatID, UserID, and Text not found in {actual_log_calls}")
+
+        self.assertIn(f"Command type 'nlp_process' with module 'nlp' not specifically handled by NLP, proceeding with default save.", actual_log_calls)
         self.assertIn(f"Saved command from {mock_message.chat.id} to {str(expected_file_path)}", actual_log_calls)
 
 
@@ -281,8 +289,18 @@ class TestBot(unittest.TestCase):
         # Получаем все фактические вызовы к моку
         actual_log_calls = [call_item[0][0] for call_item in mock_log_local_bot_event.call_args_list if call_item[0]]
 
-        self.assertIn(f"Received message from {mock_message.chat.id}: {mock_message.text}", actual_log_calls)
-        self.assertIn(f"Command type 'test_log' with module 'logging_test' not specifically handled by NLP, proceeding with default save.", actual_log_calls) # Updated expected log
+        # Updated expected log format for received message
+        # The UserID part will be a mock representation, so we might need to check for substrings or use a more flexible match
+        # For now, let's check for the presence of key parts
+        received_log_found = any(
+            f"Received message. ChatID: {mock_message.chat.id}" in log_msg and
+            f"UserID: " in log_msg and # Check that UserID is mentioned
+            f"Text: \"{mock_message.text}\"" in log_msg
+            for log_msg in actual_log_calls
+        )
+        self.assertTrue(received_log_found, f"Expected initial log with ChatID, UserID, and Text not found in {actual_log_calls}")
+
+        self.assertIn(f"Command type 'test_log' with module 'logging_test' not specifically handled by NLP, proceeding with default save.", actual_log_calls)
         self.assertIn(f"Saved command from {mock_message.chat.id} to {str(expected_file_path)}", actual_log_calls)
 
     # --- Tests for NLP Integration ---
