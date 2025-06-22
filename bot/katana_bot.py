@@ -3,55 +3,47 @@ import json
 import os
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
-from bot.nlp_clients.anthropic_client import AnthropicClient, AnthropicClientError
-from bot.nlp_clients.openai_client import OpenAIClient, OpenAIClientError
-from bot.nlp_clients.base_nlp_client import NLPServiceError
-
-# --- Logging Setup ---
-# Remove basicConfig if a more sophisticated setup is added later (e.g. from a config file)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()] # Output to console
-)
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- Environment Variables & Bot Initialization ---
-API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN')
-if API_TOKEN and ':' in API_TOKEN:
-    logger.info("✅ Telegram API token loaded successfully.")
-else:
+# --- Заглушки и глобальные переменные ---
+# Это будет заменено реальной реализацией или импортом
+def get_katana_response(history: list[dict]) -> str:
+    """Заглушка для функции получения ответа от NLP модели."""
+    logger.info(f"get_katana_response called with history: {history}")
+    if not history:
+        return "Катана к вашим услугам. О чём поразмыслим?"
+    last_message = history[-1]['content']
+    return f"Размышляю над вашим последним сообщением: '{last_message}'... (это заглушка)"
+
+# Словарь для хранения состояний чатов (истории сообщений)
+# Ключ: chat_id, Значение: list сообщений [{'role': 'user'/'assistant', 'content': 'message_text'}]
+katana_states = {}
+
+# Типы сообщений в истории
+MESSAGE_ROLE_USER = "user"
+MESSAGE_ROLE_ASSISTANT = "assistant"
+# --- Конец заглушек ---
+
+# Получаем токен из переменной окружения
+API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN', 'YOUR_API_TOKEN')
+if not API_TOKEN or ':' not in API_TOKEN:
     logger.error("❌ Invalid or missing Telegram API token. Please set KATANA_TELEGRAM_TOKEN env variable with format '123456:ABCDEF'.")
     raise ValueError("❌ Invalid or missing Telegram API token. Please set KATANA_TELEGRAM_TOKEN env variable with format '123456:ABCDEF'.")
 
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', "dummy_anthropic_key_env")
-if ANTHROPIC_API_KEY == "dummy_anthropic_key_env":
-    logger.warning("⚠️ Anthropic API key is using the default dummy value. Set ANTHROPIC_API_KEY for actual use.")
-else:
-    logger.info("✅ Anthropic API key loaded.")
-
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', "dummy_openai_key_env")
-if OPENAI_API_KEY == "dummy_openai_key_env":
-    logger.warning("⚠️ OpenAI API key is using the default dummy value. Set OPENAI_API_KEY for actual use.")
-else:
-    logger.info("✅ OpenAI API key loaded.")
-
-
 bot = telebot.TeleBot(API_TOKEN)
 
-# --- Constants ---
+# Папка для сохранения команд
 COMMAND_FILE_DIR = Path('commands')
 COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 
-NLP_MODULE_ANTHROPIC = "anthropic_chat"
-NLP_MODULE_OPENAI = "openai_chat"
+# def log_local_bot_event(message): # Эта функция больше не нужна, используем logger напрямую
+#     """Логирование события бота."""
+#     logger.info(message)
 
-# --- Utility Functions (Replaces log_local_bot_event) ---
-# No longer needed, using standard logger
-
-# --- Placeholder Handlers ---
 def handle_log_event(command_data, chat_id):
     """Обработка команды 'log_event' (заглушка)."""
     logger.info(f"handle_log_event called for chat_id {chat_id} with data: {command_data}")
@@ -60,204 +52,147 @@ def handle_mind_clearing(command_data, chat_id):
     """Обработка команды 'mind_clearing' (заглушка)."""
     logger.info(f"handle_mind_clearing called for chat_id {chat_id} with data: {command_data}")
 
-# --- NLP Core Logic ---
-def get_nlp_response(user_prompt: str, module: str) -> str:
+def handle_message_impl(message):
     """
-    Gets a response from the specified NLP client.
-
-    Args:
-        user_prompt: The prompt to send to the NLP model.
-        module: The NLP module to use (e.g., "anthropic_chat", "openai_chat").
-
-    Returns:
-        The NLP model's response string, or a user-friendly error message.
+    Реализация полного цикла обработки сообщения:
+    - Приём и логирование входящих сообщений.
+    - Формирование контекста из KatanaState.
+    - Вызов get_katana_response с правильной историей.
+    - Отправка ответа через bot.reply_to.
+    - Запись в состояние как входящего, так и исходящего сообщения.
+    - Обработка и логирование ошибок с понятными русскими сообщениями пользователю.
     """
-    logger.info(f"Attempting to get NLP response for module: {module}")
+    chat_id = message.chat.id
+    user_message_text = message.text
+
+    # 1. Логирование входящего сообщения (уже сделано в handle_message)
+    # logger.info(f"Processing message from chat_id {chat_id}: {user_message_text}")
+
+    # 2. Формирование контекста из KatanaState
+    if chat_id not in katana_states:
+        katana_states[chat_id] = []
+        logger.info(f"New chat session started for chat_id {chat_id}. Initialized empty history.")
+
+    current_history = katana_states[chat_id]
+
+    # Попытка разобрать сообщение как JSON-команду
+    is_json_command = False
+    command_data = None
     try:
-        # Select and initialize the appropriate NLP client based on the module.
-        if module == NLP_MODULE_ANTHROPIC:
-            logger.info(f"Using Anthropic client. Prompt: '{user_prompt[:50]}...'")
-            # Note: Client instantiation could be optimized in a production app (e.g., singleton pattern).
-            client = AnthropicClient(api_key=ANTHROPIC_API_KEY)
-            # The 'scenario' parameter is for the current mock client's behavior.
-            # In a real integration, this would be a direct call to the actual client method.
-            response = client.generate_text(prompt=user_prompt, scenario="success")
-            logger.info(f"Anthropic client success. Response: '{response[:50]}...'")
-            return response
-        elif module == NLP_MODULE_OPENAI:
-            logger.info(f"Using OpenAI client. Prompt: '{user_prompt[:50]}...'")
-            client = OpenAIClient(api_key=OPENAI_API_KEY)
-            response = client.generate_text(prompt=user_prompt, scenario="success")
-            logger.info(f"OpenAI client success. Response: '{response[:50]}...'")
-            return response
+        parsed_json = json.loads(user_message_text)
+        # Проверяем, является ли это валидной командой с нужными полями
+        required_fields = {"type": str, "module": str, "args": dict, "id": (str, int)}
+        is_valid_command_structure = True
+        for field, expected_type in required_fields.items():
+            if field not in parsed_json:
+                is_valid_command_structure = False
+                break
+            if field == "id":
+                if not any(isinstance(parsed_json[field], t) for t in expected_type):
+                    is_valid_command_structure = False
+                    break
+            elif not isinstance(parsed_json[field], expected_type):
+                is_valid_command_structure = False
+                break
+
+        if is_valid_command_structure:
+            is_json_command = True
+            command_data = parsed_json
         else:
-            # Handle cases where the module is not a known/supported NLP service.
-            logger.warning(f"Unknown NLP module specified: {module}")
-            return f"❌ Error: Unknown NLP module '{module}'. Cannot process request."
+            logger.info(f"Message from chat_id {chat_id} parsed as JSON but not a valid command structure: {user_message_text}")
 
-    except NLPServiceError as e:
-        # Catch custom NLP exceptions from the clients.
-        # These exceptions already have a user-friendly `user_message`.
-        logger.error(
-            f"NLPServiceError caught for module {module}. User Message: '{e.user_message}'. Original Error: {type(e.original_error).__name__} - {e.original_error}",
-            exc_info=True # Adds stack trace to the log for detailed debugging.
-        )
-        return e.user_message # Return the user-friendly message to the end-user.
-    except Exception as e:
-        # Catch any other unexpected exceptions during NLP processing.
-        logger.critical(
-            f"Unexpected critical error during NLP processing for module {module}! Error: {type(e).__name__} - {e}",
-            exc_info=True # Adds stack trace to the log.
-        )
-        # Return a generic error message to the user for unforeseen issues.
-        return "❌ An unexpected system error occurred while trying to process your request. Please try again later."
+    except json.JSONDecodeError:
+        logger.info(f"Message from chat_id {chat_id} is not JSON, treating as natural language: {user_message_text}")
+        pass # Не JSON, значит, обычное сообщение
+
+    # Добавляем сообщение пользователя в историю
+    current_history.append({"role": MESSAGE_ROLE_USER, "content": user_message_text})
+
+    if is_json_command and command_data:
+        command_type = command_data.get("type")
+        logger.info(f"Processing JSON command: type='{command_type}' for chat_id {chat_id}")
+
+        if command_type == "log_event":
+            handle_log_event(command_data, chat_id)
+            bot_response_text = "✅ 'log_event' обработан (заглушка)."
+            bot.reply_to(message, bot_response_text)
+            current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+            return
+        elif command_type == "mind_clearing":
+            handle_mind_clearing(command_data, chat_id)
+            katana_states[chat_id] = [] # Очищаем историю
+            logger.info(f"Mind clearing for chat_id {chat_id}. History reset.")
+            bot_response_text = "✅ Контекст диалога очищен. Начинаем с чистого листа."
+            bot.reply_to(message, bot_response_text)
+            # Добавляем ответ ассистента как первое сообщение после очистки
+            katana_states[chat_id].append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+            return
+        else: # Другие JSON команды (сохранение файла)
+            logger.info(f"Command type '{command_type}' not specifically handled, proceeding with default save.")
+            timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')
+            command_file_name = f"{timestamp_str}_{chat_id}.json"
+            module_name = command_data.get('module', 'telegram_general')
+            module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{module_name}" if module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
+            module_command_dir.mkdir(parents=True, exist_ok=True)
+            command_file_path = module_command_dir / command_file_name
+
+            with open(command_file_path, "w", encoding="utf-8") as f:
+                json.dump(command_data, f, ensure_ascii=False, indent=2)
+
+            bot_response_text = f"✅ Команда принята и сохранена как `{command_file_path}`."
+            bot.reply_to(message, bot_response_text)
+            current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+            logger.info(f"Saved command from {chat_id} to {command_file_path}")
+            return
+    else:
+        # Это не JSON-команда или невалидная JSON-команда, значит, обычное текстовое сообщение
+        # 3. Вызов get_katana_response с правильной историей
+        logger.info(f"Calling get_katana_response for chat_id {chat_id} with history length {len(current_history)}")
+
+        try:
+            # 3. Вызов get_katana_response с правильной историей
+            katana_response_text = get_katana_response(current_history)
+            logger.info(f"Katana response for chat_id {chat_id}: {katana_response_text}")
+
+            # 4. Отправка ответа через bot.reply_to
+            bot.reply_to(message, katana_response_text)
+
+            # 5. Запись исходящего сообщения в состояние
+            current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text})
+            logger.info(f"Appended assistant response to history for chat_id {chat_id}. History length: {len(current_history)}")
+
+        except Exception as e:
+            error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
+            logger.error(f"[ErrorID: {error_id}] Error during get_katana_response or reply for chat_id {chat_id}: {e}", exc_info=True)
+            # Формируем сообщение для пользователя
+            user_error_message = (
+                "😕 Произошла внутренняя ошибка при обработке вашего запроса. "
+                "Команда уже уведомлена и разбирается в проблеме. "
+                f"Пожалуйста, попробуйте позже. (Код ошибки: {error_id})"
+            )
+            bot.reply_to(message, user_error_message)
+            # Важно: не добавляем ошибочный ответ ассистента в историю,
+            # но сообщение пользователя там уже есть.
 
 
-# --- Telegram Bot Handlers ---
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     """Ответ на /start"""
-    bot.reply_to(message, "Привет! Я — Katana. Отправь JSON-команду, чтобы начать.")
+    bot.reply_to(message, "Привет! Я — Katana. Готов к диалогу или JSON-команде.")
     logger.info(f"/start received from {message.chat.id}")
+    # Инициализируем состояние для нового пользователя при /start
+    if message.chat.id not in katana_states:
+        katana_states[message.chat.id] = []
+    katana_states[message.chat.id].append({"role": MESSAGE_ROLE_ASSISTANT, "content": "Привет! Я — Katana. Готов к диалогу или JSON-команде."})
+
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     """Главный обработчик входящих сообщений."""
-    chat_id = message.chat.id
-    command_text = message.text
-
-    logger.info(f"Received message from {chat_id}: {command_text}")
-
-    try: # Top-level try-except for the entire message handling logic
-        try:
-            command_data = json.loads(command_text)
-        except json.JSONDecodeError:
-            reply_text = "❌ Error: Invalid JSON format."
-        bot.reply_to(message, reply_text)
-        logger.warning(f"Invalid JSON from {chat_id}: {command_text}. Replied: '{reply_text}'", exc_info=True)
-        return
-
-    required_fields = {
-        "type": str,
-        "module": str,
-        "args": dict,
-        "id": (str, int)
-    }
-
-    for field, expected_type in required_fields.items():
-        if field not in command_data:
-            error_msg = f"❌ Error: Missing required field '{field}'."
-            bot.reply_to(message, error_msg)
-            logger.warning(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
-            return
-        if field == "id":
-            if not any(isinstance(command_data[field], t) for t in expected_type): # type: ignore
-                error_msg = f"❌ Error: Field '{field}' must be type str or int. Got {type(command_data[field]).__name__}."
-                bot.reply_to(message, error_msg)
-                logger.warning(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
-                return
-        elif not isinstance(command_data[field], expected_type): # type: ignore
-            error_msg = f"❌ Error: Field '{field}' must be type {expected_type.__name__}. Got {type(command_data[field]).__name__}." # type: ignore
-            bot.reply_to(message, error_msg)
-            logger.warning(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
-            return
-
-    command_type = command_data.get("type")
-    module_name = command_data.get("module")
-    command_type = command_data.get("type") # Already got this, but make sure it's used for routing NLP
-
-    # --- NLP Module Handling ---
-    # Check if the command type indicates an NLP operation.
-    # If so, delegate to `get_nlp_response` which handles specific module validation and client calls.
-    if command_type == "nlp_query": # "nlp_query" is the designated type for NLP actions.
-        if not module_name: # Module name is essential for routing to the correct NLP client.
-            reply_text = "❌ Error: Missing 'module' field for NLP command."
-            bot.reply_to(message, reply_text)
-            logger.warning(f"NLP command validation failed for {chat_id}: {reply_text} (Command: {command_text})")
-            return
-
-        user_prompt = command_data.get("args", {}).get("prompt")
-        if not user_prompt or not isinstance(user_prompt, str):
-            reply_text = "❌ Error: Missing 'prompt' in 'args' for NLP command or it's not a string."
-            bot.reply_to(message, reply_text)
-            logger.warning(f"NLP command validation failed for {chat_id}: {reply_text} (Command: {command_text})")
-            return
-
-        nlp_response = get_nlp_response(user_prompt, module_name)
-        bot.reply_to(message, nlp_response)
-        # Log based on whether nlp_response indicates an error (starts with ❌) or success
-        if nlp_response.startswith("❌"):
-            logger.warning(f"Sent NLP error reply to {chat_id} for module {module_name}. Reply: '{nlp_response}'")
-        else:
-            logger.info(f"Sent NLP success reply to {chat_id} for module {module_name}. Reply: '{nlp_response[:100]}...'")
-        return
-
-    # --- Existing Command Type Handling (Non-NLP) ---
-    if command_type == "log_event":
-        handle_log_event(command_data, chat_id)
-        reply_text = "✅ 'log_event' processed (placeholder)."
-        bot.reply_to(message, reply_text)
-        logger.info(f"Sent '{command_type}' confirmation to {chat_id}. Reply: '{reply_text}'")
-        return
-    elif command_type == "mind_clearing":
-        handle_mind_clearing(command_data, chat_id)
-        reply_text = "✅ 'mind_clearing' processed (placeholder)."
-        bot.reply_to(message, reply_text)
-        logger.info(f"Sent '{command_type}' confirmation to {chat_id}. Reply: '{reply_text}'")
-        return
-
-    # --- Default: Save command to file (if not an NLP module and not other specific types) ---
-    logger.info(f"Command type '{command_type}' for module '{module_name}' not specifically handled by NLP or other handlers, proceeding with default save.")
-
-    timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
-    command_file_name = f"{timestamp_str}_{chat_id}.json"
-    
-    # Ensure module_name for directory is not None, default to 'telegram_general' if it was
-    dir_module_name = module_name if module_name else 'telegram_general'
-    module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{dir_module_name}"
-    module_command_dir.mkdir(parents=True, exist_ok=True)
-    command_file_path = module_command_dir / command_file_name
-
-    try:
-        with open(command_file_path, "w", encoding="utf-8") as f:
-            json.dump(command_data, f, ensure_ascii=False, indent=2)
-        reply_text = f"✅ Command received and saved as `{command_file_path}`."
-        bot.reply_to(message, reply_text)
-        logger.info(f"Saved command from {chat_id} to {command_file_path}. Replied: '{reply_text}'")
-    except Exception as e:
-        logger.error(f"Error saving command file for {chat_id} to {command_file_path}: {e}", exc_info=True)
-        reply_text = "❌ Error: Could not save your command due to a server-side issue."
-        bot.reply_to(message, reply_text)
-        logger.error(f"Sent file save error reply to {chat_id}. Reply: '{reply_text}'")
-
-    except Exception as e:
-        # Catch-all for any other unhandled exception during message processing
-        logger.critical(
-            f"Unhandled exception in handle_message for chat_id {chat_id}. Command: '{command_text}'. Error: {e}",
-            exc_info=True
-        )
-        reply_text = "🤖 Ой, что-то пошло не так на моей стороне. Я уже разбираюсь. Попробуйте свой запрос чуть позже."
-        try:
-            bot.reply_to(message, reply_text)
-            logger.info(f"Sent generic error reply to {chat_id} due to unhandled exception. Reply: '{reply_text}'")
-        except Exception as reply_e:
-            # If even replying fails, log that too.
-            logger.error(f"Failed to send generic error reply to {chat_id}. Error during reply: {reply_e}", exc_info=True)
-
-def main():
-    """Starts the KatanaBot."""
-    logger.info("🚀 KatanaBot starting up...")
-    logger.info("Polling mode: continuous (none_stop=True)")
-    try:
-        # none_stop=True ensures the bot keeps running even after some errors,
-        # attempting to reconnect and continue polling.
-        bot.polling(none_stop=True)
-    except Exception as e:
-        # This will typically catch errors if none_stop=False, or critical setup/library errors.
-        # With none_stop=True, most operational errors are handled internally by telebot or should be caught in handlers.
-        logger.critical(f"Bot polling loop exited critically: {e}", exc_info=True)
-    finally:
-        logger.info("Bot stopped.")
+    logger.info(f"Received message from chat_id {message.chat.id} (user: {message.from_user.username}): {message.text}")
+    handle_message_impl(message)
 
 if __name__ == '__main__':
-    main()
+    logger.info("Bot starting...")
+    bot.polling()
+    logger.info("Bot stopped.")
