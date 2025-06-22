@@ -90,33 +90,90 @@ def analyze_text(text, current_context):
                  intents.append({"name": "fallback_after_clarification_fail", "confidence": 1.0})
 
 
-    # --- Логика Fallback ---
+    # --- Тематические фреймы (начальная реализация) ---
+    active_frames = []
+    # Пример: фрейм для погоды
+    # TODO: Развивать логику фреймов, их активации и обновления на основе контекста
+    if is_get_weather_intent or current_context.get("last_recognized_intent") == "clarify_city_for_weather":
+        weather_frame = {
+            "name": "weather_inquiry_frame",
+            "slots": {
+                "city": entities.get("city"),
+                "date": entities.get("date", "today") # Пример, date не извлекается пока
+            },
+            "status": "incomplete" # Статус будет обновляться далее или в response_generator
+        }
+        if weather_frame["slots"]["city"]:
+            weather_frame["status"] = "ready_to_fulfill" # Если есть город, можно пробовать выполнить
+
+        # Если предыдущий интент был уточнение, а теперь есть город, то фрейм 'complete'
+        if current_context.get("last_recognized_intent") == "clarify_city_for_weather" and entities.get("city"):
+            weather_frame["status"] = "completed_after_clarification"
+
+        active_frames.append(weather_frame)
+
+    # --- Логика Fallback (улучшенная) ---
+    fallback_type = None
     if not intents: # Если вообще никаких интентов не нашлось
-        intents.append({"name": "fallback", "confidence": 1.0})
-    # Если интенты есть, но среди них нет get_weather, а clarify_city_for_weather остался (маловероятно после логики выше, но как подстраховка)
-    elif not any(i["name"] == "get_weather" for i in intents) and any(i["name"] == "clarify_city_for_weather" for i in intents) and not entities.get("city"):
-         # Если у нас только clarify_city_for_weather, но города нет, это странно, должен быть fallback
-         pass # Логика выше должна была это покрыть, оставив clarify_city_for_weather или заменив на fallback_after_clarification_fail
+        # Проверяем, есть ли сущности, чтобы предложить уточняющий fallback
+        if entities:
+            intents.append({"name": "fallback_clarification_needed", "confidence": 0.7})
+            fallback_type = "clarification_needed"
+        else:
+            intents.append({"name": "fallback_general", "confidence": 1.0})
+            fallback_type = "general"
+
+    # Если интенты есть, но это только clarify_city_for_weather и город всё ещё неясен
+    # (это состояние должно было привести к fallback_after_clarification_fail ранее, но как доп. проверка)
+    # Эта логика должна применяться только если clarify_city_for_weather НЕ был только что добавлен
+    # в результате get_weather без города.
+    # Вместо этого, такая проверка уже есть выше в блоке:
+    # elif current_context.get("last_recognized_intent") == "clarify_city_for_weather":
+    #     if entities.get("city"): ...
+    #     else: intents.append({"name": "fallback_after_clarification_fail", ...})
+    # Поэтому этот блок ниже можно упростить или удалить, если он дублирует.
+    # Пока что закомментируем его, чтобы восстановить правильную логику clarify_city_for_weather.
+
+    # is_clarify_only_without_city = len(intents) == 1 and \
+    #                                intents[0]["name"] == "clarify_city_for_weather" and \
+    #                                not entities.get("city") and \
+    #                                current_context.get("last_recognized_intent") == "clarify_city_for_weather" # Добавлено условие на предыдущий контекст
+    # if is_clarify_only_without_city:
+    #     # Переопределяем на fallback_after_clarification_fail если он еще не там
+    #     if not any(i["name"] == "fallback_after_clarification_fail" for i in intents):
+    #         intents = [i for i in intents if i["name"] != "clarify_city_for_weather"]
+    #         intents.append({"name": "fallback_after_clarification_fail", "confidence": 1.0})
+    #         fallback_type = "clarification_failed"
 
 
     # Сортировка намерений по уверенности (важно для выбора основного намерения)
     intents.sort(key=lambda x: x["confidence"], reverse=True)
 
     # Убедимся, что если есть clarify_city_for_weather, то get_weather удален, если город не определен
-    has_clarify = any(i["name"] == "clarify_city_for_weather" for i in intents)
-    if has_clarify and not entities.get("city"):
+    # Эта логика уже есть выше, но можно сделать финальную проверку
+    has_clarify_intent = any(i["name"] == "clarify_city_for_weather" for i in intents)
+    if has_clarify_intent and not entities.get("city"):
         intents = [i for i in intents if i["name"] != "get_weather"]
-        # Если после удаления get_weather и при наличии clarify_city остался только он, а других интентов нет, то все ок.
-        # Если были другие интенты, они остаются.
-        # Если clarify_city - единственный интент, это нормально.
+        # Если clarify_city_for_weather остался единственным и без города,
+        # это должно было быть обработано как fallback_after_clarification_fail или clarify_city_for_weather
+        # Логика выше должна это покрывать.
 
-    # Если после всех манипуляций список интентов пуст (маловероятно), добавляем fallback
+    # Если после всех манипуляций список интентов пуст (маловероятно), добавляем общий fallback
     if not intents:
-        intents.append({"name": "fallback", "confidence": 1.0})
+        intents.append({"name": "fallback_general", "confidence": 1.0})
+        if not fallback_type: fallback_type = "general"
+
+    # Если есть интенты, но нет fallback_type, а первый интент - это один из fallback'ов, установим тип
+    if intents and not fallback_type:
+        if intents[0]["name"] == "fallback_general": fallback_type = "general"
+        elif intents[0]["name"] == "fallback_clarification_needed": fallback_type = "clarification_needed"
+        elif intents[0]["name"] == "fallback_after_clarification_fail": fallback_type = "clarification_failed"
 
 
     return {
         "text": text,
         "intents": intents,
         "entities": entities,
+        "active_frames": active_frames,
+        "fallback_type": fallback_type
     }
