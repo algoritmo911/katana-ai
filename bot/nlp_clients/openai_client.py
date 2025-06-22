@@ -10,27 +10,33 @@ from .base_nlp_client import (
 # OpenAI Specific Exceptions
 class OpenAIClientError(NLPServiceError):
     """Base exception for all OpenAI client errors."""
-    pass
+    def __init__(self, user_message: str = "Произошла ошибка при обращении к OpenAI.", original_error: Exception | None = None):
+        super().__init__(user_message, original_error)
 
 class OpenAIAPIError(OpenAIClientError, NLPAPIError):
     """Generic OpenAI API error."""
-    pass
+    def __init__(self, user_message: str = "Произошла непредвиденная ошибка API OpenAI.", original_error: Exception | None = None):
+        NLPAPIError.__init__(self, user_message=user_message, original_error=original_error)
 
 class OpenAIAuthenticationError(OpenAIClientError, NLPAuthenticationError):
     """Raised for OpenAI authentication failures."""
-    pass
+    def __init__(self, user_message: str = "Ошибка аутентификации с OpenAI. Проверьте ваш API-ключ.", original_error: Exception | None = None):
+        NLPAuthenticationError.__init__(self, user_message=user_message, original_error=original_error)
 
 class OpenAIRateLimitError(OpenAIClientError, NLPRateLimitError):
     """Raised for OpenAI rate limit errors."""
-    pass
+    def __init__(self, user_message: str = "Сервис OpenAI временно перегружен (лимит запросов). Попробуйте позже.", original_error: Exception | None = None):
+        NLPRateLimitError.__init__(self, user_message=user_message, original_error=original_error)
 
 class OpenAIInvalidRequestError(OpenAIClientError, NLPBadRequestError):
     """Raised for invalid requests to the OpenAI API."""
-    pass
+    def __init__(self, user_message: str = "Некорректный запрос к OpenAI. Пожалуйста, проверьте данные.", original_error: Exception | None = None):
+        NLPBadRequestError.__init__(self, user_message=user_message, original_error=original_error)
 
 class OpenAIInternalServerError(OpenAIClientError, NLPInternalServerError):
     """Raised for OpenAI internal server errors."""
-    pass
+    def __init__(self, user_message: str = "Внутренняя ошибка сервера OpenAI. Попробуйте позже.", original_error: Exception | None = None):
+        NLPInternalServerError.__init__(self, user_message=user_message, original_error=original_error)
 
 
 class OpenAIClient:
