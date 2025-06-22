@@ -7,25 +7,53 @@ and exchange command/response data by adding tasks and polling for their results
 import subprocess
 import json
 import logging
+from logging.handlers import RotatingFileHandler # Import for log rotation
 import os
 import sys # For sys.executable
 import time
 import re # For parsing task ID
 
-# Configure a logger for this module
-logger = logging.getLogger(__name__)
-# Basic configuration for the logger if this module is run standalone for testing
-if not logger.handlers:
-    logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s')
-
-# Define the path to the katana_agent.py script
-# This assumes cli_integration.py is in the same directory as katana_agent.py
-_KATANA_AGENT_DIR = os.path.dirname(__file__)
+# Define paths
+_KATANA_AGENT_DIR = os.path.dirname(__file__) # Assumes this script is in alg911.catana-ai
+LOG_DIR = os.path.join(_KATANA_AGENT_DIR, "logs")
+BACKEND_LOG_FILE = os.path.join(LOG_DIR, "backend.log")
 KATANA_AGENT_SCRIPT_PATH = os.path.join(_KATANA_AGENT_DIR, "katana_agent.py")
 COMMANDS_FILE_PATH = os.path.join(_KATANA_AGENT_DIR, "katana.commands.json")
 
 DEFAULT_POLL_TIMEOUT = 30  # seconds
 DEFAULT_POLL_INTERVAL = 0.5  # seconds
+
+# --- Centralized Logger Setup ---
+def setup_backend_logger(logger_name, level=logging.INFO):
+    """Sets up a logger that writes to backend.log with rotation."""
+    logger_instance = logging.getLogger(logger_name)
+    logger_instance.setLevel(level)
+
+    # Prevent adding handlers multiple times if function is called repeatedly
+    if not logger_instance.handlers:
+        os.makedirs(LOG_DIR, exist_ok=True) # Ensure log directory exists
+
+        # Rotating File Handler for backend.log
+        file_handler = RotatingFileHandler(
+            BACKEND_LOG_FILE,
+            maxBytes=5*1024*1024,  # 5 MB
+            backupCount=3,
+            encoding='utf-8'
+        )
+        formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] [%(name)s] [%(module)s.%(funcName)s:%(lineno)d] %(message)s',
+                                      datefmt='%Y-%m-%dT%H:%M:%S%z')
+        file_handler.setFormatter(formatter)
+        logger_instance.addHandler(file_handler)
+
+        # Optional: Add a StreamHandler for console output during development/debugging
+        # console_handler = logging.StreamHandler(sys.stdout)
+        # console_handler.setFormatter(formatter)
+        # logger_instance.addHandler(console_handler)
+
+    return logger_instance
+
+# Configure logger for this module using the centralized setup
+logger = setup_backend_logger(__name__, logging.DEBUG)
 
 def _load_json_file(file_path: str, default_value=None):
     """

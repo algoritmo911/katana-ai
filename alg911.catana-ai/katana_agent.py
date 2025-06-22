@@ -1,7 +1,8 @@
 import json
 import os
 import datetime
-import logging # New import
+import logging
+from logging.handlers import RotatingFileHandler # Import for log rotation
 import requests # For sending messages to Telegram via n8n webhook
 import sys # For sys.argv and sys.exit
 # import time # Not used
@@ -34,21 +35,59 @@ console_handler.setFormatter(console_formatter)
 katana_logger.addHandler(console_handler)
 
 # File Handler
-# Ensure log directory exists
-log_dir = os.path.dirname(EVENTS_LOG_FILE)
-if log_dir and not os.path.exists(log_dir):
-    os.makedirs(log_dir, exist_ok=True)
+# Ensure log directory exists for EVENTS_LOG_FILE
+events_log_dir = os.path.dirname(EVENTS_LOG_FILE)
+if events_log_dir and not os.path.exists(events_log_dir):
+    os.makedirs(events_log_dir, exist_ok=True)
 
-file_handler = logging.FileHandler(EVENTS_LOG_FILE)
-file_handler.setLevel(logging.DEBUG)
-file_formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] [%(name)s] [%(module)s.%(funcName)s:%(lineno)d] %(message)s', datefmt='%Y-%m-%dT%H:%M:%S%z')
-file_handler.setFormatter(file_formatter)
-katana_logger.addHandler(file_handler)
+# File Handler for katana_events.log with rotation
+katana_file_formatter = logging.Formatter(
+    '[%(asctime)s] [%(levelname)s] [%(name)s] [%(module)s.%(funcName)s:%(lineno)d] %(message)s',
+    datefmt='%Y-%m-%dT%H:%M:%S%z'
+)
+katana_events_rfh = RotatingFileHandler( # Renamed variable for clarity
+    EVENTS_LOG_FILE,
+    maxBytes=10*1024*1024,  # 10 MB
+    backupCount=5,
+    encoding='utf-8'
+)
+katana_events_rfh.setLevel(logging.DEBUG)
+katana_events_rfh.setFormatter(katana_file_formatter)
+katana_logger.addHandler(katana_events_rfh)
+
+# --- Specific Loggers Setup ---
+LOGS_DIR = os.path.join(SCRIPT_DIR, "logs")
+os.makedirs(LOGS_DIR, exist_ok=True) # Ensure logs directory exists
+
+CLI_LOG_FILE = os.path.join(LOGS_DIR, "cli.log")
+TELEGRAM_PROCESSING_LOG_FILE = os.path.join(LOGS_DIR, "telegram.log")
+
+# CLI Activities Logger
+cli_activities_logger = logging.getLogger("KatanaCLIActivities")
+cli_activities_logger.setLevel(logging.INFO)
+cli_formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+cli_rfh = RotatingFileHandler(CLI_LOG_FILE, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')
+cli_rfh.setFormatter(cli_formatter)
+cli_activities_logger.addHandler(cli_rfh)
+cli_activities_logger.propagate = False
+
+# Telegram Processing Logger
+telegram_processing_logger = logging.getLogger("KatanaTelegramProcessing")
+telegram_processing_logger.setLevel(logging.INFO)
+telegram_formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+telegram_rfh = RotatingFileHandler(TELEGRAM_PROCESSING_LOG_FILE, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')
+telegram_rfh.setFormatter(telegram_formatter)
+telegram_processing_logger.addHandler(telegram_rfh)
+telegram_processing_logger.propagate = False
+
 
 # --- KatanaCLI Class ---
 class KatanaCLI:
     def __init__(self):
-        self.logger = katana_logger # Use the globally configured logger
+        # self.logger is still katana_logger for general internal operations if not overridden
+        self.logger = katana_logger
+        self.cli_logger = cli_activities_logger # Specific logger for CLI actions
+        self.telegram_logger = telegram_processing_logger # Specific for Telegram processing
         self.agent_memory_state = {} # Instance variable for memory state
         # File paths remain global constants, accessible directly
 
@@ -223,18 +262,22 @@ class KatanaCLI:
 
     # --- CLI History and Parsing ---
     def add_to_history(self, command_string):
+        # Logging for this action is specific to CLI context
+        self.cli_logger.info(f"Adding to command history: '{command_string[:100]}...'") # Log snippet
         history = self.load_history()
         if not isinstance(history, list): # Ensure history is a list
-            self.logger.warning("History file was not a list. Re-initializing history.")
+            self.logger.warning("History file was not a list. Re-initializing history.") # General logger for file issue
             history = []
         history_entry = {
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "command_string": command_string
         }
         history.append(history_entry)
-        self.save_history(history)
+        self.save_history(history) # save_history uses self.logger (katana_logger)
 
     def parse_command(self, raw_input_string):
+        # This is a utility, typically no logging needed here directly.
+        # Caller can log the raw_input_string if desired.
         parts = raw_input_string.strip().split(maxsplit=1)
         command = parts[0] if parts else ""
         args = parts[1].split() if len(parts) > 1 else []
@@ -309,6 +352,7 @@ class KatanaCLI:
         `params` is the original JSON payload from the Telegram webhook.
         """
         if source != "task":
+            self.telegram_logger.error(f"process_telegram_message called incorrectly with source='{source}'")
             return False, "process_telegram_message can only be called as a task."
 
         user_id = params.get("user_id", "unknown_user")
@@ -316,64 +360,80 @@ class KatanaCLI:
         text = params.get("text", "").strip()
         original_command_id = params.get("original_command_id", "unknown_original_cmd") # From webhook
 
-        self.logger.info(f"Processing Telegram message task: user_id={user_id}, chat_id={chat_id}, text='{text}', original_cmd_id='{original_command_id}'")
+        self.telegram_logger.info(f"Processing Telegram message: user_id={user_id}, chat_id={chat_id}, text='{text}', original_cmd_id='{original_command_id}'")
 
         if not chat_id or chat_id == "unknown_chat":
+            self.telegram_logger.error("Cannot process Telegram message: chat_id is missing or invalid.")
             return False, "Cannot process Telegram message without a valid chat_id."
 
+        # Delegate to specific handlers or use if/elif here
         if text.startswith("/status"):
-            all_tasks = self.load_commands()
+            # Get general status (pending tasks) using katana_logger or a general method
+            all_tasks = self.load_commands() # Uses katana_logger for file ops
             pending_tasks_count = 0
             if isinstance(all_tasks, list):
                 pending_tasks_count = sum(1 for task in all_tasks if isinstance(task, dict) and task.get("status") == "pending")
 
-            status_message = f"Katana Agent is running.\nPending tasks: {pending_tasks_count}"
-            self.send_telegram_message(chat_id, status_message)
-            return True, f"Status request processed. Response placeholder logged for chat_id {chat_id}."
+            # Get service status using its specific command execution (which logs to cli_activities_logger)
+            service_status_success, service_status_msg = self._execute_status_katana_command(params={}, source="task") # source="task" here as it's part of a task
+
+            combined_message = f"Katana Agent is running.\nPending tasks: {pending_tasks_count}\n\n{service_status_msg}"
+            self.send_telegram_message(chat_id, combined_message) # send_telegram_message uses katana_logger for send attempt
+            self.telegram_logger.info(f"Sent combined status to chat_id {chat_id}.")
+            return True, f"Status request processed for chat_id {chat_id}."
 
         elif text.startswith("/echo_tg "):
             echo_response = text[len("/echo_tg "):].strip()
             if not echo_response:
                 echo_response = "You said /echo_tg but provided nothing to echo!"
             self.send_telegram_message(chat_id, echo_response)
-            return True, f"Echo request processed. Response placeholder logged for chat_id {chat_id}."
+            self.telegram_logger.info(f"Sent echo response to chat_id {chat_id}.")
+            return True, f"Echo request processed for chat_id {chat_id}."
+
+        elif text.startswith("/start_katana"):
+            success, msg = self._execute_start_katana_command(params={}, source="task") # source="task"
+            self.send_telegram_message(chat_id, msg)
+            self.telegram_logger.info(f"Processed /start_katana for chat_id {chat_id}. Result: {msg}")
+            return success, f"Processed /start_katana for Telegram. Result: {msg}"
+
+        elif text.startswith("/stop_katana"):
+            success, msg = self._execute_stop_katana_command(params={}, source="task") # source="task"
+            self.send_telegram_message(chat_id, msg)
+            self.telegram_logger.info(f"Processed /stop_katana for chat_id {chat_id}. Result: {msg}")
+            return success, f"Processed /stop_katana for Telegram. Result: {msg}"
 
         else:
-            unknown_cmd_message = "Sorry, I didn't understand that command. Try /status or /echo_tg <message>."
+            unknown_cmd_message = "Sorry, I didn't understand that command. Try /status, /echo_tg <message>, /start_katana, or /stop_katana."
             self.send_telegram_message(chat_id, unknown_cmd_message)
-            self.logger.info(f"Unknown Telegram command from chat_id {chat_id}: '{text}'")
-            return True, "Unknown Telegram command processed."
+            self.telegram_logger.info(f"Unknown Telegram command from chat_id {chat_id}: '{text}'")
+            return True, "Unknown Telegram command processed." # Task itself completed by replying
 
     # --- System Status Command Execution Methods ---
-    def _execute_start_katana_command(self, params, source="cli") -> tuple[bool, str]:
-        """Handles the start_katana CLI command."""
-        # Params are ignored for this command
-        self.logger.info("Executing start_katana command.")
+    # These methods perform system-level actions, so they log to cli_activities_logger
+    # as if they were direct CLI invocations of system commands.
+    def _execute_start_katana_command(self, params, source="task_or_cli") -> tuple[bool, str]: # params typically ignored
+        self.cli_logger.info(f"Executing start_katana command (source: {source}).")
         self.agent_memory_state['katana_service_status'] = "running"
         self.agent_memory_state['katana_service_last_start_time'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        self.save_memory()
+        self.save_memory() # Uses katana_logger for file op
         message = "Katana service started successfully."
-        if source == "cli":
+        if source == "cli": # Only print to console if called directly from CLI
             print(message)
         return True, message
 
-    def _execute_stop_katana_command(self, params, source="cli") -> tuple[bool, str]:
-        """Handles the stop_katana CLI command."""
-        # Params are ignored for this command
-        self.logger.info("Executing stop_katana command.")
+    def _execute_stop_katana_command(self, params, source="task_or_cli") -> tuple[bool, str]: # params typically ignored
+        self.cli_logger.info(f"Executing stop_katana command (source: {source}).")
         self.agent_memory_state['katana_service_status'] = "stopped"
         self.agent_memory_state['katana_service_last_stop_time'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        self.save_memory()
+        self.save_memory() # Uses katana_logger
         message = "Katana service stopped successfully."
-        if source == "cli":
+        if source == "cli": # Only print to console if called directly from CLI
             print(message)
         return True, message
 
-    def _execute_status_katana_command(self, params, source="cli") -> tuple[bool, str]:
-        """Handles the status_katana CLI command."""
-        # Params are ignored for this command
-        self.logger.info("Executing status_katana command.")
-        self.load_memory() # Ensure we have the latest status from file
+    def _execute_status_katana_command(self, params, source="task_or_cli") -> tuple[bool, str]: # params typically ignored
+        self.cli_logger.info(f"Executing status_katana command (source: {source}).")
+        self.load_memory() # Ensure we have the latest status from file (uses katana_logger)
 
         status = self.agent_memory_state.get('katana_service_status', "unknown")
         last_start = self.agent_memory_state.get('katana_service_last_start_time', "N/A")
@@ -384,7 +444,7 @@ class KatanaCLI:
             f"Last Start Time: {last_start}\n"
             f"Last Stop Time: {last_stop}"
         )
-        if source == "cli":
+        if source == "cli": # Only print to console if called directly from CLI
             print(message)
         return True, message
 
@@ -394,29 +454,31 @@ class KatanaCLI:
         Handles the 'echo' command (CLI or task).
         Returns: (success: bool, message: str | None)
         """
-        self.logger.debug(f"Executing echo command with params: {params} from source: {source}")
+        logger_to_use = self.cli_logger if source == "cli" else self.logger # task-based echo is general
+        logger_to_use.info(f"Executing echo command with params: {params} from source: {source}")
         message = None
         if source == "cli": # params is a list of strings
             message = " ".join(params)
-            print(message)
+            print(message) # Direct output for CLI
         elif source == "task": # params is a dict
             message = params.get("text_to_echo", "No text_to_echo parameter provided in task.")
-            # For tasks, we don't print to console here, it's returned as result.
+            # For tasks, the message is returned, not printed here.
         else:
+            self.logger.error(f"Unknown source '{source}' for echo command.")
             return False, "Unknown source for echo command."
         return True, message
 
     def _execute_memdump_command(self, params, source="cli"):
         """
-        Handles the 'memdump' command.
+        Handles the 'memdump' command. (Primarily CLI)
         Returns: (success: bool, message: str | None)
         """
-        # Params are ignored for memdump for now
-        self.logger.debug(f"Executing memdump command from source: {source}")
+        # Params are ignored
+        self.cli_logger.info(f"Executing memdump command (source: {source}).")
         mem_state_json = json.dumps(self.agent_memory_state, indent=2)
         if source == "cli":
             print(mem_state_json)
-        return True, mem_state_json
+        return True, mem_state_json # Return for tasks or if needed by caller
 
     def _execute_exit_command(self, params, source="cli"):
         """
@@ -425,7 +487,7 @@ class KatanaCLI:
         """
         # Params are ignored
         if source == "cli":
-            self.logger.info("Exit command received via CLI. Terminating shell.")
+            self.cli_logger.info("Exit command received via CLI. Terminating shell.")
             return False, "Exiting KatanaCLI." # False for success to signal exit
         else:
             self.logger.warning("Exit command called as a task, which is not supported. Ignoring.")
@@ -461,15 +523,15 @@ class KatanaCLI:
             task_id = self.add_task(action=action_name, parameters=parameters, origin="cli_addtask")
             # Make the printed output easily parsable for internal_task_id
             cli_output_msg = f"CREATED_TASK_ID: {task_id}"
-            # The log message can be more verbose
-            log_msg = f"Task {task_id} for action '{action_name}' added via CLI."
-            self.logger.info(log_msg)
+            # The log message for the CLI action itself
+            log_msg = f"Task {task_id} for action '{action_name}' added via CLI's addtask command."
+            self.cli_logger.info(log_msg) # Log to cli.log
             # Print only the parsable part to stdout for subprocess communication
             print(cli_output_msg)
             return True, cli_output_msg # Return the parsable message as well
         except Exception as e:
             err_msg = f"Failed to add task: {e}"
-            self.logger.error(err_msg)
+            self.cli_logger.error(f"Error in _execute_addtask_command: {err_msg}") # Log error to cli.log
             print(err_msg)
             return False, err_msg
 
@@ -479,23 +541,30 @@ class KatanaCLI:
         Manages parameter adaptation based on source (CLI vs Task).
         Returns: (success_status: bool, result_message: str | None)
         """
-        self.logger.info(f"Attempting to dispatch command: '{command_name}' with params: {params} from source: {source}")
+        logger_to_use = self.logger # Default to general logger
+        if source == "cli":
+            logger_to_use = self.cli_logger
+        # For source=="task", specific task type handlers (like _execute_process_telegram_message)
+        # will use their own dedicated loggers (e.g., self.telegram_logger).
+        # _dispatch_command_execution itself logs the attempt to the chosen logger.
+
+        logger_to_use.info(f"Attempting to dispatch command: '{command_name}' with params: {params} from source: {source}")
 
         command_handler = self.commands.get(command_name)
 
         if command_handler:
             try:
-                # For CLI, params is usually a list of strings.
-                # For tasks, params is a dictionary.
-                # Handlers are expected to manage this based on the 'source' argument.
+                # Pass the source to the handler.
+                # Handlers are now responsible for using the correct logger based on source if needed,
+                # or this dispatch can choose. For now, handlers get the source.
                 success, result_message = command_handler(params, source=source)
                 return success, result_message
             except Exception as e:
-                self.logger.error(f"Exception during execution of command '{command_name}': {e}", exc_info=True)
+                logger_to_use.error(f"Exception during execution of command '{command_name}': {e}", exc_info=True)
                 return False, f"Error executing command '{command_name}': {str(e)}"
         else:
-            self.logger.warning(f"Unknown command: {command_name}")
-            if source == "cli":
+            logger_to_use.warning(f"Unknown command: {command_name}")
+            if source == "cli": # Also print to console for CLI unknown command
                 print(f"Unknown command: {command_name}")
             return False, f"Unknown command: {command_name}"
 

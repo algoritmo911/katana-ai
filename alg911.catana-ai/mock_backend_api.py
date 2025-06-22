@@ -7,19 +7,27 @@ import threading # Required for background task with 'threading' async_mode
 from collections import deque # For efficiently getting last N lines
 import re # For parsing log lines
 
-# Attempt to import send_command_to_cli and KATANA_AGENT_SCRIPT_PATH
+# Attempt to import from cli_integration
 try:
-    from cli_integration import send_command_to_cli, KATANA_AGENT_SCRIPT_PATH
+    from cli_integration import send_command_to_cli, KATANA_AGENT_SCRIPT_PATH, setup_backend_logger
+    # Use the centralized logger setup from cli_integration.py
+    logger = setup_backend_logger(__name__, logging.INFO)
 except ImportError:
-    logging.warning("Could not import from cli_integration. Using placeholder for send_command_to_cli.")
-    KATANA_AGENT_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "katana_agent.py") # Best guess
-    def send_command_to_cli(action, parameters):
-        logging.warning("Using placeholder send_command_to_cli due to import error.")
-        return {"status": "error", "message": "cli_integration module not found or placeholder in use."}
+    # Fallback basic logging if cli_integration is not found (e.g. during initial setup or if standalone)
+    logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s')
+    logger = logging.getLogger(__name__)
+    logger.warning("Could not import setup_backend_logger from cli_integration. Using basicConfig for logging.")
+    # Define KATANA_AGENT_SCRIPT_PATH if it's not imported, for _KATANA_AGENT_DIR usage below
+    if 'KATANA_AGENT_SCRIPT_PATH' not in globals():
+        KATANA_AGENT_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "katana_agent.py") # Best guess
+    def send_command_to_cli(action, parameters): # Placeholder if import failed
+        logger.warning("Using placeholder send_command_to_cli due to import error from cli_integration.")
+        return {"status": "error", "message": "cli_integration.send_command_to_cli not available."}
 
-# Configure basic logging for the Flask app and other modules used
-logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s')
-logger = logging.getLogger(__name__)
+# Ensure KATANA_AGENT_SCRIPT_PATH is defined for _KATANA_AGENT_DIR usage, even if cli_integration failed to import fully
+if 'KATANA_AGENT_SCRIPT_PATH' not in globals():
+    logger.error("KATANA_AGENT_SCRIPT_PATH is not defined. This should not happen if cli_integration was imported.")
+    KATANA_AGENT_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "katana_agent.py") # Fallback path
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'your_default_secret_key_here!')
