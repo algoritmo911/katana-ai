@@ -1,0 +1,28 @@
+# Configuration for the NLP and AI service connector project
+
+# Active NLP provider.
+# This should correspond to the module name in nlp_providers directory
+# (e.g., 'dummy_provider' for nlp_providers/dummy_provider.py)
+# and the class name (e.g., DummyProvider).
+active_nlp_provider: "dummy_provider.DummyProvider"
+
+# Provider-specific configurations
+# Each provider can have its own section here.
+# For example, if you have 'api_key_provider.APIKeyProvider':
+# api_key_provider:
+#   api_key: "YOUR_API_KEY_HERE"
+#   endpoint: "https://api.example.com/nlp"
+
+dummy_provider:
+  # No specific settings needed for the dummy provider
+  # This section is just for illustration
+  mode: "test"
+
+echo_provider:
+  # No specific settings needed for the echo provider
+  prefix: "Echo: "
+
+# Future AI service configurations can be added here
+# active_ai_service: "some_ai_service.SomeAIService"
+# some_ai_service:
+#   setting1: "value1"
