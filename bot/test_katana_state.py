@@ -2,6 +2,7 @@ import unittest
 import json
 from pathlib import Path
 import os
+import shutil # For rmtree
 import time # For unique file names if needed, or just cleanup
 
 from bot.katana_state import KatanaState, ChatHistory
@@ -126,6 +127,62 @@ class TestKatanaState(unittest.TestCase):
 
         if corrupted_file.exists(): # cleanup
             os.remove(corrupted_file)
+
+    def test_backup_state(self):
+        self.state.add_chat_message("chat1", "user", "Backup test msg 1")
+        self.state.update_user_setting("chat1", "backup_pref", True)
+        self.state.update_global_metric("backups_run", 0)
+
+        backup_dir = Path("test_backups_temp")
+        backup_file = backup_dir / "katana_backup_test.json"
+
+        # Ensure clean backup target
+        if backup_file.exists():
+            os.remove(backup_file)
+        if backup_dir.exists():
+            shutil.rmtree(backup_dir) # Remove dir if it exists from previous failed run
+
+        self.state.backup_state(backup_file)
+        self.assertTrue(backup_file.exists())
+
+        with open(backup_file, "r") as f:
+            backup_data = json.load(f)
+
+        self.assertIn("chat1", backup_data["chat_histories"])
+        self.assertEqual(len(backup_data["chat_histories"]["chat1"]["messages"]), 1)
+        self.assertEqual(backup_data["chat_histories"]["chat1"]["messages"][0]["text"], "Backup test msg 1")
+        self.assertTrue(backup_data["user_settings"]["chat1"]["backup_pref"])
+        self.assertEqual(backup_data["global_metrics"]["backups_run"], 0)
+
+        # Verify content matches what save_state would produce (by loading it back)
+        # First, save current state to main file
+        self.state.save_state()
+        with open(self.test_state_file, "r") as f:
+            main_data = json.load(f)
+
+        self.assertEqual(backup_data, main_data, "Backup data should match main state data.")
+
+        # Cleanup backup
+        if backup_file.exists():
+            os.remove(backup_file)
+        if backup_dir.exists():
+            shutil.rmtree(backup_dir)
+
+    def test_backup_state_creates_directory(self):
+        backup_dir = Path("test_backups_temp_create_dir/sub_dir")
+        backup_file = backup_dir / "another_backup.json"
+
+        if backup_dir.exists(): # Cleanup from previous runs
+            shutil.rmtree(backup_dir.parent)
+
+        self.assertFalse(backup_dir.exists())
+        self.state.backup_state(backup_file)
+        self.assertTrue(backup_file.exists())
+
+        # Cleanup
+        if backup_dir.parent.exists():
+            shutil.rmtree(backup_dir.parent)
+
 
 if __name__ == '__main__':
     unittest.main()

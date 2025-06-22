@@ -2,7 +2,8 @@ import telebot
 import json
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone # Added timezone
+from typing import Dict, List, Any # For type hinting
 
 # Получаем токен из переменной окружения
 API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN') # Removed default 'YOUR_API_TOKEN' to make check more explicit
@@ -45,6 +46,13 @@ from .katana_state import KatanaState # Relative import for same package
 katana_state = KatanaState()
 # --- End Katana State Initialization ---
 
+# --- Backup Configuration ---
+BACKUP_DIR = Path("katana_backups")
+BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+BACKUP_INTERVAL_MESSAGES = 100 # Backup every 100 processed messages
+message_counter_for_backup = 0
+# --- End Backup Configuration ---
+
 def log_local_bot_event(message):
     """Вывод лога события в консоль."""
     print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
@@ -65,30 +73,117 @@ def handle_mind_clearing(command_data, chat_id: str): # Ensure chat_id is consis
     katana_state.clear_chat_history(chat_id)
     # The reply text for this will be handled in the main handle_message function after this call.
 
-def get_katana_response(chat_id: str, command_data: dict, current_history_messages: list) -> str:
+# --- NLP Provider Integration ---
+import openai # Import the openai library
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+# Placeholder for actual OpenAI client initialization if needed globally
+# Example:
+# if OPENAI_API_KEY:
+#    openai_client = openai.OpenAI(api_key=OPENAI_API_KEY) # New SDK style
+# else:
+#    openai_client = None
+
+def format_history_for_openai(chat_messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    formatted_messages = []
+    for msg in chat_messages:
+        role = "assistant" if msg["sender"] == "katana" else msg["sender"] # user, system_event
+        if role not in ["user", "assistant", "system"]: # Filter out system_event or adapt if needed
+            if role == "system_event": # Optional: treat system events as system messages or ignore
+                # formatted_messages.append({"role": "system", "content": f"System Event: {msg['text']}"})
+                continue
+            else: # Ignore other unknown roles for now
+                continue
+        formatted_messages.append({"role": role, "content": msg["text"]})
+    return formatted_messages
+
+def get_openai_chat_response(user_prompt: str, history_messages: List[Dict[str, Any]]) -> str:
+    if not OPENAI_API_KEY:
+        return "🤖 OpenAI API key not configured. Please ask an admin to set it up."
+
+    try:
+        # Initialize the client inside the function, or use a global client if preferred and initialized safely
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+        messages_for_api = format_history_for_openai(history_messages)
+        messages_for_api.append({"role": "user", "content": user_prompt})
+
+        # Limit history length to avoid overly long requests / high token usage for now
+        # e.g., keep last 10 messages (5 user, 5 assistant turns) + system prompt if any
+        MAX_HISTORY_MESSAGES_FOR_API = 20 # Keep this configurable or adjust as needed
+        if len(messages_for_api) > MAX_HISTORY_MESSAGES_FOR_API:
+            messages_for_api = messages_for_api[-MAX_HISTORY_MESSAGES_FOR_API:]
+
+
+        log_local_bot_event(f"Calling OpenAI with {len(messages_for_api)} messages. Prompt: {user_prompt[:50]}...")
+
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages_for_api
+        )
+
+        ai_response = response.choices[0].message.content
+        log_local_bot_event(f"OpenAI response received: {ai_response[:50]}...")
+        return ai_response.strip() if ai_response else "🤖 OpenAI returned an empty response."
+
+    except openai.APIConnectionError as e:
+        log_local_bot_event(f"OpenAI APIConnectionError: {e}")
+        return "🤖 Sorry, I couldn't connect to OpenAI. Please try again later."
+    except openai.RateLimitError as e:
+        log_local_bot_event(f"OpenAI RateLimitError: {e}")
+        return "🤖 I'm a bit overwhelmed with requests to OpenAI right now. Please try again in a moment."
+    except openai.APIStatusError as e: # General API error
+        log_local_bot_event(f"OpenAI APIStatusError: Status {e.status_code}, Response: {e.response}")
+        return f"🤖 Encountered an issue with OpenAI (Status {e.status_code}). Please try again."
+    except Exception as e:
+        log_local_bot_event(f"An unexpected error occurred while calling OpenAI: {e}")
+        return "🤖 An unexpected error occurred while trying to reach OpenAI."
+
+
+def get_anthropic_chat_response(user_prompt: str, history_messages: List[Dict[str, Any]]) -> str:
+    if not ANTHROPIC_API_KEY:
+        return "🤖 Anthropic API key not configured. Please ask an admin to set it up."
+    # Actual Anthropic API call will be implemented later.
+    return (f"🤖 (Placeholder) Would call Anthropic with prompt: {user_prompt} "
+            f"(and {len(history_messages)} history messages)")
+# --- End NLP Provider Integration ---
+
+
+def get_katana_response(chat_id: str, command_data: dict, current_raw_history_messages: list) -> str:
     """
-    Placeholder for Katana's consciousness.
+    Katana's consciousness. Dispatches to NLP providers or uses internal logic.
     Generates a response based on the command and chat history.
     """
     command_type = command_data.get("type", "unknown_command")
-    module = command_data.get("module", "unknown_module")
-    num_past_messages = len(current_history_messages) # Includes the current user message
+    module = command_data.get("module", "unknown_module") # For dispatching
+    args = command_data.get("args", {})
+    user_prompt_from_args = args.get("prompt", args.get("text", args.get("query", None))) # Flexible prompt extraction
 
-    # Simple "awareness" of history
-    if num_past_messages <= 1: # Only the current user message
+    # The current_raw_history_messages includes the user's current command/message as the last item.
+    # For NLP providers, we want the history *before* this current message.
+    history_before_current_prompt = current_raw_history_messages[:-1] if len(current_raw_history_messages) > 0 else []
+
+    if module == "openai_chat" and user_prompt_from_args:
+        return get_openai_chat_response(user_prompt_from_args, history_before_current_prompt)
+    elif module == "anthropic_chat" and user_prompt_from_args:
+        return get_anthropic_chat_response(user_prompt_from_args, history_before_current_prompt)
+
+    # Fallback to existing placeholder logic if no specific NLP module matched or no prompt
+    num_past_messages = len(current_raw_history_messages) # Includes the current user message
+    if num_past_messages <= 1:
         history_awareness_phrase = "This is our first command message exchange."
     else:
-        # We subtract 1 because current_history_messages includes the latest user message that invoked this
-        history_awareness_phrase = f"I see we have {num_past_messages -1} prior messages in our history."
+        history_awareness_phrase = f"I see we have {num_past_messages - 1} prior messages in our history."
 
-    response = (
-        f"🤖 Katana Placeholder Response:\n"
+    fallback_response = (
+        f"🤖 Katana Placeholder Response (Fallback):\n"
         f"Received command '{command_type}' for module '{module}'.\n"
         f"{history_awareness_phrase}\n"
         f"I am processing this. My real intelligence is yet to be fully integrated.\n"
-        f"Args received: {json.dumps(command_data.get('args', {}))}"
+        f"Args received: {json.dumps(args)}"
     )
-    return response
+    return fallback_response
 
 # Define handlers, but only register them if bot is initialized
 def handle_start_impl(message):
@@ -98,17 +193,29 @@ def handle_start_impl(message):
 
 def handle_message_impl(message):
     """Главный обработчик входящих сообщений."""
+    global message_counter_for_backup
+
     chat_id = str(message.chat.id) # Ensure chat_id is a string for KatanaState
     command_text = message.text
 
     log_local_bot_event(f"Received message from {chat_id}: {command_text}")
     katana_state.add_chat_message(chat_id, "user", command_text)
 
+    # Increment message counter and check for backup trigger BEFORE any early returns
+    message_counter_for_backup += 1
+    if message_counter_for_backup >= BACKUP_INTERVAL_MESSAGES:
+        timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        backup_file_name = f"katana_state_backup_{timestamp_str}.json"
+        backup_file_path = BACKUP_DIR / backup_file_name
+        log_local_bot_event(f"Message counter reached {message_counter_for_backup}. Triggering backup to {backup_file_path}...")
+        katana_state.backup_state(backup_file_path)
+        message_counter_for_backup = 0 # Reset counter
+
     try:
         command_data = json.loads(command_text)
     except json.JSONDecodeError:
         error_reply = "❌ Error: Invalid JSON format. Please send commands in correct JSON."
-        bot.reply_to(message, error_reply)
+        if bot: bot.reply_to(message, error_reply) # Check if bot is initialized
         katana_state.add_chat_message(chat_id, "katana", error_reply)
         log_local_bot_event(f"Invalid JSON from {chat_id}: {command_text}")
         return

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch, call
 import json
 from pathlib import Path
 import shutil
+import openai # For APIConnectionError
 
 from bot import katana_bot # Assuming katana_bot.py is in the 'bot' directory and runnable
 # from bot.katana_state import ChatHistory # Not strictly needed for mocking katana_state object
@@ -199,7 +200,7 @@ class TestBotWithKatanaState(unittest.TestCase):
 
         # --- Second message ---
         self.mock_telebot_instance_patched.reply_to.reset_mock() # Reset for the next call check
-        
+
         command2 = {"type": "follow_up", "module": "knowledge", "args": {"q": "second question"}, "id": "q2"}
         mock_message2 = self._create_mock_message(command2, chat_id=chat_id)
 
@@ -210,7 +211,7 @@ class TestBotWithKatanaState(unittest.TestCase):
             {"sender": "katana", "text": katana_reply1_text, "timestamp": "ts2"}
         ]
         self.mock_katana_state_global_instance_patched.get_chat_history.return_value = history_for_call2
-        
+
         katana_bot.handle_message_impl(mock_message2) # Call the implementation
 
         args2, _ = self.mock_telebot_instance_patched.reply_to.call_args
@@ -227,6 +228,156 @@ class TestBotWithKatanaState(unittest.TestCase):
         self.assertEqual(calls[1], call(chat_id_str, "katana", katana_reply1_text))
         self.assertEqual(calls[2], call(chat_id_str, "user", mock_message2.text))
         self.assertEqual(calls[3], call(chat_id_str, "katana", args2[1])) # args2[1] is katana_reply2_text
+
+    # --- Test Backup Mechanism ---
+    def test_backup_triggered_after_interval(self):
+        original_backup_interval = katana_bot.BACKUP_INTERVAL_MESSAGES
+        katana_bot.BACKUP_INTERVAL_MESSAGES = 3 # Set a small interval for test
+        chat_id = 666
+        chat_id_str = str(chat_id)
+
+        # Mock get_chat_history to return an empty history for simplicity for these calls
+        mock_history_obj = MagicMock()
+        mock_history_obj.messages = []
+        self.mock_katana_state_global_instance_patched.get_chat_history.return_value = mock_history_obj
+
+        # Send 2 messages (backup should not trigger)
+        for i in range(2):
+            cmd = {"type": "msg", "module": "test", "args": {"text": f"message {i+1}"}, "id": f"m{i+1}"}
+            msg = self._create_mock_message(cmd, chat_id=chat_id)
+            katana_bot.handle_message_impl(msg)
+
+        self.mock_katana_state_global_instance_patched.backup_state.assert_not_called()
+        self.assertEqual(katana_bot.message_counter_for_backup, 2)
+
+        # Send 3rd message (backup should trigger)
+        cmd3 = {"type": "msg", "module": "test", "args": {"text": "message 3"}, "id": "m3"}
+        msg3 = self._create_mock_message(cmd3, chat_id=chat_id)
+
+        # Mock datetime for consistent backup filename
+        with patch('bot.katana_bot.datetime') as mock_datetime_backup:
+            mock_datetime_backup.now.return_value.strftime.return_value = "BACKUP_TIMESTAMP"
+            katana_bot.handle_message_impl(msg3)
+
+        expected_backup_path = katana_bot.BACKUP_DIR / "katana_state_backup_BACKUP_TIMESTAMP.json"
+        self.mock_katana_state_global_instance_patched.backup_state.assert_called_once_with(expected_backup_path)
+        self.assertEqual(katana_bot.message_counter_for_backup, 0) # Counter should reset
+
+        # Send 1 more message (counter should be 1)
+        cmd4 = {"type": "msg", "module": "test", "args": {"text": "message 4"}, "id": "m4"}
+        msg4 = self._create_mock_message(cmd4, chat_id=chat_id)
+        katana_bot.handle_message_impl(msg4)
+        self.assertEqual(katana_bot.message_counter_for_backup, 1)
+        # backup_state should still only have been called once
+        self.mock_katana_state_global_instance_patched.backup_state.assert_called_once_with(expected_backup_path)
+
+
+        # Restore original interval
+        katana_bot.BACKUP_INTERVAL_MESSAGES = original_backup_interval
+
+    # --- Test NLP Provider Integration (Mocked) ---
+    @patch('bot.katana_bot.openai.OpenAI') # Patch the OpenAI client constructor
+    def test_openai_integration_success(self, MockOpenAIClient):
+        chat_id = 777
+        prompt_text = "Tell me a joke about cats."
+        command = {"type": "chat", "module": "openai_chat", "args": {"prompt": prompt_text}, "id": "ai001"}
+        mock_message = self._create_mock_message(command, chat_id=chat_id)
+
+        # Configure the mock OpenAI client and its response
+        mock_openai_instance = MockOpenAIClient.return_value
+        mock_completion = MagicMock()
+        mock_completion.choices = [MagicMock(message=MagicMock(content="Why was the cat sitting on the computer? To keep an eye on the mouse!"))]
+        mock_openai_instance.chat.completions.create.return_value = mock_completion
+
+        # Mock KatanaState's get_chat_history to provide some history
+        mock_history_obj = MagicMock()
+        previous_messages = [
+            {"sender": "user", "text": "Hi Katana", "timestamp": "ts1"},
+            {"sender": "katana", "text": "Hello there!", "timestamp": "ts2"}
+        ]
+        mock_history_obj.messages = list(previous_messages) # Use a copy
+        # current_raw_history_messages in get_katana_response will include the current command
+        # so, when get_chat_history is called, it's to get the state *before* current command was added to history by handle_message_impl
+        # but handle_message_impl adds current message to state *then* calls get_chat_history.
+        # For this test, we assume get_chat_history returns the history *including* the current user command.
+        # The get_katana_response then slices it (history_before_current_prompt).
+        current_command_as_history_item = {"sender": "user", "text": json.dumps(command), "timestamp": "ts_now"}
+        mock_history_obj.messages.append(current_command_as_history_item)
+        self.mock_katana_state_global_instance_patched.get_chat_history.return_value = mock_history_obj
+
+        # Store original API key and set a dummy one for the test
+        original_openai_key = katana_bot.OPENAI_API_KEY
+        katana_bot.OPENAI_API_KEY = "test_dummy_key_openai"
+
+        katana_bot.handle_message_impl(mock_message)
+
+        # 1. Check if OpenAI client was called with correct parameters
+        expected_api_messages = [
+            {"role": "user", "content": "Hi Katana"},
+            {"role": "assistant", "content": "Hello there!"},
+            {"role": "user", "content": prompt_text} # Current prompt
+        ]
+        mock_openai_instance.chat.completions.create.assert_called_once()
+        _, kwargs = mock_openai_instance.chat.completions.create.call_args
+        self.assertEqual(kwargs['model'], "gpt-3.5-turbo")
+        self.assertEqual(kwargs['messages'], expected_api_messages)
+
+        # 2. Check bot's reply (should be the mocked OpenAI response)
+        self.mock_telebot_instance_patched.reply_to.assert_called_with(mock_message, "Why was the cat sitting on the computer? To keep an eye on the mouse!")
+
+        # 3. Check KatanaState history calls (user prompt + OpenAI response)
+        # add_chat_message called for user's JSON command, and then for Katana's OpenAI reply.
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(str(chat_id), "user", mock_message.text)
+        self.mock_katana_state_global_instance_patched.add_chat_message.assert_any_call(str(chat_id), "katana", "Why was the cat sitting on the computer? To keep an eye on the mouse!")
+
+        # Restore original key
+        katana_bot.OPENAI_API_KEY = original_openai_key
+
+
+    def test_openai_integration_no_api_key(self):
+        chat_id = 778
+        prompt_text = "This won't work."
+        command = {"type": "chat", "module": "openai_chat", "args": {"prompt": prompt_text}, "id": "ai002"}
+        mock_message = self._create_mock_message(command, chat_id=chat_id)
+
+        original_openai_key = katana_bot.OPENAI_API_KEY
+        katana_bot.OPENAI_API_KEY = None # Simulate no API key
+
+        # Mock history for consistency, though not strictly needed for this error path
+        mock_history_obj = MagicMock()
+        mock_history_obj.messages = [{"sender": "user", "text": json.dumps(command), "timestamp": "ts_now"}]
+        self.mock_katana_state_global_instance_patched.get_chat_history.return_value = mock_history_obj
+
+        katana_bot.handle_message_impl(mock_message)
+
+        self.mock_telebot_instance_patched.reply_to.assert_called_with(mock_message, "🤖 OpenAI API key not configured. Please ask an admin to set it up.")
+
+        katana_bot.OPENAI_API_KEY = original_openai_key
+
+
+    @patch('bot.katana_bot.openai.OpenAI')
+    def test_openai_integration_api_error(self, MockOpenAIClient):
+        chat_id = 779
+        prompt_text = "Trigger an API error."
+        command = {"type": "chat", "module": "openai_chat", "args": {"prompt": prompt_text}, "id": "ai003"}
+        mock_message = self._create_mock_message(command, chat_id=chat_id)
+
+        mock_openai_instance = MockOpenAIClient.return_value
+        mock_openai_instance.chat.completions.create.side_effect = openai.APIConnectionError(request=MagicMock())
+
+        original_openai_key = katana_bot.OPENAI_API_KEY
+        katana_bot.OPENAI_API_KEY = "test_dummy_key_openai_error"
+
+        mock_history_obj = MagicMock()
+        mock_history_obj.messages = [{"sender": "user", "text": json.dumps(command), "timestamp": "ts_now"}]
+        self.mock_katana_state_global_instance_patched.get_chat_history.return_value = mock_history_obj
+
+        katana_bot.handle_message_impl(mock_message)
+
+        self.mock_telebot_instance_patched.reply_to.assert_called_with(mock_message, "🤖 Sorry, I couldn't connect to OpenAI. Please try again later.")
+
+        katana_bot.OPENAI_API_KEY = original_openai_key
+
 
 if __name__ == '__main__':
     unittest.main()

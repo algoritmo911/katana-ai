@@ -74,6 +74,21 @@ class KatanaState:
         except Exception as e:
             print(f"Could not save state to {self.state_file_path}: {e}")
 
+    def backup_state(self, backup_file_path: Path):
+        """Saves the current state to a specified backup file path."""
+        data_to_save = {
+            "global_metrics": self.global_metrics,
+            "chat_histories": {chat_id: history.to_dict() for chat_id, history in self.chat_histories.items()},
+            "user_settings": self.user_settings
+        }
+        try:
+            backup_file_path.parent.mkdir(parents=True, exist_ok=True) # Ensure backup directory exists
+            with open(backup_file_path, "w", encoding="utf-8") as f:
+                json.dump(data_to_save, f, ensure_ascii=False, indent=2)
+            print(f"Katana state successfully backed up to {backup_file_path}")
+        except Exception as e:
+            print(f"Could not backup state to {backup_file_path}: {e}")
+
     def get_chat_history(self, chat_id: str) -> ChatHistory:
         chat_id_str = str(chat_id)
         if chat_id_str not in self.chat_histories:
