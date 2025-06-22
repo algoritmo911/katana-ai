@@ -1,6 +1,7 @@
-import telebot
+import telebot.async_telebot as async_telebot # Use async version
 import json
 import os
+import asyncio # Required for async operations
 from pathlib import Path
 from datetime import datetime
 
@@ -9,7 +10,7 @@ API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN', 'YOUR_API_TOKEN')
 if not API_TOKEN or ':' not in API_TOKEN:
     raise ValueError("❌ Invalid or missing Telegram API token. Please set KATANA_TELEGRAM_TOKEN env variable with format '123456:ABCDEF'.")
 
-bot = telebot.TeleBot(API_TOKEN)
+bot = async_telebot.AsyncTeleBot(API_TOKEN) # Use AsyncTeleBot
 
 # Папка для сохранения команд
 COMMAND_FILE_DIR = Path('commands')
@@ -28,13 +29,13 @@ def handle_mind_clearing(command_data, chat_id):
     log_local_bot_event(f"handle_mind_clearing called for chat_id {chat_id} with data: {command_data}")
 
 @bot.message_handler(commands=['start'])
-def handle_start(message):
+async def handle_start(message): # Make async
     """Ответ на /start"""
-    bot.reply_to(message, "Привет! Я — Katana. Отправь JSON-команду, чтобы начать.")
+    await bot.reply_to(message, "Привет! Я — Katana. Отправь JSON-команду, чтобы начать.") # Add await
     log_local_bot_event(f"/start received from {message.chat.id}")
 
 @bot.message_handler(func=lambda message: True)
-def handle_message(message):
+async def handle_message(message): # Make async
     """Главный обработчик входящих сообщений."""
     chat_id = message.chat.id
     command_text = message.text
@@ -44,7 +45,7 @@ def handle_message(message):
     try:
         command_data = json.loads(command_text)
     except json.JSONDecodeError:
-        bot.reply_to(message, "❌ Error: Invalid JSON format.")
+        await bot.reply_to(message, "❌ Error: Invalid JSON format.") # Add await
         log_local_bot_event(f"Invalid JSON from {chat_id}: {command_text}")
         return
 
@@ -100,7 +101,61 @@ def handle_message(message):
     bot.reply_to(message, f"✅ Command received and saved as `{command_file_path}`.")
     log_local_bot_event(f"Saved command from {chat_id} to {command_file_path}")
 
-if __name__ == '__main__':
+# Placeholder for AI request handler
+async def handle_ai_request(command_data, chat_id, message):
+    """Handles AI requests by routing to the appropriate provider."""
+    log_local_bot_event(f"handle_ai_request called for chat_id {chat_id} with data: {command_data}")
+
+    ai_provider = command_data.get("args", {}).get("provider")
+    prompt = command_data.get("args", {}).get("prompt")
+    model = command_data.get("args", {}).get("model")
+    # Make sure message object is available for replies
+    # message_to_reply = message # if message is passed directly, otherwise ensure it's part of command_data or context
+
+    if not ai_provider or not prompt:
+        await bot.reply_to(message, "❌ Error: 'provider' and 'prompt' are required in 'args' for AI requests.") # Add await
+        return
+
+    response_text = None
+    if ai_provider == "openai":
+        from bot.ai_providers.openai import generate_text_openai
+        # Ensure model is provided or use a default
+        response_text = await generate_text_openai(prompt, model=model if model else "gpt-3.5-turbo")
+    elif ai_provider == "anthropic":
+        from bot.ai_providers.anthropic import generate_text_anthropic
+        # Ensure model is provided or use a default
+        response_text = await generate_text_anthropic(prompt, model=model if model else "claude-2")
+    elif ai_provider == "huggingface":
+        from bot.ai_providers.huggingface import generate_text_huggingface
+        # Ensure model is provided or use a default for text generation
+        # Add more specific handling if other HuggingFace tasks like text-to-image are needed
+        if command_data.get("args", {}).get("task") == "text-to-image":
+            from bot.ai_providers.huggingface import text_to_image_huggingface
+            image_bytes = await text_to_image_huggingface(prompt, model=model if model else "stabilityai/stable-diffusion-2")
+            if image_bytes:
+                await bot.send_photo(chat_id, photo=image_bytes, caption=f"Generated image for: {prompt}") # Add await
+            else:
+                await bot.reply_to(message, "❌ Error generating image with HuggingFace.") # Add await
+            return # Exit after sending image or error
+        else: # Default to text generation
+            response_text = await generate_text_huggingface(prompt, model=model if model else "gpt2")
+    else:
+        await bot.reply_to(message, f"❌ Error: Unknown AI provider '{ai_provider}'. Supported: openai, anthropic, huggingface.") # Add await
+        return
+
+    if response_text:
+        await bot.reply_to(message, f"🤖 AI Response ({ai_provider}):\n{response_text}") # Add await
+    else:
+        await bot.reply_to(message, f"❌ Error: Could not get a response from {ai_provider}.") # Add await
+
+
+# The duplicated handle_message function and its related comments are removed.
+# The correct async def handle_message is already defined above and decorated.
+
+async def main(): # Create an async main function
     log_local_bot_event("Bot starting...")
-    bot.polling()
+    await bot.polling() # Use await for polling
     log_local_bot_event("Bot stopped.")
+
+if __name__ == '__main__':
+    asyncio.run(main()) # Run the async main function

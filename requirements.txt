@@ -1,0 +1,14 @@
+pyTelegramBotAPI[async]>=4.10.0
+# Using 4.10.0 as a recent version that supports async, adjust if specific version is needed
+# pyTelegramBotAPI's async functionality depends on aiohttp
+aiohttp>=3.8.0
+# Adding aiohttp as a direct dependency for telebot's async features
+openai>=1.0.0
+# For AsyncOpenAI client
+anthropic>=0.10.0
+# Check for the latest version with AsyncAnthropic / AsyncClient
+huggingface_hub>=0.17.0
+# For InferenceClient
+# Add other dependencies if any are discovered
+python-dotenv # For loading .env files if you plan to use them for API keys locally
+# Example: KATANA_TELEGRAM_TOKEN, OPENAI_API_KEY, etc.
