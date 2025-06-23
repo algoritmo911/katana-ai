@@ -74,7 +74,70 @@ When you push changes to `main` or create a pull request targeting `main`, the C
     - Formatting checks with `black`.
     - Unit tests with `pytest` and coverage reporting.
 
-If any of these steps fail, the CI build will be marked as failed, helping to catch issues early.
+If any of these steps fail, a CI build will be marked as failed, helping to catch issues early.
+
+## CI/CD Pipeline with Deployment
+
+This project uses GitHub Actions for Continuous Integration (CI) and Continuous Deployment (CD). The primary workflow for this is defined in `.github/workflows/deploy.yml`.
+
+### Workflow Overview (`deploy.yml`)
+
+This workflow automates testing and deployment of the Telegram bot.
+
+**Triggers:**
+*   Push to `main` branch.
+*   Push to `dev` branch.
+*   Manual trigger via `workflow_dispatch` from the GitHub Actions UI.
+
+**Key Steps:**
+1.  **Checkout Code:** Fetches the latest version of your repository.
+2.  **Set up Python:** Configures the specified Python version (e.g., 3.10).
+3.  **Install Dependencies:** Installs all required packages from `requirements.txt`.
+4.  **Run Tests:** Executes the test suite using `pytest`. All tests must pass for the workflow to proceed to deployment.
+5.  **Generate `.env` File (Simulated in CI):**
+    *   During the CI/CD run, a `.env` file is generated using secrets stored in GitHub. This step ensures that sensitive information like API tokens are not hardcoded in the repository but are available to the application at runtime.
+    *   The actual deployment environment (e.g., Railway, Render, VPS) will need these environment variables set up.
+6.  **Deploy to Cloud (Placeholder):**
+    *   If tests pass, this step handles the deployment. The actual deployment commands will depend on the chosen hosting platform (e.g., Railway, Render, or a custom script for a VPS).
+    *   This step is currently a placeholder and needs to be configured with actual deployment logic.
+7.  **Send Telegram Notification (Placeholder):**
+    *   An optional step to send a notification (e.g., via a Telegram message) about the status (success or failure) of the deployment.
+
+### GitHub Secrets for CI/CD
+
+The `deploy.yml` workflow relies on GitHub Secrets to securely manage sensitive information like API keys and deployment tokens. These secrets are encrypted and can only be used by GitHub Actions.
+
+**Required Secrets (add these in your GitHub repository settings under `Settings > Secrets and variables > Actions`):**
+*   `TELEGRAM_BOT_TOKEN`: Your Telegram bot's API token.
+*   `OPENAI_API_KEY`: Your OpenAI API key (if used by the bot).
+*   `RAILWAY_TOKEN`: Your Railway API token (if deploying to Railway).
+*   `SSH_PRIVATE_KEY`: Your SSH private key for deploying to a VPS (if using SCP/SSH). *Ensure you store the private key securely and configure the corresponding public key on your server.*
+*   *(Add any other secrets your bot or deployment process might need).*
+
+**How to Add New Secrets:**
+1.  Go to your GitHub repository.
+2.  Click on "Settings".
+3.  In the left sidebar, navigate to "Secrets and variables" > "Actions".
+4.  Click the "New repository secret" button.
+5.  Enter the name of the secret (e.g., `TELEGRAM_BOT_TOKEN`) and its value.
+6.  Click "Add secret".
+
+### Local Testing of the Pipeline
+
+While direct local execution of GitHub Actions workflows can be complex, you can simulate parts of it:
+
+1.  **Run Checks Script:** Always run `./run_checks.sh` locally before pushing to ensure tests and linting pass. This script covers a significant portion of what the CI part of the `deploy.yml` workflow does.
+2.  **Test Branch:** Push your changes to a feature branch (e.g., `feat/test-cicd`) that is *not* `main` or `dev`. Then, create a Pull Request targeting `dev` or `main`. This will trigger the `main.yml` workflow (if configured for PRs) or you can temporarily modify `deploy.yml` to trigger on your feature branch for testing purposes.
+3.  **`act` (Advanced):** For more comprehensive local testing of GitHub Actions, you can use a tool like [`act`](https://github.com/nektos/act). It allows you to run your GitHub Actions workflows locally using Docker. Installation and usage instructions are available on its GitHub page. This requires Docker to be installed and running.
+    ```bash
+    # Example (after installing act):
+    # Dry run
+    # act -n
+    # Run the default event (push)
+    # act
+    # Run a specific job from a workflow
+    # act -j build -W .github/workflows/deploy.yml
+    ```
 
 ## Guidelines for Writing New Tests
 
