@@ -8,6 +8,7 @@ import subprocess # Added for run_katana_command
 from nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
+from katana.katana_agent import KatanaAgent # Import KatanaAgent
 
 # Load environment variables from .env file
 load_dotenv()
@@ -18,6 +19,8 @@ API_TOKEN = os.environ.get('TELEGRAM_API_TOKEN', '12345:dummytoken')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
 bot = telebot.async_telebot.AsyncTeleBot(API_TOKEN) # Use AsyncTeleBot
+katana_agent_instance = KatanaAgent() # Instantiate KatanaAgent
+
 if OPENAI_API_KEY:
     openai.api_key = OPENAI_API_KEY
 else:
@@ -35,6 +38,26 @@ TELEGRAM_LOG_FILE = LOG_DIR / 'telegram.log'
 # Dictionary to store active GPT streaming tasks and their cancellation events
 # Key: chat_id, Value: tuple(asyncio.Task, asyncio.Event, telegram_message_id_being_edited)
 active_gpt_streams = {}
+
+# --- Conversation History Management ---
+chat_histories = {}  # Stores conversation history for each chat_id
+MAX_HISTORY_LENGTH = 20 # Max number of messages (user + assistant) to keep per chat
+
+def add_to_history(chat_id: int, role: str, content: str):
+    """Adds a message to the chat's history, maintaining max length."""
+    if chat_id not in chat_histories:
+        chat_histories[chat_id] = []
+
+    chat_histories[chat_id].append({"role": role, "content": content})
+
+    # Trim history if it exceeds max length
+    if len(chat_histories[chat_id]) > MAX_HISTORY_LENGTH:
+        # Keep the most recent MAX_HISTORY_LENGTH messages
+        chat_histories[chat_id] = chat_histories[chat_id][-MAX_HISTORY_LENGTH:]
+
+def get_history(chat_id: int) -> list:
+    """Retrieves the history for a chat_id, or an empty list if none."""
+    return chat_histories.get(chat_id, [])
 
 def log_to_file(message, filename=TELEGRAM_LOG_FILE):
     """Appends a message to the specified log file."""
@@ -202,114 +225,77 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
         return
 
     except json.JSONDecodeError:
-        # Not NLP, not JSON -> Fallback to GPT
-        log_local_bot_event(f"Text from {chat_id} ('{text[:50]}...') is not NLP or JSON. Attempting GPT stream.")
+        # Not NLP, not JSON -> Route to KatanaAgent
+        log_local_bot_event(f"Text from {chat_id} ('{text[:50]}...') is not NLP or JSON. Routing to KatanaAgent.")
 
-        # --- Start of new task management for GPT streaming ---
-        if chat_id in active_gpt_streams:
-            old_task, old_cancel_event, old_msg_id = active_gpt_streams[chat_id]
-            log_local_bot_event(f"log_event({chat_id}, \"gpt_interrupt_request\", \"New message received, attempting to cancel previous stream for message {old_msg_id}.\")")
-            old_cancel_event.set()
-            try:
-                await asyncio.wait_for(old_task, timeout=2.0) # Wait for old task to finish/cancel
-                log_local_bot_event(f"log_event({chat_id}, \"gpt_previous_stream_cancelled\", \"Previous stream task for message {old_msg_id} completed/cancelled.\")")
-            except asyncio.TimeoutError:
-                log_local_bot_event(f"log_event({chat_id}, \"gpt_previous_stream_timeout\", \"Timeout waiting for previous stream task for message {old_msg_id} to cancel.\")")
-            # Removal from active_gpt_streams is handled by the task itself in its finally block
+        # Add user's message to history
+        add_to_history(chat_id, "user", text)
+        current_chat_history = get_history(chat_id)
 
-        # Define the coroutine that will handle the actual streaming for this new request
-        async def _handle_gpt_streaming_for_chat(current_text, current_chat_id, current_original_message, current_cancellation_event):
-            sent_message_id = None
-            full_response_message = ""
-            try:
-                await bot.send_chat_action(current_chat_id, 'typing')
+        try:
+            # Get response from KatanaAgent
+            # Note: KatanaAgent's get_response is synchronous in the current plan.
+            # If it were async, we would 'await' it.
+            # For now, we run it in executor to prevent blocking the main async loop if it becomes complex later.
+            loop = asyncio.get_event_loop()
+            katana_response_text = await loop.run_in_executor(
+                None,  # Uses the default ThreadPoolExecutor
+                katana_agent_instance.get_response,
+                text,  # current user message
+                current_chat_history # history *including* current user message
+            )
 
-                async for chunk in get_gpt_streamed_response(current_text, current_chat_id, current_cancellation_event):
-                    if current_cancellation_event.is_set(): # Double check, get_gpt_streamed_response should also handle this
-                        log_local_bot_event(f"log_event({current_chat_id}, \"gpt_streaming_loop_cancelled\", \"Cancellation detected in process_user_message loop.\")")
-                        break
+            if katana_response_text:
+                # Add Katana's response to history
+                add_to_history(chat_id, "assistant", katana_response_text)
+                # Send Katana's response to the user
+                if original_message:
+                    await bot.reply_to(original_message, katana_response_text)
+                else: # Should not happen for user messages, but as a fallback
+                    await bot.send_message(chat_id, katana_response_text)
+                log_local_bot_event(f"KatanaAgent response sent to {chat_id}: '{katana_response_text[:100]}...'")
+            else:
+                log_local_bot_event(f"KatanaAgent returned no response for {chat_id}.")
+                # Optionally send a message like "Katana has nothing to say."
+                # For now, just log.
 
-                    full_response_message += chunk
-                    if not sent_message_id:
-                        try:
-                            sent_msg = await bot.reply_to(current_original_message, full_response_message) if current_original_message else await bot.send_message(current_chat_id, full_response_message)
-                            sent_message_id = sent_msg.message_id
-                            # Store/update message_id in active_gpt_streams if needed, though it's tricky with task structure
-                            # For now, the initial message_id is what we might care about for context if we re-implement cancellation details
-                            if current_chat_id in active_gpt_streams: # Update message_id if task is still current
-                                task, cancel_event, _ = active_gpt_streams[current_chat_id]
-                                active_gpt_streams[current_chat_id] = (task, cancel_event, sent_message_id)
+        except Exception as e:
+            log_local_bot_event(f"Error interacting with KatanaAgent for chat {chat_id}: {e}")
+            error_reply = "⚠️ Error communicating with Katana."
+            if original_message:
+                await bot.reply_to(original_message, error_reply)
+            else:
+                await bot.send_message(chat_id, error_reply)
+        return # KatanaAgent has handled the message.
 
-                            log_local_bot_event(f"GPT stream: Sent initial message {sent_message_id} to chat {current_chat_id}.")
-                        except Exception as e_send:
-                            log_local_bot_event(f"Error sending initial GPT message to {current_chat_id}: {e_send}. Sending as new message.")
-                            try:
-                                sent_msg = await bot.send_message(current_chat_id, full_response_message)
-                                sent_message_id = sent_msg.message_id
-                                if current_chat_id in active_gpt_streams: # Update message_id
-                                   task, cancel_event, _ = active_gpt_streams[current_chat_id]
-                                   active_gpt_streams[current_chat_id] = (task, cancel_event, sent_message_id)
-                                log_local_bot_event(f"GPT stream: Sent initial message {sent_message_id} (fallback) to chat {current_chat_id}.")
-                            except Exception as e_fallback:
-                                log_local_bot_event(f"Error sending fallback initial GPT message to {current_chat_id}: {e_fallback}")
-                                await bot.send_message(current_chat_id, "⚠️ Error sending GPT response.")
-                                return # Exit this specific handler coroutine
-                    else:
-                        if chunk and sent_message_id: # Ensure there's new content and a message to edit
-                            try:
-                                await asyncio.sleep(0.1) # Keep small delay
-                                await bot.edit_message_text(full_response_message, current_chat_id, sent_message_id)
-                                log_local_bot_event(f"GPT stream: Edited message {sent_message_id} in chat {current_chat_id}.")
-                            except telebot.async_telebot.apihelper.ApiTelegramException as e_edit:
-                                if "message is not modified" in str(e_edit).lower():
-                                    log_local_bot_event(f"GPT stream: Message {sent_message_id} not modified, skipping edit.")
-                                elif "message to edit not found" in str(e_edit).lower() or "message can't be edited" in str(e_edit).lower() :
-                                    log_local_bot_event(f"GPT stream: Message {sent_message_id} not found or can't be edited. Stopping edits for this stream. Error: {e_edit}")
-                                    break # Stop trying to edit this message
-                                else:
-                                    log_local_bot_event(f"Error editing GPT message {sent_message_id} in chat {current_chat_id}: {e_edit}")
-                            except Exception as e_gen_edit:
-                                log_local_bot_event(f"General error editing GPT message {sent_message_id} in chat {current_chat_id}: {e_gen_edit}")
-
-                if not sent_message_id and full_response_message and not current_cancellation_event.is_set():
-                     await bot.send_message(current_chat_id, full_response_message)
-                elif not sent_message_id and not full_response_message:
-                    log_local_bot_event(f"GPT stream for chat {current_chat_id} resulted in no content to send.")
-
-            except asyncio.CancelledError:
-                log_local_bot_event(f"log_event({current_chat_id}, \"gpt_streaming_task_cancelled\", \"Task for GPT streaming was cancelled externally.\")")
-                # Potentially send a message like "Previous response generation cancelled." - but might be noisy
-            except Exception as e_outer:
-                log_local_bot_event(f"log_event({current_chat_id}, \"gpt_streaming_task_error\", \"Error in GPT streaming task: {e_outer}\")")
-                if sent_message_id and not full_response_message: # Error before any content, or message was deleted
-                    pass # Avoid sending generic error if we couldn't even start
-                elif not current_cancellation_event.is_set(): # Don't send error if it was cancelled.
-                    try:
-                        await bot.send_message(current_chat_id, "⚠️ An error occurred while generating the response.")
-                    except Exception:
-                        pass # Best effort
-            finally:
-                log_local_bot_event(f"log_event({current_chat_id}, \"gpt_streaming_task_finally\", \"Finishing GPT task. Sent message ID: {sent_message_id}\")")
-                # Remove this task from active streams
-                if active_gpt_streams.get(current_chat_id) and active_gpt_streams[current_chat_id][0] is asyncio.current_task():
-                    del active_gpt_streams[current_chat_id]
-                    log_local_bot_event(f"log_event({current_chat_id}, \"gpt_active_stream_removed\", \"Task removed from active streams.\")")
-                else:
-                    # This might happen if a new task rapidly replaced this one due to quick succession of messages
-                    log_local_bot_event(f"log_event({current_chat_id}, \"gpt_active_stream_mismatch_on_remove\", \"Task not found or already replaced in active streams during cleanup.\")")
-
-
-        # Create and store the new task
-        new_cancellation_event = asyncio.Event()
-        # Pass the original_message to the handler for reply context
-        gpt_task = asyncio.create_task(
-            _handle_gpt_streaming_for_chat(text, chat_id, original_message, new_cancellation_event)
-        )
-        active_gpt_streams[chat_id] = (gpt_task, new_cancellation_event, None) # Initially no message_id to edit
-        log_local_bot_event(f"log_event({chat_id}, \"gpt_new_stream_task_created\", \"New GPT stream task started.\")")
-        # Note: We don't await gpt_task here, it runs in the background.
-        return
-        # --- End of new task management ---
+        # --- Old GPT Streaming Logic (Now Bypassed/Replaced by KatanaAgent) ---
+        # # --- Start of new task management for GPT streaming ---
+        # if chat_id in active_gpt_streams:
+        #     old_task, old_cancel_event, old_msg_id = active_gpt_streams[chat_id]
+        #     log_local_bot_event(f"log_event({chat_id}, \"gpt_interrupt_request\", \"New message received, attempting to cancel previous stream for message {old_msg_id}.\")")
+        #     old_cancel_event.set()
+        #     try:
+        #         await asyncio.wait_for(old_task, timeout=2.0) # Wait for old task to finish/cancel
+        #         log_local_bot_event(f"log_event({chat_id}, \"gpt_previous_stream_cancelled\", \"Previous stream task for message {old_msg_id} completed/cancelled.\")")
+        #     except asyncio.TimeoutError:
+        #         log_local_bot_event(f"log_event({chat_id}, \"gpt_previous_stream_timeout\", \"Timeout waiting for previous stream task for message {old_msg_id} to cancel.\")")
+        #     # Removal from active_gpt_streams is handled by the task itself in its finally block
+        #
+        # # Define the coroutine that will handle the actual streaming for this new request
+        # async def _handle_gpt_streaming_for_chat(current_text, current_chat_id, current_original_message, current_cancellation_event):
+        #     # ... (GPT streaming implementation was here) ...
+        #
+        # # Create and store the new task
+        # new_cancellation_event = asyncio.Event()
+        # # Pass the original_message to the handler for reply context
+        # gpt_task = asyncio.create_task(
+        #     _handle_gpt_streaming_for_chat(text, chat_id, original_message, new_cancellation_event)
+        # )
+        # active_gpt_streams[chat_id] = (gpt_task, new_cancellation_event, None) # Initially no message_id to edit
+        # log_local_bot_event(f"log_event({chat_id}, \"gpt_new_stream_task_created\", \"New GPT stream task started.\")")
+        # # Note: We don't await gpt_task here, it runs in the background.
+        # return
+        # --- End of old GPT task management ---
 
 # This will be the new text handler
 @bot.message_handler(func=lambda message: True, content_types=['text'])
