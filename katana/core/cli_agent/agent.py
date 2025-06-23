@@ -11,7 +11,7 @@ from katana.core.cli_agent.katana import KatanaCore # Corrected absolute import
 # Pathlib and other imports are handled by katana.py if needed by KatanaCore itself.
 
 import logging
-from katana.logging_config import setup_logging, get_logger # This should be correct if run with /app in PYTHONPATH
+from katana.logger import setup_logging, get_logger # This should be correct if run with /app in PYTHONPATH
 
 logger = get_logger(__name__)
 

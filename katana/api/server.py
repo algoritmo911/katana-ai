@@ -9,8 +9,8 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 import uvicorn
 
-from katana.logging_config import (
-    setup_logging as setup_katana_logging,  # Renamed to avoid conflict
+from katana.logger import (
+    setup_logging as setup_katana_logging,
     get_logger as get_katana_logger,
     DEFAULT_LOGGER_NAME,
     DEFAULT_LOG_FILE_NAME
@@ -36,8 +36,10 @@ LOG_LINE_REGEX = re.compile(
 # katana_events.log is properly configured for other parts of a larger app
 # or for the API server's own katana_logger usage if it were to use get_katana_logger().
 # For the API server's own internal logs (uvicorn, fastapi), they have their own logging.
-setup_katana_logging()
-api_server_logger = logging.getLogger(__name__) # Standard Python logger for API server's own messages
+setup_katana_logging() # Ensures the main katana logger is configured
+# Use katana's logger for API server specific messages, namespaced under the main logger
+api_server_logger = get_katana_logger(DEFAULT_LOGGER_NAME + ".api")
+
 
 # Pydantic model for the request body of /api/logs/level
 class LogLevelRequest(BaseModel):

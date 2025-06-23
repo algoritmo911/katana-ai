@@ -7,7 +7,7 @@ import uuid
 import traceback
 import shutil
 import logging
-from katana.logging_config import setup_logging, get_logger
+from katana.logger import setup_logging, get_logger
 
 # Initialize logger for this module
 logger = get_logger(__name__)

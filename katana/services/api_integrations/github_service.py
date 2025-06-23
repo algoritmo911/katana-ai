@@ -18,7 +18,7 @@ except ImportError:
     pass # Actual logging will be done by the module-level logger if PYGITHUB_AVAILABLE is false.
 
 
-from katana.logging_config import get_logger, setup_logging # setup_logging for __main__
+from katana.logger import get_logger, setup_logging # setup_logging for __main__
 # import logging # No longer needed here as get_logger handles it.
 
 logger = get_logger(__name__)

@@ -12,7 +12,7 @@ from pathlib import Path # For path operations within the script
 DEFAULT_SECRETS_FILENAME = "secrets_temp.json"
 import uuid # Added for unique message_ids
 
-from katana.logging_config import get_logger, setup_logging
+from katana.logger import get_logger, setup_logging
 import logging # For logger levels if needed
 
 logger = get_logger(__name__)

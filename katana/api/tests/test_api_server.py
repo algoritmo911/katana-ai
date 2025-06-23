@@ -9,7 +9,7 @@ import os # For checking environment variables, if any tests need it for setup
 # Assuming katana.api.server is where your FastAPI app instance is
 from katana.api.server import app, LOG_LINE_REGEX # Import app and other necessary items
 # Import items from logging_config that tests might need to reference or manipulate
-from katana.logging_config import (
+from katana.logger import (
     DEFAULT_LOG_FILE_NAME,
     DEFAULT_LOGGER_NAME,
     setup_logging as setup_katana_logging # Alias for clarity

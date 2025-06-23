@@ -4,7 +4,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 from openai import OpenAI, APIError, AuthenticationError, RateLimitError # For openai >= 1.0.0
 import traceback # For more detailed error logging
 import logging # Import logging for setup_logging level
-from katana.logging_config import setup_logging, get_logger
+from katana.logger import setup_logging, get_logger
 
 # --- Initialize Logging ---
 setup_logging(log_level=logging.INFO) # Or logging.DEBUG, etc.
@@ -55,6 +55,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_context = {'user_id': user_id_str, 'chat_id': chat_id_str, 'message_id': message_id_str}
 
     logger.info(f"Received message from user {user_id_str}: {user_text[:100]}", extra=log_context)
+    # TODO: Add log_event for NLP interpretation here (e.g., intent, entities) if applicable before sending to OpenAI
 
     if not client: # Check if OpenAI client is initialized
         logger.error("OpenAI client not initialized. Cannot process message.", extra=log_context)
@@ -112,11 +113,15 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # TODO: Add log_event for voice stream processing if voice messages are handled
+    # TODO: Add log_event for mode changes if the bot supports different modes (e.g., chat vs. command)
 
     logger.info(
         "Katana Telegram Bot (AI Chat Mode) is running. Press Ctrl-C to stop.",
         extra={**system_context, 'message_id': 'init_main_running'}
     )
+    logger.info("Bot started.", extra={**system_context, 'message_id': 'bot_startup_event'}) # Explicit bot start log
+
     try:
         application.run_polling()
     except Exception as e_poll:
@@ -130,9 +135,14 @@ def main():
         ) # format_exc() provides the message
     finally:
         logger.info(
+            "Katana Telegram Bot (AI Chat Mode) stopping...",
+            extra={**system_context, 'message_id': 'bot_stopping_event'} # Explicit bot stop log
+        )
+        logger.info(
             "Katana Telegram Bot (AI Chat Mode) stopped.",
             extra={**system_context, 'message_id': 'init_main_stopped'}
         )
+
 
 if __name__ == '__main__':
     # To run this:

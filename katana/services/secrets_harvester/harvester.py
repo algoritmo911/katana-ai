@@ -11,7 +11,7 @@ DEFAULT_SECRETS_FILENAME = "secrets_temp.json"
 DEFAULT_API_LABEL = "api" # Case-sensitive as per gkeepapi docs for findLabel
 import uuid # Added for unique message_ids
 
-from katana.logging_config import get_logger, setup_logging
+from katana.logger import get_logger, setup_logging
 import logging # For logger levels if needed
 
 logger = get_logger(__name__)

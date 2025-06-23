@@ -2,6 +2,7 @@ import logging
 import logging.handlers
 from pythonjsonlogger import jsonlogger
 import datetime
+import coloredlogs
 
 # Define the default logger name
 DEFAULT_LOGGER_NAME = 'katana_logger'
@@ -135,23 +136,40 @@ def setup_logging(log_level=logging.INFO, log_file_path=None):
     context_filter = ContextFilter()
 
     # Create console handler
+    # console_handler = logging.StreamHandler() # Outputs to stderr by default
+    # console_handler.setFormatter(formatter) # We will use coloredlogs for console
+    # console_handler.addFilter(context_filter) # Add filter to handler
+    # logger.addHandler(console_handler)
+
+    # Create console handler with coloredlogs
     console_handler = logging.StreamHandler() # Outputs to stderr by default
-    console_handler.setFormatter(formatter)
-    console_handler.addFilter(context_filter) # Add filter to handler
+    # Format for console can be simpler than JSON and include standard fields for context.
+    # coloredlogs.ColoredFormatter will handle the coloring.
+    # Note: `extra` fields like user_id won't appear in console_format unless explicitly added to the format string
+    # and handled by the formatter or if ColoredFormatter picks them up (it usually doesn't for custom 'extra' fields).
+    # For console, we primarily care about readability and standard log info.
+    console_format = '%(asctime)s %(name)s[%(process)d] %(levelname)s %(message)s (%(module)s:%(funcName)s:%(lineno)d)'
+    console_formatter = coloredlogs.ColoredFormatter(console_format, datefmt='%H:%M:%S')
+    console_handler.setFormatter(console_formatter)
+    # The ContextFilter is not strictly necessary for console if we don't display these fields there,
+    # but adding it won't hurt and ensures consistency if we decide to add them to console_format later.
+    console_handler.addFilter(context_filter)
     logger.addHandler(console_handler)
 
-    # Determine log file path
+    # Determine log file path for JSON logs
     actual_log_file_path = log_file_path if log_file_path else DEFAULT_LOG_FILE_NAME
 
-    # Create file handler with rotation
+    # Create file handler with rotation for JSON logs
+    # The 'formatter' here is the CustomJsonFormatter defined earlier.
     file_handler = logging.handlers.RotatingFileHandler(
         actual_log_file_path, maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT, encoding='utf-8'
     )
-    file_handler.setFormatter(formatter)
-    file_handler.addFilter(context_filter) # Add filter to handler
+    file_handler.setFormatter(formatter) # This is our CustomJsonFormatter
+    file_handler.addFilter(context_filter) # Add filter to handler to ensure custom fields for JSON
     logger.addHandler(file_handler)
 
     # Remove filter from logger if it was there, to avoid double filtering if code was partially run before
+    # This part of the original code might be redundant if handlers are cleared properly at the start.
     # Though the initial clear of handlers should make this unnecessary.
     # However, if a filter was on the logger AND handlers, it might run twice.
     # For simplicity, filters are now only on handlers.

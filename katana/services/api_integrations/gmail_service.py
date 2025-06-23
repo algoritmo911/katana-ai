@@ -25,7 +25,7 @@ except ImportError:
     # Early log for critical dependency error - will be handled by module-level logger
     pass
 
-from katana.logging_config import get_logger, setup_logging # setup_logging for __main__
+from katana.logger import get_logger, setup_logging # setup_logging for __main__
 # import logging # No longer needed here
 
 logger = get_logger(__name__)

@@ -5,7 +5,7 @@ import re
 import json # Added
 import datetime # Added
 from pathlib import Path
-from katana.logging_config import get_logger, setup_logging, DEFAULT_LOGGER_NAME, DEFAULT_LOG_FILE_NAME, MAX_BYTES, BACKUP_COUNT
+from katana.logger import get_logger, setup_logging, DEFAULT_LOGGER_NAME, DEFAULT_LOG_FILE_NAME, MAX_BYTES, BACKUP_COUNT
 
 # Define a test log file name
 TEST_LOG_FILE = Path("test_katana_events.log")
@@ -111,34 +111,32 @@ def test_log_file_creation_and_content():
                              expected_module_contains=Path(__file__).stem) # module is this test file
 
 def test_console_output(capsys):
-    """Test console output using capsys fixture for JSON logs."""
-    # setup_logging is called, configuring DEFAULT_LOGGER_NAME
-    # We get a child of it to test propagation for console.
+    """Test console output using capsys fixture for colored text logs."""
     setup_logging(log_level=logging.WARNING)
-
-    logger = get_logger(DEFAULT_LOGGER_NAME + ".console_test") # Child logger
-    warning_message = "Testing console warning output."
+    logger = get_logger(DEFAULT_LOGGER_NAME + ".console_color_test") # Child logger
+    warning_message = "Testing console warning output for color."
     logger.warning(warning_message)
 
     captured = capsys.readouterr()
-
-    # StreamHandler by default writes to stderr.
-    # Our setup_logging adds a StreamHandler that goes to console (stderr for all levels by default StreamHandler)
     captured_err = captured.err.strip()
-    assert captured_err, "stderr output is empty."
 
-    log_lines = captured_err.splitlines()
-    assert len(log_lines) == 1, "Expected a single log line in stderr."
-    log_json = _parse_log_line(log_lines[0])
+    assert captured_err, "stderr output for console is empty."
+    # Check for ANSI escape codes (basic check for coloring)
+    assert "\x1b[" in captured_err, "No ANSI escape codes found in console output, expected colored logs."
+    assert warning_message in captured_err, "Warning message not found in console output."
+    assert "WARNING" in captured_err, "Log level 'WARNING' not found in console output."
+    # Check for some other parts of the format string
+    assert Path(__file__).stem in captured_err, "Module name not found in console output."
+    assert "console_color_test" in captured_err, "Logger name segment 'console_color_test' not found."
 
-    _check_common_log_fields(log_json,
-                             expected_level="WARNING",
-                             expected_message_contains=warning_message,
-                             expected_module_contains=Path(__file__).stem) # module is this test file (console_test is part of logger name)
+    # Ensure it's NOT JSON
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(captured_err.splitlines()[0])
 
-def test_log_format_and_exc_info(capsys):
-    """Test the JSON log format, including exc_info."""
-    setup_logging(log_level=logging.ERROR) # Ensure ERROR level is processed
+
+def test_log_format_and_exc_info_file(capsys):
+    """Test the JSON log format in FILE, including exc_info. Console will be text."""
+    setup_logging(log_level=logging.ERROR, log_file_path=str(TEST_LOG_FILE)) # Ensure ERROR level is processed
 
     # Get a child logger to check formatting via propagation
     logger_name_segment = "format_test_logger_segment"
@@ -152,27 +150,30 @@ def test_log_format_and_exc_info(capsys):
         # Log the error from within an exception handler context
         logger.error(error_message, exc_info=True)
 
-    captured = capsys.readouterr()
-    log_output = captured.err.strip()
-    assert log_output, "stderr output for error is empty."
+    # Console output will be colored text
+    captured_console = capsys.readouterr()
+    console_output = captured_console.err.strip()
+    assert error_message in console_output, "Error message not in console output."
+    assert "ERROR" in console_output, "Error level not in console output."
+    assert "\x1b[" in console_output, "No ANSI escape codes in console error output."
 
-    log_lines = log_output.splitlines()
-    # exc_info can span multiple lines in the raw output if not careful, but JSON should be one line.
-    # However, the `message` within JSON for `exc_info` might contain newlines.
-    # For this test, we expect one JSON object per log call.
-    assert len(log_lines) >= 1, "Expected at least one line for error log in stderr."
+    # File output should be JSON and contain exc_info
+    assert TEST_LOG_FILE.exists(), "Log file should be created for exc_info test."
+    file_content = TEST_LOG_FILE.read_text().strip()
+    assert file_content, "Log file for exc_info test is empty."
 
-    log_json = _parse_log_line(log_lines[0]) # Assume first line is our primary log JSON
+    log_lines_file = file_content.splitlines()
+    assert len(log_lines_file) == 1, "Expected one log line in the file for exc_info test."
+    log_json_file = _parse_log_line(log_lines_file[0])
 
-    _check_common_log_fields(log_json,
+    _check_common_log_fields(log_json_file,
                              expected_level="ERROR",
                              expected_message_contains=error_message,
-                             expected_module_contains=Path(__file__).stem) # module name
+                             expected_module_contains=Path(__file__).stem)
 
-    assert 'exc_info' in log_json
-    assert "ZeroDivisionError" in log_json['exc_info'], "exc_info should contain ZeroDivisionError details."
-    # Example of a more specific check if needed:
-    # assert "Traceback (most recent call last):" in log_json['exc_info']
+    assert 'exc_info' in log_json_file, "exc_info field missing in JSON log."
+    assert "ZeroDivisionError" in log_json_file['exc_info'], "exc_info should contain ZeroDivisionError details."
+    assert "Traceback (most recent call last):" in log_json_file['exc_info'], "Traceback information missing from exc_info."
 
 
 def test_log_rotation_config():
@@ -252,30 +253,18 @@ def test_custom_context_fields(capsys):
     msg3 = "Log with no custom context."
     logger.info(msg3)
 
-    # Check console output (stderr)
+    # Check console output (stderr) - it will be colored text, not JSON
     captured_err = capsys.readouterr().err.strip()
     log_lines_err = captured_err.splitlines()
     assert len(log_lines_err) == 3, "Expected 3 log lines in stderr for context test."
 
-    log_json1_err = _parse_log_line(log_lines_err[0])
-    assert log_json1_err['user_id'] == extra1['user_id']
-    assert log_json1_err['chat_id'] == extra1['chat_id']
-    assert log_json1_err['message_id'] == extra1['message_id']
-    assert log_json1_err['message'] == msg1
+    # Basic check for message content in colored logs
+    assert msg1 in log_lines_err[0]
+    assert msg2 in log_lines_err[1]
+    assert msg3 in log_lines_err[2]
+    # Custom context fields (user_id, etc.) are not in the default console format for coloredlogs
 
-    log_json2_err = _parse_log_line(log_lines_err[1])
-    assert log_json2_err['user_id'] == extra2['user_id']
-    assert log_json2_err['chat_id'] == "N/A" # Default
-    assert log_json2_err['message_id'] == "N/A" # Default
-    assert log_json2_err['message'] == msg2
-
-    log_json3_err = _parse_log_line(log_lines_err[2])
-    assert log_json3_err['user_id'] == "N/A" # Default
-    assert log_json3_err['chat_id'] == "N/A" # Default
-    assert log_json3_err['message_id'] == "N/A" # Default
-    assert log_json3_err['message'] == msg3
-
-    # Check file output
+    # Check file output (JSON)
     assert TEST_LOG_FILE.exists(), "Log file should be created for context test."
     content_file = TEST_LOG_FILE.read_text().strip()
     log_lines_file = content_file.splitlines()
