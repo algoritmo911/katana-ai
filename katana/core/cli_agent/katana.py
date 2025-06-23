@@ -231,9 +231,11 @@ class KatanaCore:
                 break
             except Exception as e:
                 error_context = {**cli_user_context, 'message_id': f'main_loop_exception_{datetime.utcnow().isoformat()}'}
-                logger.critical(f"An unexpected error occurred in the main loop: {e}", extra=error_context)
-                import traceback
-                logger.critical(traceback.format_exc(), extra=error_context) # format_exc() provides the message
+                logger.critical(
+                    f"An unexpected error occurred in the main loop: {e}",
+                    exc_info=True,
+                    extra=error_context
+                )
                 time.sleep(1)
 
 if __name__ == '__main__':

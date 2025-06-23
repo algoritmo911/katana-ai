@@ -81,8 +81,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"OpenAI API Error: {e}", extra=log_context)
         await update.message.reply_text(f"An error occurred with the OpenAI API: {str(e)}")
     except Exception as e:
-        logger.critical(f"An unexpected error occurred in handle_message: {e}", extra=log_context)
-        logger.critical(traceback.format_exc(), extra=log_context) # format_exc() provides the message
+        logger.critical(
+            f"An unexpected error occurred in handle_message: {e}",
+            exc_info=True,
+            extra=log_context
+        )
         await update.message.reply_text("Sorry, an unexpected error occurred while processing your message.")
 
 # --- Main Bot Setup ---
@@ -122,12 +125,9 @@ def main():
     except Exception as e_poll:
         logger.critical(
             f"Error during bot polling: {e_poll}",
+            exc_info=True,
             extra={**system_context, 'message_id': 'main_poll_error'}
         )
-        logger.critical(
-            traceback.format_exc(),
-            extra={**system_context, 'message_id': 'main_poll_traceback'}
-        ) # format_exc() provides the message
     finally:
         logger.info(
             "Katana Telegram Bot (AI Chat Mode) stopped.",

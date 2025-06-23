@@ -349,5 +349,80 @@ def test_log_level_filtering(capsys):
     # Ensure no new lines were added for the child's debug message
     assert len(content_file_after_child.splitlines()) == 1
 
+
+def test_colorized_console_output_tty(capsys, monkeypatch):
+    """Test colorized console output when sys.stdout.isatty() is True."""
+    # Mock sys.stdout.isatty() to return True
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+
+    # Explicitly use TEST_LOG_FILE to avoid interference with default log file
+    setup_logging(log_level=logging.INFO, log_file_path=str(TEST_LOG_FILE))
+    logger = get_logger(DEFAULT_LOGGER_NAME + ".color_console_test")
+
+    test_message = "Testing colorized TTY output."
+    test_extra = {"user_id": "color_user", "chat_id": "color_chat", "message_id": "color_msg"}
+    logger.info(test_message, extra=test_extra)
+
+    captured = capsys.readouterr()
+    console_output = captured.err.strip() # ColorFormatter logs to console_handler (stderr)
+
+    assert console_output, "Console output for TTY is empty."
+
+    # Check for ANSI color codes (e.g., \x1b[92m for INFO level - green)
+    assert "\x1b[92m" in console_output, "ANSI green color code for INFO level not found."
+    assert "\x1b[0m" in console_output, "ANSI reset color code not found."
+
+    # Check that the output is not JSON
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(console_output)
+
+    # Check for message content and context fields (may be part of the colorized string)
+    assert test_message in console_output
+    assert test_extra["user_id"] in console_output
+    assert test_extra["chat_id"] in console_output
+    assert test_extra["message_id"] in console_output
+    assert Path(__file__).stem in console_output # module name
+
+    # Check that file output is still JSON and not colorized
+    assert TEST_LOG_FILE.exists(), "Log file should be created for colorized TTY test."
+    file_content = TEST_LOG_FILE.read_text().strip()
+    assert file_content, "Log file is empty for colorized TTY test."
+
+    # Ensure file content is valid JSON and not colorized
+    assert "\x1b[92m" not in file_content, "File log should not contain ANSI color codes."
+    log_json_file = _parse_log_line(file_content.splitlines()[0])
+    assert log_json_file['message'] == test_message
+    assert log_json_file['user_id'] == test_extra['user_id']
+    assert log_json_file['level'] == "INFO"
+
+
+def test_non_colorized_console_output_non_tty(capsys, monkeypatch):
+    """Test non-colorized (JSON) console output when sys.stdout.isatty() is False."""
+    # Mock sys.stdout.isatty() to return False
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    setup_logging(log_level=logging.INFO, log_file_path=str(TEST_LOG_FILE))
+    logger = get_logger(DEFAULT_LOGGER_NAME + ".non_color_console_test")
+
+    test_message = "Testing non-colorized non-TTY JSON output."
+    logger.info(test_message)
+
+    captured = capsys.readouterr()
+    console_output = captured.err.strip()
+
+    assert console_output, "Console output for non-TTY is empty."
+
+    # Check that output IS JSON
+    log_json_console = _parse_log_line(console_output)
+
+    # Check for no ANSI color codes
+    assert "\x1b[" not in console_output, "Console output for non-TTY should not have ANSI codes."
+
+    # Check common fields (similar to _check_common_log_fields but for console)
+    assert log_json_console.get('level') == "INFO"
+    assert test_message in log_json_console.get('message', '')
+    assert Path(__file__).stem in log_json_console.get('module', '')
+
+
 # Remove pytest.main() call if present, tests should be run by pytest runner
 # pytest.main() # For running directly if needed, though typically run via `pytest` command

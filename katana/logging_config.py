@@ -2,6 +2,31 @@ import logging
 import logging.handlers
 from pythonjsonlogger import jsonlogger
 import datetime
+import sys # Added for sys.stdout.isatty()
+
+# Define custom colors for log levels (optional)
+COLORS = {
+    'DEBUG': '\033[94m',  # Blue
+    'INFO': '\033[92m',   # Green
+    'WARNING': '\033[93m', # Yellow
+    'ERROR': '\033[91m',  # Red
+    'CRITICAL': '\033[91m', # Red
+    'ENDC': '\033[0m',    # Reset color
+}
+
+class ColorFormatter(logging.Formatter):
+    def format(self, record):
+        # Ensure default fields are present for the formatter string
+        default_values = {'user_id': 'N/A', 'chat_id': 'N/A', 'message_id': 'N/A'}
+        for key, value in default_values.items():
+            if not hasattr(record, key):
+                setattr(record, key, value)
+
+        log_message = super().format(record)
+        # Apply color only to the levelname part for better readability with context
+        # This requires the format string to have levelname separate or use a more complex replacement.
+        # For simplicity, coloring the whole line.
+        return f"{COLORS.get(record.levelname, '')}{log_message}{COLORS['ENDC']}"
 
 # Define the default logger name
 DEFAULT_LOGGER_NAME = 'katana_logger'
@@ -136,7 +161,17 @@ def setup_logging(log_level=logging.INFO, log_file_path=None):
 
     # Create console handler
     console_handler = logging.StreamHandler() # Outputs to stderr by default
-    console_handler.setFormatter(formatter)
+    # console_handler.setFormatter(formatter) # Original JSON formatter for console
+
+    # Color Formatter for console
+    if sys.stdout.isatty(): # Check if running in a TTY to enable colors
+        # For TTY, use a human-readable colorized format
+        color_formatter = ColorFormatter('%(asctime)s - %(levelname)s - %(module)s - %(message)s (%(user_id)s, %(chat_id)s, %(message_id)s)')
+        console_handler.setFormatter(color_formatter)
+    else:
+        # For non-TTY (e.g., piped output), use the JSON formatter
+        console_handler.setFormatter(formatter)
+
     console_handler.addFilter(context_filter) # Add filter to handler
     logger.addHandler(console_handler)
 

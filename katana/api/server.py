@@ -22,22 +22,16 @@ app = FastAPI()
 # Use the default log file name from the logging_config module
 LOG_FILE_PATH = Path(DEFAULT_LOG_FILE_NAME)
 
-# Regex to parse log lines, made slightly more flexible for module names and messages
-# Example: INFO 2023-10-27 10:00:00,123 - my.module - This is a message
-LOG_LINE_REGEX = re.compile(
-    r"^(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s+"  # Level
-    r"(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}(?:,\d{3})?)\s+-\s+"  # Timestamp (optional millis)
-    r"([\w.-]+)\s+-\s+"  # Module name (allow dots and hyphens)
-    r"(.*)$"  # Message
-)
-
+# LOG_LINE_REGEX is no longer needed as logs are expected to be in JSON format.
 # Ensure Katana's main logging is set up when the server starts.
 # This primarily ensures that if the API server is the first thing to run,
 # katana_events.log is properly configured for other parts of a larger app
 # or for the API server's own katana_logger usage if it were to use get_katana_logger().
 # For the API server's own internal logs (uvicorn, fastapi), they have their own logging.
 setup_katana_logging()
-api_server_logger = logging.getLogger(__name__) # Standard Python logger for API server's own messages
+# Ensure API server's own logger uses the Katana setup for consistent formatting and output.
+# Using get_katana_logger ensures it's part of the hierarchy that setup_katana_logging configures.
+api_server_logger = get_katana_logger(__name__)
 
 # Pydantic model for the request body of /api/logs/level
 class LogLevelRequest(BaseModel):
@@ -82,48 +76,52 @@ async def get_logs(
         raise HTTPException(status_code=500, detail=f"Could not read log file: {str(e)}")
 
     all_parsed_logs: List[Dict[str, str]] = []
-    # Note: The LOG_LINE_REGEX is for parsing the old string format.
-    # Now that logs are JSON, this parsing logic will need to change if this endpoint reads its own output.
-    # For now, assuming it reads katana_events.log which is now JSON.
-    # The parsing logic below will fail for JSON lines.
-    # This endpoint needs to be updated to parse JSON log lines.
-    # For this step, I'm only updating the logger calls *made by this server*.
-    # The logic of *reading and parsing* the log file by this endpoint is a separate concern.
-    # However, the logger.debug call below for unparsable lines should be updated.
-
     for line_number, line_content in enumerate(lines, start=1):
         line_content = line_content.strip()
-        if not line_content: # Skip empty lines
+        if not line_content:  # Skip empty lines
             continue
         try:
-            # Attempt to parse as JSON first
             log_entry = json.loads(line_content)
-            # Ensure it has the fields we expect for display, even if it's a generic JSON log
-            all_parsed_logs.append({
+            # Fields from our JSON logs: timestamp, level, message, module, funcName, lineno, user_id, chat_id, message_id
+            # We need to ensure the displayed fields are consistent.
+            # The frontend might expect "level" not "levelname", "timestamp" not "asctime".
+            # Our CustomJsonFormatter already ensures 'timestamp' and 'level'.
+            parsed_log = {
                 "timestamp": log_entry.get("timestamp", "N/A"),
-                "level": log_entry.get("level", log_entry.get("levelname", "N/A")), # Handle old levelname too
+                "level": log_entry.get("level", "UNKNOWN"), # Should be 'level' from JSON
                 "module": log_entry.get("module", "N/A"),
-                "message": log_entry.get("message", str(log_entry)), # Fallback to string of whole log
-                # Potentially add user_id, chat_id, message_id if they should be displayed
-            })
+                "message": log_entry.get("message", ""),
+                "user_id": log_entry.get("user_id", "N/A"),
+                "chat_id": log_entry.get("chat_id", "N/A"),
+                "message_id": log_entry.get("message_id", "N/A"),
+                "funcName": log_entry.get("funcName", ""),
+                "lineno": log_entry.get("lineno", 0),
+                # Include raw log if message is missing, or for detailed view later
+                # "raw_log": log_entry if not log_entry.get("message") else None
+            }
+            all_parsed_logs.append(parsed_log)
         except json.JSONDecodeError:
-            # Fallback to regex for old format or non-JSON lines, if any might still exist
-            match = LOG_LINE_REGEX.match(line_content)
-            if match:
-                log_level_old, timestamp_old, module_old, message_old = match.groups()
-                all_parsed_logs.append({
-                    "timestamp": timestamp_old,
-                    "level": log_level_old,
-                    "module": module_old,
-                    "message": message_old.strip()
-                })
-            elif line_content: # If it's not JSON and not matching old regex, log a debug message.
-                # Use a more specific message_id for these parsing issues.
-                parse_fail_ctx = {**api_context, 'message_id': f'{request_id}_parse_fail_line_{line_number}'}
-                api_server_logger.debug(
-                    f"Could not parse log line {line_number} as JSON or old format from {LOG_FILE_PATH}: '{line_content[:100]}...'",
-                    extra=parse_fail_ctx
-                )
+            # This case should ideally not happen if all logs are proper JSON.
+            # If it does, it might be a corrupted log line or a line from another source.
+            parse_fail_ctx = {**api_context, 'message_id': f'{request_id}_parse_fail_line_{line_number}'}
+            api_server_logger.warning(
+                f"Could not parse log line {line_number} as JSON from {LOG_FILE_PATH}: '{line_content[:200]}...'",
+                extra=parse_fail_ctx
+            )
+            # Optionally, include it as a raw string entry if needed for debugging.
+            # all_parsed_logs.append({
+            #     "timestamp": "N/A", "level": "UNKNOWN", "module": "parsing_error",
+            #     "message": f"Invalid JSON line: {line_content[:200]}...",
+            #     "user_id": "N/A", "chat_id": "N/A", "message_id": "N/A"
+            # })
+        except Exception as e_parse:
+            # Catch any other unexpected error during parsing a line
+            parse_fail_ctx = {**api_context, 'message_id': f'{request_id}_parse_unexpected_fail_line_{line_number}'}
+            api_server_logger.error(
+                f"Unexpected error parsing log line {line_number} from {LOG_FILE_PATH}: {e_parse} - Line: '{line_content[:200]}...'",
+                exc_info=True,
+                extra=parse_fail_ctx
+            )
 
     # Reverse logs to have newest first - apply after parsing and before filtering
     all_parsed_logs.reverse()

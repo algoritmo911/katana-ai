@@ -117,14 +117,15 @@ def execute_module(command):
             return {"status": "error", "message": err_msg}
 
     except Exception as e:
-        error_details = traceback.format_exc()
         err_msg = f"{type(e).__name__}: {e}"
-        # For critical errors, the message includes the traceback details for easier debugging from logs
         logger.critical(
-            f"Executing module '{module_name}' (command_id: {command_id}): {err_msg}\nTraceback:\n{error_details}",
+            f"Executing module '{module_name}' (command_id: {command_id}): {err_msg}",
+            exc_info=True,
             extra=exec_context
         )
-        return {"status": "error", "message": err_msg, "traceback": error_details}
+        # Return traceback in the response if needed by the caller, otherwise just log it.
+        # For now, keeping it in the response as per original logic.
+        return {"status": "error", "message": err_msg, "traceback": traceback.format_exc()}
 
 # --- MCI Helper Functions ---
 def load_commands():
@@ -188,10 +189,7 @@ def move_to_processed(original_command_file_path, processed_command_data):
     except Exception as e:
         logger.critical(
             f"Could not move/archive command file {original_command_file_path}. Error: {e}. Command data: {processed_command_data}",
-            extra=archive_context
-        )
-        logger.critical(
-            f"Traceback for archival failure: {traceback.format_exc()}", # format_exc provides message
+            exc_info=True,
             extra=archive_context
         )
         return False
@@ -339,9 +337,9 @@ def main(loop=False, delay=5):
                 move_to_processed(command_file_path, command_data)
 
         except Exception as e_loop:
-            error_details_loop = traceback.format_exc()
             logger.critical(
-                f"CRITICAL_ERROR in main agent loop: {e_loop}\nTraceback:\n{error_details_loop}",
+                f"CRITICAL_ERROR in main agent loop: {e_loop}",
+                exc_info=True,
                 extra={**mci_sys_context, 'message_id': f'main_loop_exception_iter_{loop_iteration}'}
             )
             if loop:
