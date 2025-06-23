@@ -4,14 +4,20 @@ Katana is a Telegram bot designed for flexible interaction and command processin
 
 ## Project Structure
 
--   `bot/`: Contains the core bot logic.
-    -   `katana_bot.py`: Main entry point and message handling for the bot.
+-   `main.py`: Main entry point for the application, handles interface selection and core processing loop.
+-   `bot/`: Contains supporting bot logic.
+    -   `katana_bot.py`: Utility module for bot functions (e.g., heartbeat, specific handlers if any).
     -   `nlp_clients/`: Clients for interacting with NLP models (e.g., Anthropic, OpenAI).
-    -   `commands/`: Directory where received JSON commands might be stored or processed.
+    -   `commands/`: Directory where received JSON commands might be stored or processed (now managed from `main.py`).
+-   `src/`: Source directory for modular components.
+    -   `interfaces/`: Contains different communication interfaces.
+        -   `interface_base.py`: Abstract base class for interfaces.
+        -   `telegram_interface.py`: Telegram specific communication interface.
+        -   `gemma_interface.py`: Interface for connecting to the Gemma/Kodjima API.
+        -   `tests/`: Unit tests for the interfaces.
 -   `ui/`: Contains the source code for a potential web UI (details might vary).
 -   `legacy_ui/`: Contains source code for a previous web UI.
 -   `requirements.txt`: Python dependencies.
--   `run_bot_locally.py`: Script to run the bot locally.
 -   `.env.example`: Example file for environment variable configuration.
 
 ## Running Locally
@@ -34,13 +40,37 @@ The bot requires certain API keys and tokens to be set as environment variables.
 2.  Edit the `.env` file and fill in your actual credentials:
 
     ```env
+    # --- Core Interface Selection ---
+    # INTERFACE: Determines the communication mode.
+    # Options: "telegram" (default), "gemma"
+    # - "telegram": Runs the bot as a Telegram bot.
+    # - "gemma":    Runs the application to send a single request to the Gemma/Kodjima API.
+    #               Requires GEMMA_API_KEY and optionally GEMMA_PAYLOAD_JSON.
+    INTERFACE="telegram"
+
+    # --- Telegram Interface Configuration ---
     KATANA_TELEGRAM_TOKEN="YOUR_TELEGRAM_BOT_TOKEN" # Get this from BotFather on Telegram
+
+    # --- Gemma Interface Configuration ---
+    # GEMMA_API_KEY: Your API key for the Gemma/Kodjima service.
+    # Required if INTERFACE is "gemma".
+    GEMMA_API_KEY="YOUR_GEMMA_API_KEY"
+
+    # GEMMA_PAYLOAD_JSON: Optional JSON string payload for a single run with INTERFACE="gemma".
+    # If not provided, a default test payload is used by main.py.
+    # Example: GEMMA_PAYLOAD_JSON='{"text": "Translate this to French: Hello", "user_id": "gemma_cli_user"}'
+    # GEMMA_PAYLOAD_JSON='{"text": "Your query here"}'
+
+
+    # --- Optional NLP Service Keys (used by core processing logic) ---
     ANTHROPIC_API_KEY="YOUR_ANTHROPIC_API_KEY"     # Optional: if you use Anthropic models
     OPENAI_API_KEY="YOUR_OPENAI_API_KEY"         # Optional: if you use OpenAI models
     ```
 
-    -   `KATANA_TELEGRAM_TOKEN`: This is essential for the bot to connect to Telegram.
-    -   `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are needed if the bot is configured to use these NLP services. If not used, the bot will log a warning but should still run with placeholder/stub responses.
+    -   `INTERFACE`: Chooses the active communication channel.
+        -   If `telegram`, `KATANA_TELEGRAM_TOKEN` is essential.
+        -   If `gemma`, `GEMMA_API_KEY` is essential. `GEMMA_PAYLOAD_JSON` can be used to provide the input query.
+    -   `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are needed if the bot's core logic (`process_user_message` -> `get_katana_response_async`) is configured to use these specific NLP services.
 
 ### 3. Install Dependencies
 
@@ -52,13 +82,43 @@ pip install -r requirements.txt
 
 ### 4. Run the Bot
 
-Execute the local runner script:
+Execute the main application script:
 
 ```bash
-python run_bot_locally.py
+python main.py
 ```
 
-You should see log messages in your console indicating that the bot is starting and has successfully loaded the environment variables.
+The behavior of the application will depend on the `INTERFACE` environment variable:
+
+-   **If `INTERFACE="telegram"` (default):**
+    You should see log messages indicating the Telegram bot is starting.
+-   **If `INTERFACE="gemma"`:**
+    The application will perform a single execution. It will use the `GEMMA_API_KEY` to send a request to the Gemma/Kodjima API. The payload for this request is taken from the `GEMMA_PAYLOAD_JSON` environment variable, or a default test payload if not set. Output from this mode (including any response from the Gemma/Kodjima API) will be logged to the console.
+
+### 5. Running with Gemma Interface (Single Shot)
+
+If you want to test or use the Gemma/Kodjima API integration directly:
+
+1.  Set your environment variables in the `.env` file:
+    ```env
+    INTERFACE="gemma"
+    GEMMA_API_KEY="YOUR_ACTUAL_GEMMA_API_KEY"
+    # Optionally, provide the JSON payload for the query:
+    GEMMA_PAYLOAD_JSON='{"text": "What is the weather like in Tokyo?", "user_id": "example_user_01"}'
+    ```
+    Refer to `main.py` for the structure of `GEMMA_PAYLOAD_JSON` that `process_user_message` expects (it should at least contain a "text" field).
+
+2.  Run `main.py`:
+    ```bash
+    python main.py
+    ```
+    The application will:
+    - Initialize the `GemmaInterface`.
+    - The `process_user_message` function in `main.py` will prepare a request dictionary based on the `GEMMA_PAYLOAD_JSON` (or default).
+    - The `GemmaInterface.send()` method will then POST this request dictionary to the configured Gemma/Kodjima API endpoint (`https://api.kodjima.com/v1/query` by default).
+    - Logs related to this operation, including the status of the API call, will be printed to the console. Note that the current `GemmaInterface.send()` does not directly return the API's response content to the main loop for display, but it logs the attempt and status.
+
+You should see log messages in your console indicating the application is starting and processing based on the selected interface.
 
 ### 5. Verify Bot is Alive
 
@@ -85,7 +145,7 @@ For running the bot in a more persistent manner (e.g., on a server), it's recomm
 A robust way to manage the Katana bot on a Linux server is by using `systemd`. This ensures the bot automatically starts on boot and restarts if it unexpectedly fails.
 
 1.  **Prepare your Environment:**
-    *   Ensure your bot project (including `run_bot_locally.py`, `requirements.txt`, and your `.env` file) is deployed to a stable directory on your server, for example, `/opt/katana-bot`.
+    *   Ensure your bot project (including `main.py`, `requirements.txt`, and your `.env` file) is deployed to a stable directory on your server, for example, `/opt/katana-bot`.
     *   It's recommended to run the bot under a dedicated user account with limited privileges.
         ```bash
         # Example: Create a user 'katana_bot_user'
@@ -107,7 +167,7 @@ A robust way to manage the Katana bot on a Linux server is by using `systemd`. T
         *   `User` and `Group`: Uncomment and set to the dedicated user you created (e.g., `katana_bot_user`). If you didn't create a specific user, you can run it as another user, but a dedicated one is safer.
         *   `WorkingDirectory`: Set this to the absolute path where your bot project is located (e.g., `/opt/katana-bot`).
         *   `EnvironmentFile`: Set this to the absolute path of your `.env` file (e.g., `/opt/katana-bot/.env`).
-        *   `ExecStart`: Ensure this points to your Python 3 executable and the absolute path to `run_bot_locally.py` within your project (e.g., `/usr/bin/python3 /opt/katana-bot/run_bot_locally.py` or `/opt/katana-bot/venv/bin/python /opt/katana-bot/run_bot_locally.py` if using a venv).
+        *   `ExecStart`: Ensure this points to your Python 3 executable and the absolute path to `main.py` within your project (e.g., `/usr/bin/python3 /opt/katana-bot/main.py` or `/opt/katana-bot/venv/bin/python /opt/katana-bot/main.py` if using a venv).
     *   Review other settings like `RestartSec` as needed. The default logging is to `journald`.
 
 4.  **Reload systemd, Enable, and Start the Service:**
@@ -173,7 +233,7 @@ By default, the bot logs to the console. You can also configure it to log to a f
     # The log file itself will be created by the application.
     ```
 
-When `run_bot_locally.py` starts, it will detect `LOG_FILE_PATH` and configure logging to output to both the console and the specified file.
+When `main.py` starts, its logging setup (currently `logging.basicConfig`) will determine how logs are handled. For file logging based on `LOG_FILE_PATH` to work as described, `main.py` would need to be enhanced to explicitly add a `FileHandler` if `LOG_FILE_PATH` is set (similar to how `run_bot_locally.py` previously handled it). This documentation assumes such setup is or will be in `main.py`.
 
 ### Log Rotation with `logrotate`
 
@@ -263,8 +323,8 @@ For a comprehensive, step-by-step guide to deploying the bot on a new server, in
 ## Graceful Shutdown
 
 The bot includes mechanisms for a basic graceful shutdown:
-- When the bot is stopped (e.g., via `Ctrl+C` or `systemctl stop`), the heartbeat thread is signaled to stop and is joined before the application fully exits. This is handled in `run_bot_locally.py` and the `if __name__ == '__main__'` block of `bot/katana_bot.py`.
-- **Further Considerations**: True graceful shutdown of active message handlers (ensuring they complete processing before exit) is more complex with the current `pyTelegramBotAPI` polling model. For applications requiring this, a different approach to message processing (e.g., a queue and worker threads) might be needed.
+- When the application is stopped (e.g., via `Ctrl+C` or `systemctl stop`), `main.py` attempts to cancel running asyncio tasks. If the heartbeat functionality from `bot/katana_bot.py` is used and integrated into `main.py`'s lifecycle, it should also be stopped gracefully.
+- **Further Considerations**: True graceful shutdown of active message handlers (ensuring they complete processing before exit) can be complex, especially with polling-based interfaces. The current `TelegramInterface` uses a separate thread for polling, and `main.py`'s shutdown sequence attempts to cancel tasks in its main asyncio loop.
 
 ### Supervisor
 
@@ -273,7 +333,7 @@ The bot includes mechanisms for a basic graceful shutdown:
 
     ```ini
     [program:katana-bot]
-    command=/usr/bin/python /path/to/your/katana-bot-project/run_bot_locally.py ; Full command
+    command=/usr/bin/python /path/to/your/katana-bot-project/main.py ; Full command
     directory=/path/to/your/katana-bot-project/ ; Project directory
     autostart=true
     autorestart=true
@@ -283,9 +343,9 @@ The bot includes mechanisms for a basic graceful shutdown:
     environment=PYTHONUNBUFFERED=1 # Ensures logs are written immediately
     # You might need to ensure .env variables are loaded,
     # either by sourcing them in the command or ensuring supervisor user has them.
-    # Alternatively, have run_bot_locally.py load them via python-dotenv, which it does.
+    # Alternatively, have main.py load them via python-dotenv, which it does.
     ```
-    Ensure the paths and username are correct. The `python-dotenv` library used in `run_bot_locally.py` should handle loading variables from the `.env` file in the specified `directory`.
+    Ensure the paths and username are correct. The `python-dotenv` library used in `main.py` should handle loading variables from the `.env` file in the specified `directory`.
 
 3.  Tell Supervisor to read the new config:
     ```bash
