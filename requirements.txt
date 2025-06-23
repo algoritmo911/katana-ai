@@ -6,3 +6,4 @@ python-dotenv
 flake8
 fastapi
 uvicorn[standard]
+streamlit
