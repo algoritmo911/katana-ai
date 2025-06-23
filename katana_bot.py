@@ -37,62 +37,48 @@ class KatanaBot:
         parts = command_string.strip().lower().split()
         if not parts:
             logger.warning("Empty command received.")
-            print(f"{self.name}: Empty command.")
-            return
+            return f"{self.name}: Empty command."
 
         command = parts[0]
         args = parts[1:]
+        response_message = ""
 
         if command == "!price":
             if len(args) == 1:
                 pair = args[0].upper() # e.g., btc-usd -> BTC-USD
                 logger.info(f"Attempting to fetch price for pair: {pair} via command.")
-                # Call the imported get_spot_price function
                 price = get_spot_price(pair)
                 if price is not None:
-                    # Note: The Coinbase API returns currency in the 'currency' field,
-                    # for /prices/:pair/spot it's the counter currency (e.g., USD for BTC-USD)
-                    print(f"{self.name}: Current price for {pair}: {price} (currency from pair)")
-                    logger.info(f"Successfully displayed price for {pair}: {price}")
+                    response_message = f"{self.name}: Current price for {pair}: {price} (currency from pair)"
+                    logger.info(f"Successfully generated price message for {pair}: {price}")
                 else:
-                    print(f"{self.name}: Could not fetch price for {pair}. See logs/coinbase.log for details.")
-                    logger.warning(f"Failed to fetch or display price for {pair} via command.")
+                    response_message = f"{self.name}: Could not fetch price for {pair}. See server logs for details."
+                    logger.warning(f"Failed to fetch price for {pair} via command.")
             else:
                 error_msg = "!price command requires one argument (the trading pair). Usage: !price BTC-USD"
                 logger.warning(error_msg)
-                print(f"{self.name}: {error_msg}")
+                response_message = f"{self.name}: {error_msg}"
         elif command == "!greet":
-            greeting_message = self.GREETING() # Assuming GREETING method exists
-            print(f"{self.name}: {greeting_message}")
+            greeting_message = self.GREETING()
+            response_message = f"{self.name}: {greeting_message}"
             logger.info("Executed !greet command.")
         else:
+            unknown_cmd_msg = f"Unknown command '{command}'. Try !price BTC-USD or !greet."
             logger.warning(f"Unknown command received: {command}")
-            print(f"{self.name}: Unknown command '{command}'. Try !price BTC-USD or !greet.")
+            response_message = f"{self.name}: {unknown_cmd_msg}"
 
-if __name__ == '__main__':
-    # Configure general logging (e.g., to console and app.log)
-    # This setup_logging is from logging_config.py
-    setup_logging(logging.DEBUG)
+        return response_message
 
-    # Specific loggers like 'KatanaCoinbaseAPI' are configured within their own modules
-    # (e.g., in coinbase_api.py). Importing them makes their loggers active.
-    # No explicit re-configuration of those loggers should be needed here.
-
-    bot = KatanaBot("MainBot") # Creates KatanaBot instance
-
-    # Keep or comment out existing __main__ calls as desired
-    # bot.start_mission("ExploreSectorGamma")
-    # bot.start_mission("")
-    # print(bot.GREETING())
-
-    # Demonstrate the new command handling
-    print("\n--- Testing Bot Commands ---")
-    bot.handle_command("!price btc-usd")
-    bot.handle_command("!price eth-eur")
-    bot.handle_command("!price SOL-USD")
-    bot.handle_command("!price INVALIDPAIR") # Test an invalid pair
-    bot.handle_command("!greet")
-    bot.handle_command("!unknown_command")
-    bot.handle_command("!price") # Test !price without arguments
-    bot.handle_command("  !price ada-usd  ") # Test with leading/trailing spaces
-    print("--- Bot Command Testing Finished ---")
+# The __main__ block is removed as the bot will be run by the FastAPI application (main.py)
+# For testing, you would now run main.py and interact via Telegram or API endpoints.
+# Example of old main block for reference (now removed):
+# if __name__ == '__main__':
+#     setup_logging(logging.DEBUG)
+#     bot = KatanaBot("MainBot")
+#     print("\n--- Testing Bot Commands ---")
+#     # Test calls would need to capture print output or be adapted if handle_command returned values
+#     # For example: print(bot.handle_command("!price btc-usd"))
+#     # bot.handle_command("!price btc-usd")
+#     # bot.handle_command("!price eth-eur")
+#     # ... and so on
+#     print("--- Bot Command Testing Finished ---")

@@ -4,3 +4,7 @@ pytest
 pytest-cov
 coverage
 requests
+fastapi
+uvicorn[standard]
+python-telegram-bot
+apscheduler
