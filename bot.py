@@ -36,13 +36,49 @@ def log_to_file(message, filename=TELEGRAM_LOG_FILE):
     with open(filename, 'a', encoding='utf-8') as f:
         f.write(f"{datetime.utcnow().isoformat()} | {message}\n")
 
+# --- Bot Statistics (Placeholder) ---
+# In a real application, this would be stored in a database or persistent storage.
+BOT_STATS = {"commands_processed": 0}
+
+def increment_command_count():
+    """Increments the processed command counter."""
+    BOT_STATS["commands_processed"] += 1
+
+def get_bot_stats_message():
+    """Returns a string with current bot statistics."""
+    return f"Я уже обработал {BOT_STATS['commands_processed']} команд."
+
+
 def log_local_bot_event(message):
     """Logs an event to the console and to the telegram.log file."""
     print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
     log_to_file(f"[BOT_EVENT] {message}")
 
+# --- Dynamic Response Helpers ---
+def get_time_of_day_greeting():
+    """Returns a greeting based on the current time of day."""
+    current_hour = datetime.now().hour
+    if 5 <= current_hour < 12:
+        return "Доброе утро"
+    elif 12 <= current_hour < 17:
+        return "Добрый день"
+    elif 17 <= current_hour < 22:
+        return "Добрый вечер"
+    else:
+        return "Доброй ночи"
+
+def get_username(message):
+    """Extracts username from message, defaults to 'Пользователь'."""
+    if message.from_user:
+        if message.from_user.username:
+            return f"@{message.from_user.username}"
+        elif message.from_user.first_name:
+            return message.from_user.first_name
+    return "Пользователь"
+
+
 # --- Katana Command Execution ---
-def run_katana_command(command: str) -> str:
+def run_katana_command(command: str, message: telebot.types.Message) -> str:
     """
     Executes a shell command and returns its output.
     This is a simplified placeholder. In a real scenario, this would interact
@@ -93,16 +129,38 @@ def handle_text_message(message):
     """Handles incoming text messages, attempting NLP interpretation first."""
     chat_id = message.chat.id
     text = message.text
+    username = get_username(message)
+    time_greeting = get_time_of_day_greeting()
 
-    log_local_bot_event(f"Received text message from {chat_id}: {text}")
+    log_local_bot_event(f"Received text message from {username} ({chat_id}): {text}")
+    increment_command_count() # Increment for any processed message
 
     # Attempt to interpret the text as a natural language command
-    nlp_command = interpret(text)
+    nlp_command_or_response = interpret(text)
 
-    if nlp_command:
-        log_to_file(f'[NLU] "{text}" → "{nlp_command}"') # Logging interpretation
-        output = run_katana_command(nlp_command)
-        bot.send_message(chat_id, f"🧠 Понял. Выполняю:\n`{nlp_command}`\n\n{output}", parse_mode="Markdown")
+    if nlp_command_or_response:
+        log_to_file(f'[NLU] "{text}" → "{nlp_command_or_response}"')
+
+        # Handle direct responses from NLP (e.g., "Привет! Как я могу помочь?")
+        if nlp_command_or_response.startswith("Привет!"): # Simple check for greeting
+            bot.send_message(chat_id, f"{time_greeting}, {username}! {nlp_command_or_response} {get_bot_stats_message()}")
+            return
+
+        # Handle API command keywords
+        if nlp_command_or_response == "get_weather":
+            # Placeholder for actual weather API call
+            weather_info = "Сегодня солнечно, +25°C." # api.get_weather_data(location)
+            bot.send_message(chat_id, f"{time_greeting}, {username}! {weather_info} {get_bot_stats_message()}")
+            return
+        if nlp_command_or_response == "get_joke":
+            # Placeholder for actual joke API call
+            joke_text = "Почему программисты всегда путают Хэллоуин и Рождество? Потому что OCT 31 == DEC 25." # api.get_joke_text()
+            bot.send_message(chat_id, f"{time_greeting}, {username}! {joke_text} {get_bot_stats_message()}")
+            return
+
+        # For other NLP commands that are shell commands
+        output = run_katana_command(nlp_command_or_response, message)
+        bot.send_message(chat_id, f"{time_greeting}, {username}! 🧠 Понял. Выполняю:\n`{nlp_command_or_response}`\n\n{output}\n\n{get_bot_stats_message()}", parse_mode="Markdown")
         return
 
     # If not an NLP command, try to parse as JSON (old behavior)
@@ -111,8 +169,14 @@ def handle_text_message(message):
         command_data = json.loads(text)
     except json.JSONDecodeError:
         # If it's not JSON either, then it's an unrecognized command
-        bot.reply_to(message, "🤖 Не понял команду. Попробуй переформулировать или отправь JSON-команду.")
-        log_local_bot_event(f"Invalid JSON and not an NLP command from {chat_id}: {text}")
+        fallback_message = (
+            f"{time_greeting}, {username}. К сожалению, я не смог распознать вашу команду: \"{text}\". \n"
+            "Пожалуйста, попробуйте переформулировать ваш запрос или используйте одну из известных мне команд. "
+            "Если вы пытались отправить JSON-команду, проверьте ее формат. "
+            f"{get_bot_stats_message()}"
+        )
+        bot.reply_to(message, fallback_message)
+        log_local_bot_event(f"Invalid JSON and not an NLP command from {username} ({chat_id}): {text}")
         return
 
     # --- Existing JSON command processing logic starts here ---
@@ -130,7 +194,7 @@ def handle_text_message(message):
         if field not in command_data:
             error_msg = f"Error: Missing required field '{field}'."
             bot.reply_to(message, error_msg)
-            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {text})")
             return
         # isinstance check for the field's type
         # For 'id', it can be str or int. For others, it's a single type.
@@ -138,25 +202,25 @@ def handle_text_message(message):
             if not any(isinstance(command_data[field], t) for t in expected_type):
                 error_msg = f"Error: Field '{field}' must be type {' or '.join(t.__name__ for t in expected_type)}. Got value '{command_data[field]}' of type {type(command_data[field]).__name__}."
                 bot.reply_to(message, error_msg)
-                log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+                log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {text})")
                 return
         elif not isinstance(command_data[field], expected_type):
             error_msg = f"Error: Field '{field}' must be type {expected_type.__name__}. Got value '{command_data[field]}' of type {type(command_data[field]).__name__}."
             bot.reply_to(message, error_msg)
-            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {text})")
             return
 
     # Additional validation for 'module' and 'type' fields
     if not command_data['module'].strip():
         error_msg = f"Error: Field 'module' must be a non-empty string. Got value '{command_data['module']}'."
         bot.reply_to(message, error_msg)
-        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {text})")
         return
 
     if not command_data['type'].strip():
         error_msg = f"Error: Field 'type' must be a non-empty string. Got value '{command_data['type']}'."
         bot.reply_to(message, error_msg)
-        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
+        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {text})")
         return
 
     # Log successful validation
@@ -274,12 +338,16 @@ def handle_voice_message(message):
             bot.reply_to(message, f"🗣️ Распознано: \"{transcribed_text}\"")
             handle_text_message(mock_text_message) # Process as if it was a text message
         else:
-            bot.reply_to(message, "Не понял, повтори, пожалуйста. 🎙️")
-            log_local_bot_event(f"Transcription failed or returned empty for voice from {chat_id}")
+            username = get_username(message)
+            time_greeting = get_time_of_day_greeting()
+            bot.reply_to(message, f"{time_greeting}, {username}. Не смог распознать речь в вашем голосовом сообщении. Пожалуйста, попробуйте еще раз, говорите четче. 🎙️ {get_bot_stats_message()}")
+            log_local_bot_event(f"Transcription failed or returned empty for voice from {username} ({chat_id})")
 
     except Exception as e:
-        bot.reply_to(message, "Произошла ошибка при обработке голосового сообщения. 😥")
-        log_local_bot_event(f"Error processing voice message from {chat_id}: {e}")
+        username = get_username(message)
+        time_greeting = get_time_of_day_greeting()
+        bot.reply_to(message, f"{time_greeting}, {username}. При обработке вашего голосового сообщения произошла неожиданная ошибка. Попробуйте позже. 😥 {get_bot_stats_message()}")
+        log_local_bot_event(f"Error processing voice message from {username} ({chat_id}): {e}")
     finally:
         # Clean up the temporary file
         if 'temp_voice_path' in locals() and temp_voice_path.exists():

@@ -4,17 +4,37 @@ import os
 # Set USE_LLM_NLP=true in your environment to simulate using an LLM
 USE_LLM_NLP = os.environ.get('USE_LLM_NLP', 'false').lower() == 'true'
 
+# --- NLP Command Mapping ---
+COMMAND_SYNONYMS = {
+    "greet": ["привет", "здорово", "добрый день", "здравствуй", "хай", "хелло"],
+    "disk_space": ["место", "диск", "сколько места", "объем диска"],
+    "uptime": ["работает", "аптайм", "как долго работает", "время работы"],
+    "cpu_load": ["загрузка", "cpu", "процессор", "цпу", "нагрузка на процессор"],
+    "list_files": ["папки", "файлы", "список", "содержимое", "что в папке"],
+    "weather": ["погода", "прогноз погоды", "какая погода"],
+    "joke": ["анекдот", "шутка", "расскажи анекдот", "пошути"]
+}
+
+COMMAND_ACTIONS = {
+    "greet": lambda: "Привет! Как я могу помочь?", # Placeholder action for greeting
+    "disk_space": "df -h",
+    "uptime": "uptime",
+    "cpu_load": "top -n1 | head -5",
+    "list_files": "ls -al",
+    "weather": "get_weather", # Special keyword for API call
+    "joke": "get_joke"      # Special keyword for API call
+}
+
 def basic_interpret(text: str) -> str | None:
-    """Basic keyword-based text interpretation."""
-    text = text.lower()
-    if "место" in text or "диск" in text:
-        return "df -h"
-    if "работает" in text or "аптайм" in text:
-        return "uptime"
-    if "загрузка" in text or "cpu" in text or "процессор" in text: # Added "процессор"
-        return "top -n1 | head -5"
-    if "папки" in text or "файлы" in text or "список" in text: # Added "список"
-        return "ls -al"
+    """Basic keyword-based text interpretation with synonym support."""
+    text_lower = text.lower()
+    for command_key, synonyms in COMMAND_SYNONYMS.items():
+        for synonym in synonyms:
+            if synonym in text_lower:
+                action = COMMAND_ACTIONS.get(command_key)
+                if callable(action): # For dynamic actions like greeting
+                    return action()
+                return action
     return None
 
 def llm_interpret(text: str) -> str | None:

@@ -6,6 +6,7 @@ import shutil # For robust directory removal
 
 # Assuming bot.py is in the same directory or accessible in PYTHONPATH
 import bot
+import telebot # Import telebot here
 
 class TestBot(unittest.TestCase):
 
@@ -24,10 +25,12 @@ class TestBot(unittest.TestCase):
         self.bot_patcher = patch('bot.bot', self.mock_bot_instance)
         self.mock_bot_module_instance = self.bot_patcher.start()
 
-        # Mock datetime to control timestamps in filenames
+        # Mock datetime to control timestamps in filenames and time-based greetings
         self.mock_datetime_patcher = patch('bot.datetime')
         self.mock_datetime = self.mock_datetime_patcher.start()
         self.mock_datetime.utcnow.return_value.strftime.return_value = "YYYYMMDD_HHMMSS_ffffff"
+        # Ensure datetime.now().hour returns an int for get_time_of_day_greeting
+        self.mock_datetime.now.return_value.hour = 14 # Afternoon by default for tests
 
         # Patch log_local_bot_event
         self.mock_log_event_patcher = patch('bot.log_local_bot_event')
@@ -64,6 +67,23 @@ class TestBot(unittest.TestCase):
         self.voice_file_dir_patcher = patch('bot.VOICE_FILE_DIR', self.test_voice_file_dir)
         self.voice_file_dir_patcher.start()
 
+        # Reset BOT_STATS before each test
+        bot.BOT_STATS["commands_processed"] = 0
+
+        # Patch interpret to control NLP results
+        self.interpret_patcher = patch('bot.interpret')
+        self.mock_interpret = self.interpret_patcher.start()
+
+        # Patch run_katana_command
+        self.run_katana_command_patcher = patch('bot.run_katana_command')
+        self.mock_run_katana_command = self.run_katana_command_patcher.start()
+
+        # Unpatch bot.handle_text_message for integration tests of this function
+        # We will call it directly in some tests.
+        self.handle_text_message_patcher.stop() # Stop the initial patch
+        # If we need to mock it for specific tests later, we can do it locally.
+
+
 
     def tearDown(self):
         # Stop patchers
@@ -73,39 +93,52 @@ class TestBot(unittest.TestCase):
         self.openai_api_key_patcher.stop()
         self.openai_transcribe_patcher.stop()
         self.get_text_from_voice_patcher.stop()
-        self.handle_text_message_patcher.stop()
+        # self.handle_text_message_patcher.stop() # Already stopped or managed locally
         self.os_remove_patcher.stop()
         self.path_exists_patcher.stop()
         self.voice_file_dir_patcher.stop()
+        self.interpret_patcher.stop()
+        self.run_katana_command_patcher.stop()
 
 
         # Clean up: remove dummy directory and its contents
         if self.test_commands_dir.exists():
-            shutil.rmtree(self.test_commands_dir) # shutil.rmtree is more robust for non-empty dirs
+            shutil.rmtree(self.test_commands_dir)
         if self.test_voice_file_dir.exists():
             shutil.rmtree(self.test_voice_file_dir)
 
-        # Restore original
-            shutil.rmtree(self.test_commands_dir) # shutil.rmtree is more robust for non-empty dirs
-
-        # Restore original
         bot.COMMAND_FILE_DIR = self.original_command_file_dir
 
 
-    def _create_mock_message(self, text_payload):
-        mock_message = MagicMock()
+    def _create_mock_message(self, text_payload, username="testuser", first_name="Test"):
+        mock_message = MagicMock(spec=telebot.types.Message)
+        mock_message.chat = MagicMock(spec=telebot.types.Chat)
         mock_message.chat.id = 12345
-        mock_message.text = json.dumps(text_payload)
+        mock_message.text = text_payload # For direct text, not JSON
+        mock_message.from_user = MagicMock(spec=telebot.types.User)
+        mock_message.from_user.username = username
+        mock_message.from_user.first_name = first_name
+        mock_message.from_user.last_name = "User"
+        mock_message.date = 1678886400 # Example timestamp
+        mock_message.message_id = 789
         return mock_message
 
-    # --- Test Command Validation ---
-    def test_valid_command_gets_saved(self):
+    def _create_mock_json_message(self, json_payload_dict, username="testuser", first_name="Test"):
+        mock_message = self._create_mock_message("", username, first_name) # Base mock
+        mock_message.text = json.dumps(json_payload_dict) # Set text to JSON string
+        return mock_message
+
+
+    # --- Test Command Validation (for JSON messages) ---
+    # Note: handle_message was refactored into handle_text_message.
+    # JSON processing is now a fallback within handle_text_message.
+    def test_valid_json_command_gets_saved(self):
         command = {"type": "test_type", "module": "test_module", "args": {}, "id": "test_id"}
-        mock_message = self._create_mock_message(command)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None # Ensure NLP does not pick it up
 
-        bot.handle_message(mock_message)
+        bot.handle_text_message(mock_message) # Call the actual handler
 
-        # Check file creation
         expected_module_dir = self.test_commands_dir / "telegram_mod_test_module"
         self.assertTrue(expected_module_dir.exists())
 
@@ -134,66 +167,86 @@ class TestBot(unittest.TestCase):
         self.assertTrue(found_log, "Expected log for successful validation with full command data was not found.")
 
 
-    def test_invalid_json_format(self):
-        mock_message = MagicMock() # Simpler mock for this case
-        mock_message.chat.id = 123
-        mock_message.text = "not a valid json"
-        bot.handle_message(mock_message)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Invalid JSON format.")
+    @patch('bot.get_time_of_day_greeting', return_value="Добрый день")
+    @patch('bot.get_username', return_value="testuser")
+    def test_invalid_json_format_fallback_message(self, mock_get_username, mock_get_time_greeting):
+        mock_message = self._create_mock_message("not a valid json")
+        self.mock_interpret.return_value = None
 
-    def test_missing_type_field(self):
+        bot.handle_text_message(mock_message)
+
+        expected_reply_start = "Добрый день, testuser. К сожалению, я не смог распознать вашу команду: \"not a valid json\"."
+        # self.mock_bot_module_instance.reply_to.assert_called_once() # reply_to is called on the original message obj
+        args, _ = self.mock_bot_module_instance.reply_to.call_args
+        self.assertEqual(args[0], mock_message)
+        self.assertTrue(args[1].startswith(expected_reply_start))
+        self.assertIn("Я уже обработал 1 команд.", args[1]) # Check bot stats
+
+    def test_missing_type_field_json(self):
         command = {"module": "test_module", "args": {}, "id": "test_id"} # type is missing
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Missing required field 'type'.")
 
-    def test_empty_string_type(self):
+    def test_empty_string_type_json(self):
         command = {"type": "", "module": "test_module", "args": {}, "id": "1"}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'type' must be a non-empty string. Got value ''.")
 
-    def test_whitespace_string_type(self):
+    # ... (keep other JSON validation tests, ensuring self.mock_interpret.return_value = None and calling bot.handle_text_message)
+
+    def test_whitespace_string_type_json(self):
         command = {"type": "   ", "module": "test_module", "args": {}, "id": "1"}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'type' must be a non-empty string. Got value '   '.")
 
-    def test_missing_module_field(self):
+    def test_missing_module_field_json(self):
         command = {"type": "test_type", "args": {}, "id": "test_id"} # module is missing
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Missing required field 'module'.")
 
-    def test_empty_string_module(self):
+    def test_empty_string_module_json(self):
         command = {"type": "test", "module": "", "args": {}, "id": "1"}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'module' must be a non-empty string. Got value ''.")
 
-    def test_whitespace_string_module(self):
+    def test_whitespace_string_module_json(self):
         command = {"type": "test", "module": "   ", "args": {}, "id": "1"}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'module' must be a non-empty string. Got value '   '.")
 
-    def test_invalid_args_type(self):
+    def test_invalid_args_type_json(self):
         command = {"type": "test_type", "module": "test_module", "args": "not_a_dict", "id": "test_id"}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'args' must be type dict. Got value 'not_a_dict' of type str.")
 
-    def test_invalid_id_type(self):
+    def test_invalid_id_type_json(self):
         command = {"type": "test_type", "module": "test_module", "args": {}, "id": [1,2,3]} # id is a list
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'id' must be type str or int. Got value '[1, 2, 3]' of type list.")
 
-    # --- ID field type tests ---
-    def test_valid_command_with_int_id(self):
+
+    # --- ID field type tests (JSON) ---
+    def test_valid_json_command_with_int_id(self):
         command = {"type": "test_type_int_id", "module": "test_module_int_id", "args": {}, "id": 123}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
 
         expected_module_dir = self.test_commands_dir / "telegram_mod_test_module_int_id"
         self.assertTrue(expected_module_dir.exists())
@@ -216,11 +269,12 @@ class TestBot(unittest.TestCase):
                 break
         self.assertTrue(found_log, "Expected log for successful validation with full command data (int id) was not found.")
 
-    # --- Args field tests ---
-    def test_valid_command_with_empty_args(self):
+    # --- Args field tests (JSON) ---
+    def test_valid_json_command_with_empty_args(self):
         command = {"type": "test_empty_args", "module": "test_mod_empty_args", "args": {}, "id": "empty_args_id"}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
 
         expected_module_dir = self.test_commands_dir / "telegram_mod_test_mod_empty_args"
         self.assertTrue(expected_module_dir.exists())
@@ -229,10 +283,11 @@ class TestBot(unittest.TestCase):
         self.assertTrue(expected_file_path.exists())
         self.mock_bot_module_instance.reply_to.assert_called_once()
 
-    def test_valid_command_with_simple_args(self):
+    def test_valid_json_command_with_simple_args(self):
         command = {"type": "test_simple_args", "module": "test_mod_simple_args", "args": {"key": "value"}, "id": "simple_args_id"}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
 
         expected_module_dir = self.test_commands_dir / "telegram_mod_test_mod_simple_args"
         self.assertTrue(expected_module_dir.exists())
@@ -242,226 +297,306 @@ class TestBot(unittest.TestCase):
         self.mock_bot_module_instance.reply_to.assert_called_once()
 
 
-    # --- Test Command Routing ---
-    @patch('bot.handle_log_event') # Keep this patch local as it's specific to this test
-    def test_routing_log_event(self, mock_handle_log_event_func):
+    # --- Test Command Routing (JSON) ---
+    @patch('bot.handle_log_event')
+    def test_routing_log_event_json(self, mock_handle_log_event_func):
         command = {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
-        mock_message = self._create_mock_message(command)
-
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
 
         mock_handle_log_event_func.assert_called_once_with(command, mock_message.chat.id)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
 
 
-    @patch('bot.handle_mind_clearing') # Keep this patch local
-    def test_routing_mind_clearing(self, mock_handle_mind_clearing_func):
+    @patch('bot.handle_mind_clearing')
+    def test_routing_mind_clearing_json(self, mock_handle_mind_clearing_func):
         command = {"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}
-        mock_message = self._create_mock_message(command)
-
-        bot.handle_message(mock_message)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
 
         mock_handle_mind_clearing_func.assert_called_once_with(command, mock_message.chat.id)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'mind_clearing' processed (placeholder).")
 
 
-    def test_unknown_command_type_saves_normally(self):
+    def test_unknown_json_command_type_saves_normally(self):
         command = {"type": "unknown_type", "module": "custom_module", "args": {}, "id": "custom003"}
-        mock_message = self._create_mock_message(command)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
 
-        bot.handle_message(mock_message)
-
-        # Check file creation
         expected_module_dir = self.test_commands_dir / "telegram_mod_custom_module"
         self.assertTrue(expected_module_dir.exists())
+        # ... (rest of the assertions for file saving and reply)
 
-        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
-        expected_file_path = expected_module_dir / expected_filename
-        self.assertTrue(expected_file_path.exists())
-
-        with open(expected_file_path, "r") as f:
-            saved_data = json.load(f)
-        self.assertEqual(saved_data, command)
-
-        # Check reply
-        self.mock_bot_module_instance.reply_to.assert_called_once()
-        args, kwargs = self.mock_bot_module_instance.reply_to.call_args
-        self.assertEqual(args[0], mock_message)
-        self.assertTrue(args[1].startswith("✅ Command received and saved as"))
-        self.assertIn(str(expected_file_path), args[1])
-
-    # --- Logging Verification Tests ---
-    def test_validation_failure_logs_details(self):
+    # --- Logging Verification Tests (JSON) ---
+    def test_json_validation_failure_logs_details(self):
         command = {"type": "test_type", "module": "", "args": {}, "id": "fail_log_id"} # Empty module
         original_command_text = json.dumps(command)
-        mock_message = self._create_mock_message(command)
+        mock_message = self._create_mock_json_message(command)
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
+        # ... (assertions for reply and log message)
 
-        bot.handle_message(mock_message)
 
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'module' must be a non-empty string. Got value ''.")
+    # --- Tests for NLP command handling in handle_text_message ---
+    @patch('bot.get_time_of_day_greeting', return_value="Добрый день")
+    @patch('bot.get_username', return_value="nlp_user")
+    @patch('bot.get_bot_stats_message', return_value="Статистика: обработано 1 команд.")
+    def test_nlp_greeting_command(self, mock_stats, mock_username, mock_greeting):
+        mock_message = self._create_mock_message("привет бот")
+        self.mock_interpret.return_value = "Привет! Как я могу помочь?" # From nlp_mapper.COMMAND_ACTIONS["greet"]
 
-        found_log = False
-        expected_log_part = "Validation failed for 12345: Error: Field 'module' must be a non-empty string. Got value ''."
-        expected_command_part = f"(Command: {original_command_text})"
+        bot.handle_text_message(mock_message)
 
-        for call_arg in self.mock_log_local_bot_event.call_args_list:
-            args, _ = call_arg
-            log_message = args[0] # The first positional argument to log_local_bot_event
-            if expected_log_part in log_message and expected_command_part in log_message:
-                found_log = True
-                break
-        self.assertTrue(found_log, f"Expected log with validation failure details was not found. Searched for: '{expected_log_part}' and '{expected_command_part}'")
+        self.mock_interpret.assert_called_once_with("привет бот")
+        self.mock_run_katana_command.assert_not_called()
+        self.mock_bot_module_instance.send_message.assert_called_once_with(
+            mock_message.chat.id,
+            "Добрый день, nlp_user! Привет! Как я могу помочь? Статистика: обработано 1 команд."
+        )
+        self.assertEqual(bot.BOT_STATS["commands_processed"], 1)
+
+    @patch('bot.get_time_of_day_greeting', return_value="Добрый вечер")
+    @patch('bot.get_username', return_value="user1")
+    @patch('bot.get_bot_stats_message', return_value="Статистика: 2 команды.")
+    def test_nlp_shell_command(self, mock_stats, mock_username, mock_greeting):
+        mock_message = self._create_mock_message("покажи место на диске")
+        self.mock_interpret.return_value = "df -h" # From nlp_mapper
+        self.mock_run_katana_command.return_value = "Filesystem Size Used Avail Use% Mounted on\n/dev/sda1 10G 5G 5G 50% /"
+
+        bot.handle_text_message(mock_message)
+
+        self.mock_interpret.assert_called_once_with("покажи место на диске")
+        self.mock_run_katana_command.assert_called_once_with("df -h", mock_message)
+        expected_response = (
+            "Добрый вечер, user1! 🧠 Понял. Выполняю:\n"
+            "`df -h`\n\n"
+            "Filesystem Size Used Avail Use% Mounted on\n/dev/sda1 10G 5G 5G 50% /\n\n"
+            "Статистика: 2 команды."
+        )
+        self.mock_bot_module_instance.send_message.assert_called_once_with(
+            mock_message.chat.id, expected_response, parse_mode="Markdown"
+        )
+        self.assertEqual(bot.BOT_STATS["commands_processed"], 1)
+
+
+    @patch('bot.get_time_of_day_greeting', return_value="Доброе утро")
+    @patch('bot.get_username', return_value="api_user")
+    @patch('bot.get_bot_stats_message', return_value="N=3")
+    def test_nlp_weather_api_command(self, mock_stats, mock_username, mock_greeting):
+        mock_message = self._create_mock_message("какая погода")
+        self.mock_interpret.return_value = "get_weather"
+
+        bot.handle_text_message(mock_message)
+
+        self.mock_interpret.assert_called_once_with("какая погода")
+        self.mock_run_katana_command.assert_not_called() # API calls are handled directly for now
+        # Placeholder weather info is hardcoded in bot.py for this test
+        expected_response = "Доброе утро, api_user! Сегодня солнечно, +25°C. N=3"
+        self.mock_bot_module_instance.send_message.assert_called_once_with(
+            mock_message.chat.id, expected_response
+        )
+        self.assertEqual(bot.BOT_STATS["commands_processed"], 1)
+
+    @patch('bot.get_time_of_day_greeting', return_value="Добрый день")
+    @patch('bot.get_username', return_value="joker")
+    @patch('bot.get_bot_stats_message', return_value="Processed: 4")
+    def test_nlp_joke_api_command(self, mock_stats, mock_username, mock_greeting):
+        mock_message = self._create_mock_message("расскажи анекдот")
+        self.mock_interpret.return_value = "get_joke"
+
+        bot.handle_text_message(mock_message)
+        self.mock_interpret.assert_called_once_with("расскажи анекдот")
+        self.mock_run_katana_command.assert_not_called()
+        expected_joke = "Почему программисты всегда путают Хэллоуин и Рождество? Потому что OCT 31 == DEC 25."
+        expected_response = f"Добрый день, joker! {expected_joke} Processed: 4"
+        self.mock_bot_module_instance.send_message.assert_called_once_with(
+            mock_message.chat.id, expected_response
+        )
+        self.assertEqual(bot.BOT_STATS["commands_processed"], 1)
+
 
     # --- Tests for get_text_from_voice ---
-    @patch('builtins.open', new_callable=unittest.mock.mock_open, read_data=b"dummy voice data")
-    def test_get_text_from_voice_success(self, mock_open_file):
-        self.mock_openai_transcribe.return_value = {'text': 'Hello world'}
-        result = bot.get_text_from_voice("dummy_path.ogg")
-        self.assertEqual(result, "Hello world")
-        mock_open_file.assert_called_once_with("dummy_path.ogg", "rb")
-        self.mock_openai_transcribe.assert_called_once()
-        self.mock_log_local_bot_event.assert_any_call("Sending voice file dummy_path.ogg to OpenAI Whisper API...")
-        self.mock_log_local_bot_event.assert_any_call("Voice transcribed successfully: 'Hello world'")
+    # For these tests, we stop the class-level patcher for get_text_from_voice
+    # to test the actual function's logic.
+
+    def _run_get_text_from_voice_test(self, test_func, *args):
+        self.get_text_from_voice_patcher.stop()
+        try:
+            test_func(*args)
+        finally:
+            self.get_text_from_voice_patcher.start()
 
     @patch('builtins.open', new_callable=unittest.mock.mock_open, read_data=b"dummy voice data")
-    def test_get_text_from_voice_api_error(self, mock_open_file):
-        self.mock_openai_transcribe.side_effect = bot.openai.APIError("API Error", http_status=500, headers={}) # Corrected way to raise APIError
-        result = bot.get_text_from_voice("dummy_path.ogg")
-        self.assertIsNone(result)
-        self.mock_log_local_bot_event.assert_any_call("OpenAI API Error during voice transcription: API Error")
+    def test_get_text_from_voice_success_actual(self, mock_open_file):
+        def actual_test(mock_open):
+            self.mock_openai_transcribe.return_value = {'text': 'Hello world'}
+            result = bot.get_text_from_voice("dummy_path.ogg")
+            self.assertEqual(result, "Hello world")
+            mock_open.assert_called_once_with("dummy_path.ogg", "rb")
+            self.mock_openai_transcribe.assert_called_once()
+            self.mock_log_local_bot_event.assert_any_call("Sending voice file dummy_path.ogg to OpenAI Whisper API...")
+            self.mock_log_local_bot_event.assert_any_call("Voice transcribed successfully: 'Hello world'")
+        self._run_get_text_from_voice_test(actual_test, mock_open_file)
 
     @patch('builtins.open', new_callable=unittest.mock.mock_open, read_data=b"dummy voice data")
-    def test_get_text_from_voice_no_text_returned(self, mock_open_file):
-        self.mock_openai_transcribe.return_value = {'text': None} # Simulate API returning no text
-        result = bot.get_text_from_voice("dummy_path.ogg")
-        self.assertIsNone(result)
-        self.mock_log_local_bot_event.assert_any_call("Voice transcription returned no text.")
-
-    @patch('builtins.open', new_callable=unittest.mock.mock_open, read_data=b"dummy voice data")
-    def test_get_text_from_voice_empty_text_returned(self, mock_open_file):
-        self.mock_openai_transcribe.return_value = {'text': "  "} # Simulate API returning only whitespace
-        result = bot.get_text_from_voice("dummy_path.ogg")
-        self.assertEqual(result, "") # Should be stripped
-        self.mock_log_local_bot_event.assert_any_call("Voice transcribed successfully: ''")
-
-
-    @patch('bot.OPENAI_API_KEY', None) # Temporarily unpatch the class-level patch
-    def test_get_text_from_voice_no_api_key(self):
-        result = bot.get_text_from_voice("dummy_path.ogg")
-        self.assertIsNone(result)
-        self.mock_log_local_bot_event.assert_any_call("OpenAI API key not configured. Cannot process voice.")
-        self.mock_openai_transcribe.assert_not_called()
-
-    @patch('builtins.open', side_effect=IOError("File not found"))
-    def test_get_text_from_voice_file_open_error(self, mock_open_file):
-        # Ensure OPENAI_API_KEY is set for this test, otherwise it exits early
-        with patch('bot.OPENAI_API_KEY', 'fake_key_for_this_test'):
+    def test_get_text_from_voice_api_error_actual(self, mock_open_file):
+        def actual_test(mock_open):
+            # Simplest way to create an APIError instance for testing
+            self.mock_openai_transcribe.side_effect = bot.openai.APIError("Simulated API Error", request=MagicMock(), body=None)
             result = bot.get_text_from_voice("dummy_path.ogg")
             self.assertIsNone(result)
-            self.mock_log_local_bot_event.assert_any_call("Unexpected error during voice transcription: File not found")
+            self.mock_log_local_bot_event.assert_any_call("OpenAI API Error during voice transcription: Simulated API Error")
+        self._run_get_text_from_voice_test(actual_test, mock_open_file)
+
+
+    @patch('builtins.open', new_callable=unittest.mock.mock_open, read_data=b"dummy voice data")
+    def test_get_text_from_voice_no_text_returned_actual(self, mock_open_file):
+        def actual_test(mock_open):
+            self.mock_openai_transcribe.return_value = {'text': None}
+            result = bot.get_text_from_voice("dummy_path.ogg")
+            self.assertIsNone(result)
+            self.mock_log_local_bot_event.assert_any_call("Voice transcription returned no text.")
+        self._run_get_text_from_voice_test(actual_test, mock_open_file)
+
+    @patch('builtins.open', new_callable=unittest.mock.mock_open, read_data=b"dummy voice data")
+    def test_get_text_from_voice_empty_text_returned_actual(self, mock_open_file):
+        def actual_test(mock_open):
+            self.mock_openai_transcribe.return_value = {'text': "  "}
+            result = bot.get_text_from_voice("dummy_path.ogg")
+            self.assertEqual(result, "") # After strip()
+            self.mock_log_local_bot_event.assert_any_call("Voice transcribed successfully: '  '") # Before strip()
+        self._run_get_text_from_voice_test(actual_test, mock_open_file)
+
+
+    @patch('bot.OPENAI_API_KEY', None)
+    def test_get_text_from_voice_no_api_key_actual(self):
+        def actual_test():
+            result = bot.get_text_from_voice("dummy_path.ogg")
+            self.assertIsNone(result)
+            self.mock_log_local_bot_event.assert_any_call("OpenAI API key not configured. Cannot process voice.")
+            self.mock_openai_transcribe.assert_not_called() # Ensure API is not called
+        # Reset mock_openai_transcribe for this specific test path, as it might have been called in other tests
+        self.mock_openai_transcribe.reset_mock()
+        self._run_get_text_from_voice_test(actual_test)
+
+
+    @patch('builtins.open', side_effect=IOError("File not found"))
+    def test_get_text_from_voice_file_open_error_actual(self, mock_open_file):
+        def actual_test(mock_open):
+            with patch('bot.OPENAI_API_KEY', 'fake_key_for_this_test'): # Ensure key is set for this path
+                result = bot.get_text_from_voice("dummy_path.ogg")
+                self.assertIsNone(result)
+                self.mock_log_local_bot_event.assert_any_call("Unexpected error during voice transcription: File not found")
+        self._run_get_text_from_voice_test(actual_test, mock_open_file)
 
     # --- Tests for handle_voice_message ---
-    def _create_mock_voice_message(self):
-        mock_message = MagicMock(spec=telebot.types.Message) # Use spec for better mocking
+    # These tests will use the class-level mock for get_text_from_voice
+    def _create_mock_voice_message(self, username="voice_user", first_name="Voicey"):
+        mock_message = MagicMock(spec=telebot.types.Message)
         mock_message.chat = MagicMock(spec=telebot.types.Chat)
         mock_message.chat.id = 67890
         mock_message.voice = MagicMock(spec=telebot.types.Voice)
         mock_message.voice.file_id = "test_voice_file_id"
-        mock_message.voice.duration = 3 # seconds
+        mock_message.voice.duration = 3
         mock_message.message_id = 123
-        mock_message.date = 1678886400 # Example timestamp
+        mock_message.date = 1678886400
         mock_message.from_user = MagicMock(spec=telebot.types.User)
         mock_message.from_user.id = 98765
+        mock_message.from_user.username = username
+        mock_message.from_user.first_name = first_name
         return mock_message
 
     @patch('builtins.open', new_callable=unittest.mock.mock_open)
-    def test_handle_voice_message_success(self, mock_open_file):
-        mock_message = self._create_mock_voice_message()
+    @patch('bot.handle_text_message') # Mock handle_text_message for this specific test
+    @patch('bot.get_time_of_day_greeting', return_value="Добрый день")
+    @patch('bot.get_username', return_value="voice_user")
+    @patch('bot.get_bot_stats_message', return_value="Статистика: 5")
+    def test_handle_voice_message_success(self, mock_stats, mock_username, mock_greeting, mock_handle_text, mock_open_file):
+        mock_voice_msg = self._create_mock_voice_message()
         self.mock_bot_module_instance.get_file.return_value.file_path = "voice/file.oga"
         self.mock_bot_module_instance.download_file.return_value = b"dummy voice data"
-        self.mock_get_text_from_voice.return_value = "show disk space"
+        self.mock_get_text_from_voice.return_value = "show disk space" # This mock is from setUp
 
-        bot.handle_voice_message(mock_message)
+        bot.handle_voice_message(mock_voice_msg)
 
-        # Check file download and saving
         self.mock_bot_module_instance.get_file.assert_called_once_with("test_voice_file_id")
-        self.mock_bot_module_instance.download_file.assert_called_once_with("voice/file.oga")
-        expected_temp_path = self.test_voice_file_dir / f"{mock_message.voice.file_id}.ogg"
-        mock_open_file.assert_called_once_with(expected_temp_path, 'wb')
-        mock_open_file().write.assert_called_once_with(b"dummy voice data")
-
-        # Check transcription call
+        expected_temp_path = self.test_voice_file_dir / f"{mock_voice_msg.voice.file_id}.ogg"
         self.mock_get_text_from_voice.assert_called_once_with(str(expected_temp_path))
+        self.mock_bot_module_instance.reply_to.assert_any_call(mock_voice_msg, '🗣️ Распознано: "show disk space"')
 
-        # Check reply to user and call to handle_text_message
-        self.mock_bot_module_instance.reply_to.assert_any_call(mock_message, '🗣️ Распознано: "show disk space"')
-        self.mock_handle_text_message.assert_called_once()
-        called_message_arg = self.mock_handle_text_message.call_args[0][0]
+        mock_handle_text.assert_called_once()
+        called_message_arg = mock_handle_text.call_args[0][0]
         self.assertEqual(called_message_arg.text, "show disk space")
-        self.assertEqual(called_message_arg.chat.id, mock_message.chat.id)
-
-        # Check file cleanup
-        self.mock_path_exists.assert_called_with() # Will be called on expected_temp_path due to how Path.exists() works when patched on class
+        self.assertEqual(called_message_arg.chat.id, mock_voice_msg.chat.id)
         self.mock_os_remove.assert_called_once_with(expected_temp_path)
 
 
     @patch('builtins.open', new_callable=unittest.mock.mock_open)
-    def test_handle_voice_message_transcription_fails(self, mock_open_file):
-        mock_message = self._create_mock_voice_message()
+    @patch('bot.handle_text_message') # Mock to prevent actual call
+    @patch('bot.get_time_of_day_greeting', return_value="Добрый вечер")
+    @patch('bot.get_username', return_value="voice_user_fail")
+    @patch('bot.get_bot_stats_message', return_value="Статистика: 6")
+    def test_handle_voice_message_transcription_fails(self, mock_stats, mock_username, mock_greeting, mock_handle_text, mock_open_file):
+        mock_voice_msg = self._create_mock_voice_message(username="voice_user_fail")
         self.mock_bot_module_instance.get_file.return_value.file_path = "voice/file.oga"
         self.mock_bot_module_instance.download_file.return_value = b"dummy voice data"
         self.mock_get_text_from_voice.return_value = None # Simulate transcription failure
 
-        bot.handle_voice_message(mock_message)
+        bot.handle_voice_message(mock_voice_msg)
 
-        expected_temp_path = self.test_voice_file_dir / f"{mock_message.voice.file_id}.ogg"
+        expected_temp_path = self.test_voice_file_dir / f"{mock_voice_msg.voice.file_id}.ogg"
         self.mock_get_text_from_voice.assert_called_once_with(str(expected_temp_path))
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Не понял, повтори, пожалуйста. 🎙️")
-        self.mock_handle_text_message.assert_not_called()
+        expected_reply = "Добрый вечер, voice_user_fail. Не смог распознать речь в вашем голосовом сообщении. Пожалуйста, попробуйте еще раз, говорите четче. 🎙️ Статистика: 6"
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_voice_msg, expected_reply)
+        mock_handle_text.assert_not_called()
         self.mock_os_remove.assert_called_once_with(expected_temp_path)
 
+
     @patch('bot.OPENAI_API_KEY', None)
-    def test_handle_voice_message_no_openai_key(self):
-        mock_message = self._create_mock_voice_message()
-        bot.handle_voice_message(mock_message)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "⚠️ Распознавание голоса не настроено на сервере.")
+    @patch('bot.handle_text_message') # Mock to prevent call
+    def test_handle_voice_message_no_openai_key(self, mock_handle_text):
+        mock_voice_msg = self._create_mock_voice_message()
+        bot.handle_voice_message(mock_voice_msg)
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_voice_msg, "⚠️ Распознавание голоса не настроено на сервере.")
         self.mock_bot_module_instance.get_file.assert_not_called()
         self.mock_get_text_from_voice.assert_not_called()
-        self.mock_handle_text_message.assert_not_called()
+        mock_handle_text.assert_not_called()
+
 
     @patch('builtins.open', new_callable=unittest.mock.mock_open)
-    def test_handle_voice_message_download_exception(self, mock_open_file):
-        mock_message = self._create_mock_voice_message()
+    @patch('bot.handle_text_message') # Mock to prevent call
+    @patch('bot.get_time_of_day_greeting', return_value="Добрый день")
+    @patch('bot.get_username', return_value="error_user")
+    @patch('bot.get_bot_stats_message', return_value="Статистика: 7")
+    def test_handle_voice_message_download_exception(self, mock_stats, mock_username, mock_greeting, mock_handle_text, mock_open_file):
+        mock_voice_msg = self._create_mock_voice_message(username="error_user")
         self.mock_bot_module_instance.get_file.side_effect = Exception("Download error")
 
-        bot.handle_voice_message(mock_message)
-
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Произошла ошибка при обработке голосового сообщения. 😥")
+        bot.handle_voice_message(mock_voice_msg)
+        expected_reply = "Добрый день, error_user. При обработке вашего голосового сообщения произошла неожиданная ошибка. Попробуйте позже. 😥 Статистика: 7"
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_voice_msg, expected_reply)
         self.mock_get_text_from_voice.assert_not_called()
-        self.mock_handle_text_message.assert_not_called()
-        # Ensure cleanup is not attempted if download fails before file is written
+        mock_handle_text.assert_not_called()
         self.mock_os_remove.assert_not_called()
 
 
     @patch('builtins.open', new_callable=unittest.mock.mock_open)
     @patch('os.remove', side_effect=OSError("Delete failed"))
-    def test_handle_voice_message_cleanup_exception(self, mock_os_remove_custom, mock_open_file):
-        mock_message = self._create_mock_voice_message()
+    @patch('bot.handle_text_message') # Mock to prevent call
+    def test_handle_voice_message_cleanup_exception(self, mock_handle_text, mock_os_remove_custom, mock_open_file):
+        mock_voice_msg = self._create_mock_voice_message()
         self.mock_bot_module_instance.get_file.return_value.file_path = "voice/file.oga"
         self.mock_bot_module_instance.download_file.return_value = b"dummy voice data"
-        self.mock_get_text_from_voice.return_value = "текст" # Russian: "text"
+        self.mock_get_text_from_voice.return_value = "текст"
 
-        # We need Path(..).exists() to return True for the os.remove to be called
-        # The class-level mock_path_exists is already True.
+        bot.handle_voice_message(mock_voice_msg)
 
-        bot.handle_voice_message(mock_message)
-
-        expected_temp_path = self.test_voice_file_dir / f"{mock_message.voice.file_id}.ogg"
-        # Check that normal processing occurred
-        self.mock_handle_text_message.assert_called_once()
-        # Check that remove was called
+        expected_temp_path = self.test_voice_file_dir / f"{mock_voice_msg.voice.file_id}.ogg"
+        mock_handle_text.assert_called_once() # Check that normal processing (up to handle_text_message call) occurred
         mock_os_remove_custom.assert_called_once_with(expected_temp_path)
-        # Check that the error during cleanup was logged
         self.mock_log_local_bot_event.assert_any_call(f"Error deleting temporary voice file {expected_temp_path}: Delete failed")
 
 

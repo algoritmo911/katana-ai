@@ -10,21 +10,40 @@ def test_interpret_disk():
     assert interpret("проверь диск") == "df -h"
     assert interpret("сколько места на диске") == "df -h"
     assert interpret("покажи место") == "df -h"
+    assert interpret("объем диска") == "df -h"
 
 def test_interpret_uptime():
     assert interpret("как долго работает система") == "uptime"
     assert interpret("аптайм сервера") == "uptime"
     assert interpret("работает?") == "uptime"
+    assert interpret("время работы компа") == "uptime"
 
 def test_interpret_cpu():
     assert interpret("какая загрузка") == "top -n1 | head -5"
     assert interpret("загрузка cpu") == "top -n1 | head -5"
     assert interpret("покажи загрузку процессора") == "top -n1 | head -5"
+    assert interpret("цпу статус") == "top -n1 | head -5"
 
 def test_interpret_ls():
     assert interpret("покажи файлы") == "ls -al"
     assert interpret("содержимое папки") == "ls -al"
     assert interpret("список файлов и папок") == "ls -al"
+    assert interpret("что в этой папке лежит?") == "ls -al"
+
+def test_interpret_greet():
+    assert interpret("привет") == "Привет! Как я могу помочь?"
+    assert interpret("Здравствуй, бот") == "Привет! Как я могу помочь?"
+    assert interpret("добрый день") == "Привет! Как я могу помочь?"
+    assert interpret("хелло!") == "Привет! Как я могу помочь?"
+
+def test_interpret_weather():
+    assert interpret("какая погода?") == "get_weather"
+    assert interpret("прогноз погоды на сегодня") == "get_weather"
+
+def test_interpret_joke():
+    assert interpret("расскажи анекдот") == "get_joke"
+    assert interpret("пошути") == "get_joke"
+    assert interpret("хочу шутку") == "get_joke"
 
 def test_interpret_none():
     assert interpret("неизвестная команда") is None

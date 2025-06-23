@@ -5,9 +5,15 @@ A Telegram bot that can understand text and voice commands.
 ## Features
 
 -   Processes text commands (JSON and natural language).
--   **NEW**: Processes voice commands by transcribing them to text using OpenAI Whisper.
--   Basic NLP for mapping natural language to shell commands.
--   Saves structured commands to the filesystem.
+    -   Enhanced NLP with synonym recognition (e.g., "привет", "здорово", "добрый день" are all understood as greetings).
+    -   Support for new commands like asking for weather or a joke (current implementation uses placeholders).
+-   Processes voice commands by transcribing them to text using OpenAI Whisper.
+-   Dynamic and personalized responses:
+    -   Greets users by name (if available) and time of day.
+    -   Includes bot usage statistics in responses.
+-   Improved error handling with polite fallback messages.
+-   Saves structured JSON commands to the filesystem.
+-   Basic NLP for mapping natural language to shell commands (e.g., "покажи место на диске" -> `df -h`).
 
 ## Setup
 
@@ -36,9 +42,15 @@ A Telegram bot that can understand text and voice commands.
 
 ## Usage
 
--   Send text messages with commands (e.g., "покажи место на диске").
--   Send voice messages with commands. The bot will transcribe the voice and process the text.
--   Send structured JSON commands (see `bot.py` for format details).
+-   **Text Messages**:
+    -   Send natural language commands (e.g., "сколько места на диске?", "какая сейчас погода?", "расскажи анекдот", "привет бот").
+    -   The bot understands various synonyms and phrasing.
+    -   Send structured JSON commands (see `bot.py` for format details if needed, though natural language is preferred).
+-   **Voice Messages**:
+    -   Send voice messages with commands. The bot will transcribe the voice to text and process it like a text command.
+-   **Interaction**:
+    -   The bot will respond with personalized greetings and include usage statistics.
+    -   If a command isn't understood, the bot will provide a polite fallback message.
 
 ## Logging
 
