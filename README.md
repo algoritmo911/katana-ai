@@ -5,7 +5,8 @@ A Telegram bot that can understand text and voice commands.
 ## Features
 
 -   Processes text commands (JSON and natural language).
--   **NEW**: Processes voice commands by transcribing them to text using OpenAI Whisper.
+-   Processes voice commands by transcribing them to text using OpenAI Whisper.
+-   **NEW**: Real-time, streamed responses from GPT for general queries and non-command text.
 -   Basic NLP for mapping natural language to shell commands.
 -   Saves structured commands to the filesystem.
 
@@ -21,7 +22,7 @@ A Telegram bot that can understand text and voice commands.
 
     **Required Variables:**
     *   `TELEGRAM_API_TOKEN`: Your Telegram Bot API token. Get this from BotFather on Telegram.
-    *   `OPENAI_API_KEY`: Your OpenAI API key. This is **strictly required for voice message processing**. Without it, voice messages will not be understood. You can obtain a key from [platform.openai.com](https://platform.openai.com/).
+    *   `OPENAI_API_KEY`: Your OpenAI API key. This is **strictly required for voice message processing and GPT-based text generation**. Without it, voice messages will not be understood and general queries will not receive GPT responses. You can obtain a key from [platform.openai.com](https://platform.openai.com/).
 
     **Optional Variables:**
     *   `USE_LLM_NLP` (optional): Set to `true` to attempt using a (currently placeholder) LLM for NLP. Defaults to `false` (uses basic keyword matching).
@@ -75,6 +76,19 @@ A Telegram bot that can understand text and voice commands.
 -   Send text messages with commands (e.g., "покажи место на диске").
 -   Send voice messages with commands. The bot will transcribe the voice and process the text.
 -   Send structured JSON commands (see `bot.py` for format details).
+-   Send general text queries (e.g., "расскажи анекдот" or "what is quantum physics?"). The bot will stream a response from GPT.
+
+## GPT Streaming and Interaction
+
+If a message sent to the bot is not recognized as a specific NLP command (like "check disk space") or a valid JSON-formatted command, the bot will forward the text to an OpenAI GPT model (currently GPT-3.5-Turbo) to generate a response.
+
+**How it works:**
+-   The bot will indicate it's working by showing a 'typing...' status in Telegram.
+-   The response from GPT will be streamed back to you. This means the message will appear and then update in real-time as more parts of the response are generated, similar to how you see responses in ChatGPT.
+-   This provides a more natural and immediate feedback loop for longer answers.
+
+**Requirements:**
+-   A valid `OPENAI_API_KEY` must be configured in your environment variables for this feature to work.
 
 ## Logging
 
