@@ -1,5 +1,37 @@
-{"round": 1, "timestamp": 1678886400, "batch_size": 10, "avg_time_per_task_seconds": 0.5, "error_types_in_batch": []}
-{"round": 2, "timestamp": 1678886500, "batch_size": 15, "avg_time_per_task_seconds": 0.7, "error_types_in_batch": [{"type": "APIError", "count": 1}, {"type": "Timeout", "count": 2}]}
-{"round": 3, "timestamp": 1678886300, "batch_size": 5, "avg_time_per_task_seconds": 0.3, "error_types_in_batch": []}
-{"round": 4, "timestamp": 1678886600, "batch_size": 20, "avg_time_per_task_seconds": 0.65, "error_types_in_batch": [], "extra_info": "Completed successfully"}
-{"round": 5, "timestamp": "not_a_real_timestamp", "batch_size": 8, "avg_time_per_task_seconds": 0.4, "error_types_in_batch": [{"type": "ValueError", "count": 1}]}
+[
+  {
+    "round": 1,
+    "batch_size": 100,
+    "avg_time_per_task_seconds": 0.5,
+    "error_types_in_batch": {
+      "TimeoutError": 5,
+      "APIError": 2
+    },
+    "start_time": "2023-10-26T10:00:00.000000",
+    "end_time": "2023-10-26T10:01:00.000000"
+  },
+  {
+    "round": 2,
+    "batch_size": 120,
+    "avg_time_per_task_seconds": 0.45,
+    "error_types_in_batch": ["ConnectionError"],
+    "start_time": "2023-10-26T10:02:00.000000",
+    "end_time": "2023-10-26T10:03:15.000000"
+  },
+  {
+    "round": 3,
+    "batch_size": 90,
+    "avg_time_per_task_seconds": 0.6,
+    "error_types_in_batch": {},
+    "start_time": "2023-10-26T10:04:00.000000",
+    "end_time": "2023-10-26T10:05:00.000000"
+  },
+  {
+    "round": 4,
+    "batch_size": 150,
+    "avg_time_per_task_seconds": null,
+    "error_types_in_batch": ["ValueError", "TypeError"],
+    "start_time": "2023-10-26T10:06:00",
+    "end_time": null
+  }
+]
