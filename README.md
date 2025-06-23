@@ -23,6 +23,7 @@ A Telegram bot that can understand text and voice commands.
     **Required Variables:**
     *   `TELEGRAM_API_TOKEN`: Your Telegram Bot API token. Get this from BotFather on Telegram.
     *   `OPENAI_API_KEY`: Your OpenAI API key. This is **strictly required for voice message processing and GPT-based text generation**. Without it, voice messages will not be understood and general queries will not receive GPT responses. You can obtain a key from [platform.openai.com](https://platform.openai.com/).
+    *   `REDIS_URL`: The connection URL for your Redis instance. This is used for the bot's short-term memory. Defaults to `redis://localhost:6379/0` if not set. Example: `redis://username:password@your-redis-host:6379/0`.
 
     **Optional Variables:**
     *   `USE_LLM_NLP` (optional): Set to `true` to attempt using a (currently placeholder) LLM for NLP. Defaults to `false` (uses basic keyword matching).
@@ -34,6 +35,7 @@ A Telegram bot that can understand text and voice commands.
     ```env
     TELEGRAM_API_TOKEN="your_telegram_token_here"
     OPENAI_API_KEY="your_openai_key_here"
+    REDIS_URL="redis://localhost:6379/0" # Or your custom Redis URL
     # USE_LLM_NLP="false" # Optional, defaults to false
     ```
     **Important:** Add `.env` to your `.gitignore` file to prevent accidentally committing your API keys.
@@ -70,6 +72,34 @@ A Telegram bot that can understand text and voice commands.
     ```bash
     python bot.py
     ```
+
+## Setting up Redis (for Short-Term Memory)
+
+The bot uses Redis for short-term memory, such as remembering recent conversation history for context with GPT.
+
+**1. Installation:**
+
+   *   **Docker (Recommended for ease of use):**
+       If you have Docker installed, you can easily run a Redis instance:
+       ```bash
+       docker run -d --name katana-redis -p 6379:6379 redis/redis-stack-server:latest
+       ```
+       This command will:
+       - Download the Redis Stack server image (which includes RedisJSON, RedisSearch, etc., though only core Redis is used for now).
+       - Run it in detached mode (`-d`).
+       - Name the container `katana-redis`.
+       - Map port `6379` on your host to port `6379` in the container.
+
+       To stop the container: `docker stop katana-redis`
+       To start it again: `docker start katana-redis`
+       To remove it (e.g., if you want to start fresh): `docker rm katana-redis` (after stopping it)
+
+   *   **Native Installation:**
+       Alternatively, you can install Redis directly on your system. Follow the official instructions for your operating system: [Redis Installation Guide](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/)
+
+**2. Configuration:**
+
+   Ensure the `REDIS_URL` environment variable is set correctly (see "Set up environment variables" above). If you're running Redis locally with default settings and no password, `redis://localhost:6379/0` should work.
 
 ## Usage
 

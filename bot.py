@@ -8,6 +8,7 @@ import subprocess # Added for run_katana_command
 from nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
+from katana_memory.memory_api import MemoryManager # Added for Katana Memory
 
 # Load environment variables from .env file
 load_dotenv()
@@ -18,6 +19,8 @@ API_TOKEN = os.environ.get('TELEGRAM_API_TOKEN', '12345:dummytoken')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
 bot = telebot.async_telebot.AsyncTeleBot(API_TOKEN) # Use AsyncTeleBot
+memory_manager = MemoryManager() # Initialize MemoryManager
+
 if OPENAI_API_KEY:
     openai.api_key = OPENAI_API_KEY
 else:
@@ -99,12 +102,17 @@ async def handle_log_event(command_data, chat_id):
     # await bot.reply_to(message, "✅ 'log_event' received (placeholder).") # TODO: Add reply mechanism
 
 async def handle_mind_clearing(command_data, chat_id):
-    """Placeholder for handling 'mind_clearing' commands."""
+    """Handles 'mind_clearing' commands by forgetting conversation history."""
     log_local_bot_event(f"handle_mind_clearing called for chat_id {chat_id} with data: {json.dumps(command_data)}")
-    # Actual implementation for mind_clearing will go here
-    # TODO: Add more specific logging based on args if needed
-    log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
-    # await bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
+    try:
+        await memory_manager.forget(chat_id)
+        log_local_bot_event(f"Successfully cleared memory for chat_id {chat_id}.")
+        # It's good practice to inform the user, but this function doesn't have `original_message`
+        # The reply is handled by the caller in `process_user_message`
+    except Exception as e:
+        log_local_bot_event(f"Error clearing memory for chat_id {chat_id}: {e}")
+        # Similar to above, error reporting to user should be handled by caller if needed.
+    # await bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # Reply handled by `process_user_message`
 
 # --- Unified Message Processing ---
 async def process_user_message(chat_id: int, text: str, original_message: telebot.types.Message):
@@ -113,6 +121,16 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
     Handles NLP, JSON commands, or falls back to GPT.
     """
     log_local_bot_event(f"Processing user message for chat {chat_id}: '{text[:100]}...'")
+
+    # Remember the user's message
+    # We store the new message before retrieving history to include it in the current context if immediately needed.
+    # However, for GPT context, history is usually retrieved *before* adding the current message to the prompt.
+    # Let's store it first, and GPT context retrieval can decide how to use it.
+    try:
+        await memory_manager.remember(chat_id, f"User: {text}")
+        log_local_bot_event(f"Message from chat {chat_id} stored in short-term memory.")
+    except Exception as e:
+        log_local_bot_event(f"Error remembering message for chat {chat_id}: {e}")
 
     # Attempt to interpret the text as a natural language command
     nlp_command = interpret(text)
@@ -451,7 +469,21 @@ async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_e
         yield "⚠️ GPT functionality is not configured on the server."
         return
 
-    log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_start\", \"User text: {user_text[:100].replace('\"', 'QUOTE').replace('\n', '\\n')}...\")")
+    # Retrieve conversation history for context
+    history_prompt = ""
+    try:
+        retrieved_history = await memory_manager.recall(chat_id)
+        if retrieved_history:
+            history_prompt = f"Previous conversation:\n{retrieved_history}\n\n----\n\n"
+            log_local_bot_event(f"Retrieved history for chat {chat_id} for GPT context.")
+        else:
+            log_local_bot_event(f"No history found for chat {chat_id} for GPT context.")
+    except Exception as e:
+        log_local_bot_event(f"Error retrieving history for chat {chat_id}: {e}")
+
+    full_user_prompt = f"{history_prompt}User's current message: {user_text}"
+
+    log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_start\", \"User text (with history): {full_user_prompt[:200].replace('\"', 'QUOTE').replace('\n', '\\n')}...\")")
     try:
         import functools
         loop = asyncio.get_event_loop()
@@ -461,12 +493,27 @@ async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_e
             return
 
         def _create_openai_stream():
+            # Note: Storing assistant responses back to memory will be handled after generation.
+            # Here we only use the history for context.
+            messages_for_gpt = [
+                {"role": "system", "content": "You are a helpful assistant."}
+            ]
+            if retrieved_history: # Simple history injection; could be more sophisticated
+                 # For now, let's just put history as part of the user message or a preceding user message.
+                 # A better way would be to parse `retrieved_history` into alternating user/assistant messages.
+                 # For simplicity, we'll prepend it to the current user message.
+                 # This might not be ideal for long histories.
+                 # Let's refine this: if history exists, treat it as a prefix to the user's message.
+                 # Or, better, construct a sequence of messages if Redis stores them in a structured way.
+                 # Given RedisCache stores a single string, we'll prepend it for now.
+                 # The `full_user_prompt` already combines history and current message.
+                 pass # `full_user_prompt` is used below
+
+            messages_for_gpt.append({"role": "user", "content": full_user_prompt})
+
             return openai.ChatCompletion.create(
                 model="gpt-3.5-turbo", # Or your preferred model
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": user_text}
-                ],
+                messages=messages_for_gpt,
                 stream=True
             )
 
@@ -493,6 +540,36 @@ async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_e
                 log_local_bot_event(f"log_event({chat_id}, \"gpt_chunk_received\", \"{log_content}...\")")
                 yield content
 
+        full_gpt_response = ""
+        while True:
+            if cancellation_event.is_set():
+                log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_pre_chunk_fetch\", \"Cancellation event set before fetching next chunk.\")")
+                break
+
+            chunk_item = await loop.run_in_executor(None, next, stream_iterator, _SENTINEL)
+
+            if cancellation_event.is_set(): # Check again immediately after the blocking call returns
+                log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_post_chunk_fetch\", \"Cancellation event set after fetching chunk.\")")
+                break
+
+            if chunk_item is _SENTINEL:
+                break
+
+            content = chunk_item.choices[0].get("delta", {}).get("content")
+            if content:
+                log_content = content[:50].replace('\n', '\\n').replace('"', 'QUOTE')
+                log_local_bot_event(f"log_event({chat_id}, \"gpt_chunk_received\", \"{log_content}...\")")
+                full_gpt_response += content
+                yield content
+
+        if full_gpt_response and not cancellation_event.is_set():
+            try:
+                await memory_manager.remember(chat_id, f"Assistant: {full_gpt_response}")
+                log_local_bot_event(f"GPT response for chat {chat_id} stored in short-term memory.")
+            except Exception as e:
+                log_local_bot_event(f"Error remembering GPT response for chat {chat_id}: {e}")
+
+
         if not cancellation_event.is_set(): # Only log 'finished' if not cancelled
             log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_finished\", \"Stream completed naturally.\")")
         else:
@@ -500,6 +577,12 @@ async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_e
 
 
     except StopIteration:
+        # This block might be redundant if full_gpt_response is handled correctly after the loop
+        if full_gpt_response and not cancellation_event.is_set(): # Check if response was already stored
+            # This logic is mostly covered by the post-loop storage.
+            # However, if StopIteration happens abruptly, this might catch it.
+            # Ensure no double storage. The current logic seems to favor post-loop storage.
+            pass
         if not cancellation_event.is_set(): # Avoid double logging if cancellation happened near end
             log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_stopped_iteration\", \"StopIteration received, stream likely ended.\")")
     except openai.APIError as e:
@@ -522,5 +605,13 @@ if __name__ == '__main__':
         except Exception as e:
             log_local_bot_event(f"Bot polling error: {e}")
         finally:
+            log_local_bot_event("Bot stopping...")
+            if memory_manager:
+                try:
+                    log_local_bot_event("Closing MemoryManager connections...")
+                    await memory_manager.close_connections()
+                    log_local_bot_event("MemoryManager connections closed.")
+                except Exception as e_mem:
+                    log_local_bot_event(f"Error closing MemoryManager connections: {e_mem}")
             log_local_bot_event("Bot stopped.")
     asyncio.run(main_runner())
