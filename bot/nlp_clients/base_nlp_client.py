@@ -29,3 +29,54 @@ class NLPInternalServerError(NLPServiceError):
 class NLPAPIError(NLPServiceError):
     """Generic NLP API error if a more specific error is not available."""
     pass
+
+import abc
+import typing
+
+class AbstractLLMClient(abc.ABC):
+    """
+    Abstract Base Class for Large Language Model (LLM) clients.
+    Defines the common interface for interacting with different LLM providers.
+    """
+
+    @abc.abstractmethod
+    def generate_response(self, prompt: str, history: list[dict] | None = None, **kwargs) -> str:
+        """
+        Generates a single text response from the LLM.
+
+        Args:
+            prompt: The user's prompt.
+            history: A list of previous messages in the conversation, if any.
+                     Each message is a dict with 'role' and 'content' keys.
+            **kwargs: Additional provider-specific parameters.
+
+        Returns:
+            The LLM's response as a string.
+
+        Raises:
+            NLPServiceError: If an error occurs during the API call.
+        """
+        pass
+
+    @abc.abstractmethod
+    async def stream_response(
+        self, prompt: str, history: list[dict] | None = None, **kwargs
+    ) -> typing.AsyncIterator[str]:
+        """
+        Generates a response from the LLM as an asynchronous stream of text chunks.
+
+        Args:
+            prompt: The user's prompt.
+            history: A list of previous messages in the conversation, if any.
+            **kwargs: Additional provider-specific parameters.
+
+        Yields:
+            Text chunks from the LLM's response.
+
+        Raises:
+            NLPServiceError: If an error occurs during the API call.
+        """
+        # This construct is necessary because abstract async generators cannot be empty
+        # and must yield something.
+        if False: # pylint: disable=using-constant-test
+            yield ""

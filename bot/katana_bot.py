@@ -98,6 +98,7 @@ MESSAGE_ROLE_ASSISTANT = "assistant"
 API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+GEMMA_API_KEY = os.getenv('GEMMA_API_KEY')
 
 if API_TOKEN and ':' in API_TOKEN:
     logger.info("✅ KATANA_TELEGRAM_TOKEN loaded successfully.")
@@ -114,6 +115,11 @@ if OPENAI_API_KEY:
     logger.info("✅ OPENAI_API_KEY loaded successfully.")
 else:
     logger.warning("⚠️ OPENAI_API_KEY not found. Some features might be unavailable.")
+
+if GEMMA_API_KEY:
+    logger.info("✅ GEMMA_API_KEY loaded successfully.")
+else:
+    logger.warning("⚠️ GEMMA_API_KEY not found. Gemma features might be unavailable or limited.")
 
 bot = telebot.TeleBot(API_TOKEN)
 
