@@ -1,4 +1,8 @@
 pytest
+pytest-asyncio
+pytest-mock
 pyTelegramBotAPI
 python-dotenv
 flake8
+fastapi
+uvicorn[standard]
