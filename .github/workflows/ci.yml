@@ -44,15 +44,83 @@ jobs:
         # Example:
         # env:
         #   KATANA_TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN_FOR_TESTS }} # If you had such a secret
-        pytest
+        pytest tests/ # Explicitly target the tests directory for orchestrator tests
       # If tests require specific environment variables (even dummy ones) to run,
       # you can set them here. For actual secrets, use GitHub encrypted secrets.
       # env:
       #   EXAMPLE_VAR: "test_value"
 
+  test-orchestrator-endpoint:
+    needs: lint-and-test # Run after linting and testing
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10"] # Test endpoint on one Python version, e.g., 3.10
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt httpx # httpx for making HTTP requests
+
+    - name: Start FastAPI server
+      run: |
+        # Start the server in the background. Assuming main.py runs the orchestrator service.
+        # Ensure your main.py can run without requiring external services not available in CI
+        # or use mock environment variables if needed.
+        # Example: MOCK_KATANA_AGENT=true uvicorn main:app --host 0.0.0.0 --port 8000 &
+        # For simplicity, we assume main:app is the FastAPI app instance.
+        # Adjust if your app instance or run command is different.
+        nohup uvicorn main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
+        echo "FastAPI server starting..."
+        # Give the server a few seconds to start
+        sleep 10
+
+    - name: Check server logs (optional)
+      run: |
+        echo "--- Server Log (first 50 lines) ---"
+        head -n 50 server.log || true # Display some logs, continue if file is short or empty
+        echo "--- Server Log (last 50 lines) ---"
+        tail -n 50 server.log || true
+
+
+    - name: Test /orchestrator/status endpoint
+      run: |
+        response=$(curl -s -w "%{http_code}" http://localhost:8000/orchestrator/status)
+        http_code=$(tail -n1 <<< "$response") # Extract HTTP code (last line)
+        body=$(sed '$ d' <<< "$response")    # Extract body (all but last line)
+
+        echo "HTTP Code: $http_code"
+        echo "Response Body: $body"
+
+        if [ "$http_code" -ne 200 ]; then
+          echo "Error: /orchestrator/status endpoint returned status $http_code"
+          exit 1
+        fi
+
+        # Basic check for expected keys in JSON response
+        # This assumes jq is available or uses simpler grep checks
+        if ! echo "$body" | grep -q '"current_batch_size"'; then
+          echo "Error: Response JSON does not contain 'current_batch_size'"
+          exit 1
+        fi
+        if ! echo "$body" | grep -q '"task_queue_length"'; then
+          echo "Error: Response JSON does not contain 'task_queue_length'"
+          exit 1
+        fi
+        echo "/orchestrator/status endpoint test passed."
+
   # Placeholder for a build/package job if you had one
   # build:
-  #   needs: lint-and-test # Run after linting and testing
+  #   needs: test-orchestrator-endpoint # Run after endpoint testing
   #   if: github.ref == 'refs/heads/main' # Example: only build on pushes to main
   #   runs-on: ubuntu-latest
   #   steps:
