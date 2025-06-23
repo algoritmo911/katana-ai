@@ -46,6 +46,27 @@ def test_interpret_partial_keywords():
     assert interpret("какой аптайм у этого сервера?") == "uptime"
     assert interpret("мне нужны все файлы в текущей папке") == "ls -al"
 
+def test_interpret_memory():
+    assert interpret("сколько памяти используется") == "free -h"
+    assert interpret("покажи ram") == "free -h"
+    assert interpret("использование оперативки") == "free -h"
+
+def test_interpret_system_info():
+    assert interpret("дай инфо о системе") == "uname -a"
+    assert interpret("какое ядро?") == "uname -a"
+    assert interpret("версия ос какая") == "uname -a"
+    assert interpret("система инфо покажи") == "uname -a"
+
+def test_interpret_network_connections():
+    assert interpret("активные сетевые подключения") == "ss -tulnp"
+    assert interpret("открытые порты") == "ss -tulnp"
+    assert interpret("покажи соединения") == "ss -tulnp"
+
+def test_interpret_ping_google():
+    assert interpret("пинг google сейчас") == "ping -c 3 google.com"
+    assert interpret("проверь связь с google") == "ping -c 3 google.com"
+
+
 # --- Tests for specific interpreter functions and the selection logic ---
 
 def test_basic_interpreter_direct():
