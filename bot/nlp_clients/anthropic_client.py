@@ -5,9 +5,10 @@ from .base_nlp_client import (
     NLPInternalServerError,
     NLPRateLimitError,
     NLPServiceError,
+    BaseNLPClient, # Import BaseNLPClient
 )
 
-# Anthropic Specific Exceptions
+# Anthropic Specific Exceptions - these can remain
 class AnthropicClientError(NLPServiceError):
     """Base exception for all Anthropic client errors."""
     pass
@@ -33,26 +34,28 @@ class AnthropicInternalServerError(AnthropicClientError, NLPInternalServerError)
     pass
 
 
-class AnthropicClient:
+class AnthropicClient(BaseNLPClient): # Inherit from BaseNLPClient
     """
-    A basic client for interacting with a simulated Anthropic API.
+    A basic client for interacting with a simulated Anthropic API, conforming to BaseNLPClient.
     This is intended for demonstrating error handling.
     """
-    def __init__(self, api_key: str = "dummy_anthropic_key"):
-        if not api_key:
+    def __init__(self, api_key: str = "dummy_anthropic_key", **kwargs):
+        super().__init__(api_key=api_key, **kwargs) # Call super
+        if not self.api_key: # self.api_key is set by super()
             raise AnthropicAuthenticationError(user_message="Anthropic API key is missing.")
-        self.api_key = api_key
+        # self.api_key is already set by super().__init__
 
-    def generate_text(self, prompt: str, scenario: str = "success"):
+    def generate_text(self, prompt: str, max_tokens: int = 1024, temperature: float = 0.7, **kwargs) -> str:
         """
         Simulates generating text using the Anthropic API.
 
         Args:
             prompt: The input prompt.
-            scenario: A string to simulate different API responses for testing.
-                      Can be "success", "auth_error", "rate_limit",
+            max_tokens: Max tokens to generate (ignored in simulation).
+            temperature: Temperature for generation (ignored in simulation).
+            **kwargs: Additional arguments, including 'scenario' for simulation.
+                      Scenarios: "success", "auth_error", "rate_limit",
                       "bad_request", "server_error", "api_error", "unexpected_error".
-
         Returns:
             A simulated successful response string.
 
@@ -60,9 +63,11 @@ class AnthropicClient:
             AnthropicAuthenticationError: If scenario is "auth_error".
             AnthropicRateLimitError: If scenario is "rate_limit".
             AnthropicInvalidRequestError: If scenario is "bad_request".
-            AnthropicInternalServerError: If scenario is "server_error".
-            AnthropicAPIError: If scenario is "api_error" or "unexpected_error".
+            AnthropicInternalServerError: If scenario from kwargs is "server_error".
+            AnthropicAPIError: If scenario from kwargs is "api_error" or "unexpected_error".
         """
+        scenario = kwargs.get("scenario", "success") # Get scenario from kwargs
+
         if scenario == "auth_error":
             raise AnthropicAuthenticationError(
                 user_message="Authentication failed. Check your Anthropic API key.",
@@ -89,9 +94,7 @@ class AnthropicClient:
                 original_error=IOError("Simulated generic API issue")
             )
         elif scenario == "unexpected_error":
-            # Simulate an error that isn't one of the directly mapped ones
             try:
-                # pylint: disable=broad-exception-raised
                 raise Exception("A very unexpected problem occurred!")
             except Exception as e:
                 raise AnthropicAPIError(
@@ -99,22 +102,29 @@ class AnthropicClient:
                     original_error=e
                 )
         elif scenario == "success":
-            return f"Anthropic processed prompt: '{prompt}' successfully."
+            # Here you could use max_tokens and temperature if it were a real client
+            return f"Anthropic processed prompt: '{prompt}' (max_tokens={max_tokens}, temp={temperature}) successfully."
         else:
-            # Should not happen with defined scenarios, but good for robustness
             raise AnthropicAPIError(
                 user_message=f"Unknown simulation scenario: {scenario}",
                 original_error=ValueError(f"Unknown scenario: {scenario}")
             )
 
+    def close(self):
+        """
+        Closes the Anthropic client.
+        For this simulated client, no specific action is required.
+        """
+        # print("AnthropicClient closed.") # Optional: for debugging
+        pass
+
 if __name__ == '__main__':
     # Example Usage (for quick testing, real tests will be separate)
-    client = AnthropicClient(api_key="test_key")
-
     print("Simulating success:")
     try:
-        response = client.generate_text("Hello world", scenario="success")
-        print(f"  Response: {response}")
+        with AnthropicClient(api_key="test_key") as client:
+            response = client.generate_text("Hello world", scenario="success", temperature=0.8)
+            print(f"  Response: {response}")
     except AnthropicClientError as e:
         print(f"  Error: {e}")
         if e.original_error:
@@ -129,7 +139,10 @@ if __name__ == '__main__':
     for scen in scenarios_to_test:
         print(f"Simulating {scen}:")
         try:
-            client.generate_text("Test prompt", scenario=scen)
+            # Use a context manager for each scenario call if client state could be affected,
+            # though for this simulated client it's not strictly necessary.
+            with AnthropicClient(api_key="test_key") as client:
+                 client.generate_text("Test prompt", scenario=scen)
         except AnthropicClientError as e:
             print(f"  Caught: {e.user_message}")
             print(f"  Type: {type(e).__name__}")
@@ -139,7 +152,7 @@ if __name__ == '__main__':
 
     print("Simulating missing API key:")
     try:
-        AnthropicClient(api_key="")
+        AnthropicClient(api_key="") # Test __init__ failure directly
     except AnthropicAuthenticationError as e:
         print(f"  Caught: {e.user_message}")
         print(f"  Type: {type(e).__name__}")

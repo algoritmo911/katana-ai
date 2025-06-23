@@ -75,15 +75,9 @@ def stop_heartbeat_thread():
     else:
         logger.info("Heartbeat thread not running or already stopped.")
 
-# --- Заглушки и глобальные переменные ---
-# Это будет заменено реальной реализацией или импортом
-def get_katana_response(history: list[dict]) -> str:
-    """Заглушка для функции получения ответа от NLP модели."""
-    logger.info(f"get_katana_response called with history: {history}")
-    if not history:
-        return "Катана к вашим услугам. О чём поразмыслим?"
-    last_message = history[-1]['content']
-    return f"Размышляю над вашим последним сообщением: '{last_message}'... (это заглушка)"
+# --- KatanaAgent Initialization ---
+from src.agents.katana_agent import KatanaAgent
+from bot.nlp_clients.base_nlp_client import NLPServiceError # To catch errors from agent
 
 # Словарь для хранения состояний чатов (истории сообщений)
 # Ключ: chat_id, Значение: list сообщений [{'role': 'user'/'assistant', 'content': 'message_text'}]
@@ -92,12 +86,38 @@ katana_states = {}
 # Типы сообщений в истории
 MESSAGE_ROLE_USER = "user"
 MESSAGE_ROLE_ASSISTANT = "assistant"
-# --- Конец заглушек ---
 
-# Получаем токен из переменной окружения
+# Получаем токен и API ключи из переменной окружения
 API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+GEMMA_API_KEY = os.getenv('GEMMA_API_KEY') # Added for Gemma
+
+# Initialize KatanaAgent instance
+# Configuration for LLMRouter within KatanaAgent
+# API keys can be passed directly or let clients pick them from env vars.
+# LLMRouter and clients are designed to pick from env if no explicit key is passed.
+# So, we only need to pass them if we want to override env, or for clarity.
+router_config = {
+    "OPENAI_API_KEY": OPENAI_API_KEY,
+    "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,
+    "GEMMA_API_KEY": GEMMA_API_KEY,
+    "default_model_for_task": {
+        "question_answering": "gemma",
+        "code_generation": "openai",
+        "text_summarization": "anthropic",
+        "general_text": "gemma" # Default fallback
+    }
+}
+# It's good practice to handle potential errors during agent initialization
+try:
+    katana_agent_instance = KatanaAgent(router_config=router_config)
+    logger.info("✅ KatanaAgent initialized successfully.")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize KatanaAgent: {e}", exc_info=True)
+    # Depending on severity, might want to exit or run in a degraded mode
+    katana_agent_instance = None # Ensure it's None if init fails
+
 
 if API_TOKEN and ':' in API_TOKEN:
     logger.info("✅ KATANA_TELEGRAM_TOKEN loaded successfully.")
@@ -230,25 +250,55 @@ def handle_message_impl(message):
             return
     else:
         # Это не JSON-команда или невалидная JSON-команда, значит, обычное текстовое сообщение
-        # 3. Вызов get_katana_response с правильной историей
-        logger.info(f"Calling get_katana_response for chat_id {chat_id} with history length {len(current_history)}")
+        logger.info(f"Processing natural language message for chat_id {chat_id} with history length {len(current_history)}")
+
+        if not katana_agent_instance:
+            logger.error(f"KatanaAgent not initialized. Cannot process message for chat_id {chat_id}.")
+            bot.reply_to(message, "⚠️ Служба обработки сообщений временно недоступна. Пожалуйста, попробуйте позже.")
+            return
 
         try:
-            # 3. Вызов get_katana_response с правильной историей
-            katana_response_text = get_katana_response(current_history)
-            logger.info(f"Katana response for chat_id {chat_id}: {katana_response_text}")
+            # Pass previous messages as context.
+            # KatanaAgent's handle_task will prepend this to the new prompt.
+            # A more sophisticated approach might involve structuring the history
+            # in a way the LLM expects (e.g., a list of user/assistant turns).
+            # For now, we'll pass the raw history list as part of the context dict.
+            context_for_agent = None
+            if len(current_history) > 1: # current_history includes the latest user message
+                # We want to pass the history *before* the current user message.
+                # The current user message (task_prompt) is `user_message_text`.
+                # The history in katana_states already includes the current user message.
+                # So, a slice up to [-1] gives history *before* current user msg.
+                context_for_agent = {"previous_messages": current_history[:-1]}
 
-            # 4. Отправка ответа через bot.reply_to
+            # The user_message_text is the actual prompt for this turn.
+            logger.debug(f"Calling KatanaAgent.handle_task for chat_id {chat_id} with prompt: '{user_message_text}' and context: {context_for_agent}")
+
+            # The 'scenario' kwarg was for simulated clients. Real clients don't need it.
+            # KatanaAgent.handle_task will use LLMRouter to pick a model.
+            katana_response_text = katana_agent_instance.handle_task(
+                task_prompt=user_message_text,
+                context=context_for_agent
+            )
+            logger.info(f"KatanaAgent response for chat_id {chat_id}: {katana_response_text}")
+
             bot.reply_to(message, katana_response_text)
             logger.info(f"Replied to chat_id {chat_id}: {katana_response_text}")
 
-            # 5. Запись исходящего сообщения в состояние
             current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text})
             logger.info(f"Appended assistant response to history for chat_id {chat_id}. History length: {len(current_history)}")
 
+        except NLPServiceError as e:
+            error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
+            logger.error(f"[ErrorID: {error_id}] NLPServiceError during KatanaAgent.handle_task for chat_id {chat_id}: {e.user_message}", exc_info=True)
+            user_error_message = (
+                f"😕 Произошла ошибка при обращении к NLP сервису: {e.user_message} "
+                f"(Код ошибки: {error_id})"
+            )
+            bot.reply_to(message, user_error_message)
         except Exception as e:
             error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
-            logger.error(f"[ErrorID: {error_id}] Error during get_katana_response or reply for chat_id {chat_id}: {e}", exc_info=True)
+            logger.error(f"[ErrorID: {error_id}] Unexpected error during KatanaAgent.handle_task or reply for chat_id {chat_id}: {e}", exc_info=True)
             # Формируем сообщение для пользователя
             user_error_message = (
                 "😕 Произошла внутренняя ошибка при обработке вашего запроса. "
@@ -320,6 +370,14 @@ if __name__ == '__main__':
     finally:
         logger.info("Initiating shutdown sequence (when run directly)...")
         stop_heartbeat_thread()  # Stop heartbeat when run directly
+        if katana_agent_instance:
+            try:
+                logger.info("Closing KatanaAgent...")
+                katana_agent_instance.close()
+                logger.info("KatanaAgent closed successfully.")
+            except Exception as e:
+                logger.error(f"Error closing KatanaAgent: {e}", exc_info=True)
+
         # Considerations for further graceful shutdown:
         # - Similar to run_bot_locally.py, true graceful handling of active message
         #   processors would require a more complex setup if using pyTelegramBotAPI's polling.

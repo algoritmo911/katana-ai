@@ -5,14 +5,33 @@ Katana is a Telegram bot designed for flexible interaction and command processin
 ## Project Structure
 
 -   `bot/`: Contains the core bot logic.
-    -   `katana_bot.py`: Main entry point and message handling for the bot.
-    -   `nlp_clients/`: Clients for interacting with NLP models (e.g., Anthropic, OpenAI).
+    -   `katana_bot.py`: Main entry point and message handling for the Telegram bot.
+    -   `nlp_clients/`: Contains clients for interacting with various NLP models (e.g., `OpenAIClient`, `AnthropicClient`, `GemmaClient`). Each client inherits from `BaseNLPClient`.
+    -   `llm_router.py`: Implements `LLMRouter`, responsible for selecting the appropriate NLP client (e.g., OpenAI, Gemma, Anthropic) based on task type or explicit preference.
     -   `commands/`: Directory where received JSON commands might be stored or processed.
+-   `src/`: Contains core application logic.
+    -   `agents/`: Houses different agent implementations.
+        -   `katana_agent.py`: The primary agent (`KatanaAgent`) that uses `LLMRouter` to process tasks (prompts) by selecting an appropriate LLM.
+        -   `julius_agent.py`: A simulator agent (`JuliusAgent`) used for testing the task orchestrator flow without actual LLM calls.
+    -   `orchestrator/`: Components for managing and orchestrating tasks.
+        -   `task_orchestrator.py`: The `TaskOrchestrator` which manages a queue of tasks, processes them in batches using an agent (now `KatanaAgent`), and logs metrics.
+-   `tests/`: Contains automated tests.
+    -   `bot/tests/`: Unit tests for bot components like NLP clients and the LLM router.
+    -   `src/agents/tests/`: Unit tests for agents.
+    -   `orchestrator/`: Integration tests for the task orchestrator.
 -   `ui/`: Contains the source code for a potential web UI (details might vary).
 -   `legacy_ui/`: Contains source code for a previous web UI.
--   `requirements.txt`: Python dependencies.
+-   `requirements.txt`: Python dependencies, including `google-generativeai` for Gemma.
 -   `run_bot_locally.py`: Script to run the bot locally.
 -   `.env.example`: Example file for environment variable configuration.
+
+## Core Components
+
+-   **`KatanaAgent`**: The main agent responsible for processing user requests. It leverages the `LLMRouter` to select the best NLP model for a given task.
+-   **`LLMRouter`**: Dynamically chooses an NLP client (OpenAI, Anthropic, Gemma) based on the inferred type of the task (e.g., question answering, code generation, summarization) or an explicit model preference. This allows for flexible and optimized NLP model usage.
+-   **NLP Clients (`OpenAIClient`, `AnthropicClient`, `GemmaClient`)**: These modules provide a standardized interface (`BaseNLPClient`) to interact with different Large Language Models.
+-   **`TaskOrchestrator`**: Manages the flow of tasks to the `KatanaAgent`, handling batching and performance metric collection.
+-   **`JuliusAgent`**: A simulated agent, useful for testing the orchestrator and overall application flow without incurring costs or dependencies on live LLM APIs.
 
 ## Running Locally
 
@@ -37,10 +56,11 @@ The bot requires certain API keys and tokens to be set as environment variables.
     KATANA_TELEGRAM_TOKEN="YOUR_TELEGRAM_BOT_TOKEN" # Get this from BotFather on Telegram
     ANTHROPIC_API_KEY="YOUR_ANTHROPIC_API_KEY"     # Optional: if you use Anthropic models
     OPENAI_API_KEY="YOUR_OPENAI_API_KEY"         # Optional: if you use OpenAI models
+    GEMMA_API_KEY="YOUR_GEMMA_API_KEY"           # Optional: if you use Google Gemma models
     ```
 
     -   `KATANA_TELEGRAM_TOKEN`: This is essential for the bot to connect to Telegram.
-    -   `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are needed if the bot is configured to use these NLP services. If not used, the bot will log a warning but should still run with placeholder/stub responses.
+    -   `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMMA_API_KEY`: These are needed if the `LLMRouter` is configured to use the respective NLP services. The `KatanaAgent` uses these keys via the `LLMRouter`. If a key for a configured service is missing, attempts to use that service will result in an authentication error from the corresponding client. The bot will still run, but functionality relying on that specific LLM will fail.
 
 ### 3. Install Dependencies
 
