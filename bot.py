@@ -1,197 +1,132 @@
 import telebot
-import json
+import json # Still needed for mock message in voice handler, consider removing if mock is fully gone.
+# Actually, json is used by telebot.types.Message for json_string. And potentially by OpenAI's library. Let's keep it.
 import os
 from pathlib import Path
 from datetime import datetime
-import subprocess # Added for run_katana_command
-from nlp_mapper import interpret # Added for NLP
-import openai # Added for Whisper API
+import openai # Added for Whisper API and GPT
 from dotenv import load_dotenv # Added for loading .env file
 
 # Load environment variables from .env file
 load_dotenv()
 
-# TODO: Get API token from environment variable or secrets manager
-# Using a format-valid dummy token for testing purposes if no env var is set.
-API_TOKEN = os.environ.get('TELEGRAM_API_TOKEN', '12345:dummytoken')
+# API Tokens and Bot Initialization
+API_TOKEN = os.environ.get('TELEGRAM_API_TOKEN', '12345:dummytoken') # Dummy for local dev if not set
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
 bot = telebot.TeleBot(API_TOKEN)
+
 if OPENAI_API_KEY:
     openai.api_key = OPENAI_API_KEY
 else:
-    print("[WARNING] OPENAI_API_KEY not found in environment variables. Voice recognition will not work.")
-
-# Directory for storing command files
-COMMAND_FILE_DIR = Path('commands')
-COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
+    print("[CRITICAL] OPENAI_API_KEY not found in environment variables. Voice recognition and GPT features WILL NOT WORK.")
+    # Consider exiting if OpenAI key is critical and not found, or providing a fallback mode.
 
 # --- Logging Setup ---
 LOG_DIR = Path('logs')
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 TELEGRAM_LOG_FILE = LOG_DIR / 'telegram.log'
 
-def log_to_file(message, filename=TELEGRAM_LOG_FILE):
+# Directory for storing temporary voice files
+VOICE_FILE_DIR = Path('voice_temp') # This was correctly here
+VOICE_FILE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def log_to_file(message_text, filename=TELEGRAM_LOG_FILE):
     """Appends a message to the specified log file."""
     with open(filename, 'a', encoding='utf-8') as f:
-        f.write(f"{datetime.utcnow().isoformat()} | {message}\n")
+        f.write(f"{datetime.utcnow().isoformat()} | {message_text}\n")
 
-def log_local_bot_event(message):
+def log_local_bot_event(event_description):
     """Logs an event to the console and to the telegram.log file."""
-    print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
-    log_to_file(f"[BOT_EVENT] {message}")
+    full_log_message = f"[BOT_EVENT] {event_description}"
+    print(f"{datetime.utcnow().isoformat()} | {full_log_message}")
+    log_to_file(full_log_message)
 
-# --- Katana Command Execution ---
-def run_katana_command(command: str) -> str:
+# --- GPT Interaction ---
+def get_gpt_response(user_text: str) -> str:
     """
-    Executes a shell command and returns its output.
-    This is a simplified placeholder. In a real scenario, this would interact
-    with a more complex 'katana_agent' or similar.
+    Sends user_text to OpenAI GPT API and returns the response.
     """
-    log_local_bot_event(f"Running katana command: {command}")
+    log_local_bot_event(f"Sending to GPT: '{user_text}'")
+    if not OPENAI_API_KEY:
+        log_local_bot_event("OpenAI API key not configured. Cannot get GPT response.")
+        return "⚠️ GPT服务当前不可用 (API key missing)."
+
     try:
-        # Using shell=True for simplicity with complex commands like pipes.
-        # Be cautious with shell=True in production due to security risks.
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, check=True, timeout=30)
-        output = result.stdout.strip()
-        if result.stderr.strip():
-            output += f"\nStderr:\n{result.stderr.strip()}"
-        log_local_bot_event(f"Command output: {output}")
-        return output
-    except subprocess.CalledProcessError as e:
-        error_message = f"Error executing command '{command}': {e.stderr.strip()}"
-        log_local_bot_event(error_message)
-        return error_message
-    except subprocess.TimeoutExpired:
-        error_message = f"Command '{command}' timed out."
-        log_local_bot_event(error_message)
-        return error_message
+        # Using a simple prompt, adjust as needed.
+        # Consider adding context or system messages if required for better responses.
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo", # Or "gpt-4" if available and preferred
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": user_text}
+            ]
+        )
+        gpt_response = response.choices[0].message.content.strip()
+        log_local_bot_event(f"Received from GPT: '{gpt_response}'")
+        return gpt_response
+    except openai.APIError as e:
+        log_local_bot_event(f"OpenAI API Error during GPT call: {e}")
+        return f"🤖 Ошибка при обращении к ИИ: {e}"
     except Exception as e:
-        error_message = f"An unexpected error occurred while running command '{command}': {str(e)}"
-        log_local_bot_event(error_message)
-        return error_message
+        log_local_bot_event(f"Unexpected error during GPT call: {e}")
+        return "🤖 Произошла непредвиденная ошибка при обработке вашего запроса."
 
-def handle_log_event(command_data, chat_id):
-    """Placeholder for handling 'log_event' commands."""
-    log_local_bot_event(f"handle_log_event called for chat_id {chat_id} with data: {json.dumps(command_data)}")
-    # Actual implementation for log_event will go here
-    # TODO: Add more specific logging based on args if needed
-    log_local_bot_event(f"Successfully processed 'log_event' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
-    # bot.reply_to(message, "✅ 'log_event' received (placeholder).") # TODO: Add reply mechanism
 
-def handle_mind_clearing(command_data, chat_id):
-    """Placeholder for handling 'mind_clearing' commands."""
-    log_local_bot_event(f"handle_mind_clearing called for chat_id {chat_id} with data: {json.dumps(command_data)}")
-    # Actual implementation for mind_clearing will go here
-    # TODO: Add more specific logging based on args if needed
-    log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
-    # bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
-
-# This will be the new text handler
+# --- Text Message Handler ---
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def handle_text_message(message):
-    """Handles incoming text messages, attempting NLP interpretation first."""
+    """Handles incoming text messages by sending them to GPT."""
     chat_id = message.chat.id
-    text = message.text
+    text = message.text.strip()
 
-    log_local_bot_event(f"Received text message from {chat_id}: {text}")
+    log_to_file(f"USER_MESSAGE | ChatID: {chat_id} | Text: \"{text}\"")
+    log_local_bot_event(f"Received text message from {chat_id}: \"{text}\"")
 
-    # Attempt to interpret the text as a natural language command
-    nlp_command = interpret(text)
-
-    if nlp_command:
-        log_to_file(f'[NLU] "{text}" → "{nlp_command}"') # Logging interpretation
-        output = run_katana_command(nlp_command)
-        bot.send_message(chat_id, f"🧠 Понял. Выполняю:\n`{nlp_command}`\n\n{output}", parse_mode="Markdown")
+    # System command handling
+    if text.lower() == "/start":
+        log_local_bot_event(f"Processing /start command for chat_id {chat_id}")
+        # Basic welcome message, can be expanded.
+        # Consider adding a prompt to the system message of get_gpt_response for /start if more dynamic welcome is needed.
+        # For now, keeping it simple and local.
+        start_message = (
+            "👋 Привет! Я ваш ИИ-ассистент.\n"
+            "Просто отправьте мне сообщение или голосовую заметку, и я постараюсь помочь.\n\n"
+            "Доступные команды:\n"
+            "/help - Показать это сообщение\n"
+            "/status - Проверить мой статус"
+        )
+        bot.send_message(chat_id, start_message)
+        log_to_file(f"SYSTEM_COMMAND | ChatID: {chat_id} | Command: /start | Response: \"{start_message}\"")
+        return
+    elif text.lower() == "/help":
+        log_local_bot_event(f"Processing /help command for chat_id {chat_id}")
+        help_message = (
+            "Как я могу помочь:\n"
+            "- Отправьте мне любой текстовый вопрос или утверждение.\n"
+            "- Отправьте голосовое сообщение, я его расшифрую и отвечу.\n"
+            "- /status: Проверить, работаю ли я.\n"
+            "- /start: Показать приветственное сообщение.\n\n"
+            "Я использую GPT для генерации ответов, так что просто говорите со мной естественно!"
+        )
+        bot.send_message(chat_id, help_message)
+        log_to_file(f"SYSTEM_COMMAND | ChatID: {chat_id} | Command: /help | Response: \"{help_message}\"")
+        return
+    elif text.lower() == "/status":
+        log_local_bot_event(f"Processing /status command for chat_id {chat_id}")
+        status_message = "✅ Я в порядке и готов к работе!"
+        if not OPENAI_API_KEY:
+            status_message = "⚠️ Я работаю, но функция ИИ отключена (проблема с API ключом)."
+        bot.send_message(chat_id, status_message)
+        log_to_file(f"SYSTEM_COMMAND | ChatID: {chat_id} | Command: /status | Response: \"{status_message}\"")
         return
 
-    # If not an NLP command, try to parse as JSON (old behavior)
-    log_local_bot_event(f"No NLP command interpreted from '{text}'. Attempting JSON parse.")
-    try:
-        command_data = json.loads(text)
-    except json.JSONDecodeError:
-        # If it's not JSON either, then it's an unrecognized command
-        bot.reply_to(message, "🤖 Не понял команду. Попробуй переформулировать или отправь JSON-команду.")
-        log_local_bot_event(f"Invalid JSON and not an NLP command from {chat_id}: {text}")
-        return
+    # If not a system command, proceed with GPT
+    ai_response = get_gpt_response(text)
+    log_to_file(f"AI_RESPONSE | ChatID: {chat_id} | Response: \"{ai_response}\"")
+    bot.send_message(chat_id, ai_response)
 
-    # --- Existing JSON command processing logic starts here ---
-    # (Copied and adapted from the original handle_message)
-    # log_local_bot_event(f"Attempting to process as JSON command from {chat_id}: {text}") # Already logged above
-    # Validate command_data fields
-    required_fields = {
-        "type": str,
-        "module": str,
-        "args": dict,
-        "id": (str, int)  # id can be string or integer
-    }
-
-    for field, expected_type in required_fields.items():
-        if field not in command_data:
-            error_msg = f"Error: Missing required field '{field}'."
-            bot.reply_to(message, error_msg)
-            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
-            return
-        # isinstance check for the field's type
-        # For 'id', it can be str or int. For others, it's a single type.
-        if field == "id":
-            if not any(isinstance(command_data[field], t) for t in expected_type):
-                error_msg = f"Error: Field '{field}' must be type {' or '.join(t.__name__ for t in expected_type)}. Got value '{command_data[field]}' of type {type(command_data[field]).__name__}."
-                bot.reply_to(message, error_msg)
-                log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
-                return
-        elif not isinstance(command_data[field], expected_type):
-            error_msg = f"Error: Field '{field}' must be type {expected_type.__name__}. Got value '{command_data[field]}' of type {type(command_data[field]).__name__}."
-            bot.reply_to(message, error_msg)
-            log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
-            return
-
-    # Additional validation for 'module' and 'type' fields
-    if not command_data['module'].strip():
-        error_msg = f"Error: Field 'module' must be a non-empty string. Got value '{command_data['module']}'."
-        bot.reply_to(message, error_msg)
-        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
-        return
-
-    if not command_data['type'].strip():
-        error_msg = f"Error: Field 'type' must be a non-empty string. Got value '{command_data['type']}'."
-        bot.reply_to(message, error_msg)
-        log_local_bot_event(f"Validation failed for {chat_id}: {error_msg} (Command: {command_text})")
-        return
-
-    # Log successful validation
-    log_local_bot_event(f"Successfully validated command from {chat_id}: {json.dumps(command_data)}")
-
-    # Command routing based on 'type'
-    command_type = command_data.get("type")
-
-    if command_type == "log_event":
-        handle_log_event(command_data, chat_id)
-        bot.reply_to(message, "✅ 'log_event' processed (placeholder).")
-        return
-    elif command_type == "mind_clearing":
-        handle_mind_clearing(command_data, chat_id)
-        bot.reply_to(message, "✅ 'mind_clearing' processed (placeholder).")
-        return
-
-    # If type is not matched, proceed with default behavior (saving)
-    log_local_bot_event(f"Command type '{command_type}' not specifically handled, proceeding with default save. Full command data: {json.dumps(command_data)}")
-
-    # Save the command to a file
-    log_local_bot_event(f"Attempting to save command from {chat_id}. Full command data: {json.dumps(command_data)}")
-    timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
-    command_file_name = f"{timestamp_str}_{chat_id}.json"
-
-    module_name = command_data.get('module', 'telegram_general')
-    module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{module_name}" if module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
-    module_command_dir.mkdir(parents=True, exist_ok=True)
-    command_file_path = module_command_dir / command_file_name
-
-    with open(command_file_path, "w", encoding="utf-8") as f:
-        json.dump(command_data, f, ensure_ascii=False, indent=2)
-
-    bot.reply_to(message, f"✅ Command received and saved as `{command_file_path}`.")
-    log_local_bot_event(f"Saved command from {chat_id} to {command_file_path}")
 
 # --- Voice Processing ---
 def get_text_from_voice(voice_file_path: str) -> str | None:
@@ -257,24 +192,17 @@ def handle_voice_message(message):
             # Important: telebot.types.Message is complex. We only mock what's needed.
             # A cleaner way might be to refactor handle_text_message to accept text directly.
             # For now, this approach minimizes changes to existing text handling.
-
-            # Mimic a text message to pass to handle_text_message
-            # We need to ensure this mock message has all attributes handle_text_message expects
-            mock_text_message = telebot.types.Message(
-                message_id=message.message_id,
-                from_user=message.from_user, # or message.chat if from_user is None in some contexts
-                date=message.date,
-                chat=message.chat,
-                content_type='text',
-                options=[], # Placeholder, may need adjustment
-                json_string=json.dumps({'text': transcribed_text}) # Ensure 'text' is available
-            )
-            mock_text_message.text = transcribed_text # Explicitly set the text attribute
-
+            # No longer need to mock a message, just process the text.
             bot.reply_to(message, f"🗣️ Распознано: \"{transcribed_text}\"")
-            handle_text_message(mock_text_message) # Process as if it was a text message
+            log_to_file(f"USER_MESSAGE (VOICE) | ChatID: {chat_id} | Transcribed: \"{transcribed_text}\"")
+
+            # Directly send transcribed text to GPT processing
+            ai_response = get_gpt_response(transcribed_text)
+            log_to_file(f"AI_RESPONSE (from VOICE) | ChatID: {chat_id} | Response: \"{ai_response}\"")
+            bot.send_message(chat_id, ai_response)
+
         else:
-            bot.reply_to(message, "Не понял, повтори, пожалуйста. 🎙️")
+            bot.reply_to(message, "Не понял, повтори, пожалуйста. 🎙️ Не удалось распознать речь.")
             log_local_bot_event(f"Transcription failed or returned empty for voice from {chat_id}")
 
     except Exception as e:
