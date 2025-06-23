@@ -175,6 +175,9 @@ For production deployments, it's highly recommended to run the Katana Bot as a m
     ```
     *   **Log Management**: Supervisor handles log rotation for files specified by `stdout_logfile` and `stderr_logfile` based on `stdout_logfile_maxbytes` and `stdout_logfile_backups` (and similarly for stderr). Ensure the log directories (e.g., `/path/to/your/katana-bot-project/logs/` or `/var/log/katana_bot/`) exist and are writable by the user running the Supervisor process or the user specified in the `katana_bot.conf`.
 
+### Graceful Shutdown
+The bot is configured to handle `SIGINT` (Ctrl+C) and `SIGTERM` (standard termination signal from systemd/supervisor) for a graceful shutdown. It will attempt to stop polling and log its shutdown process. This ensures cleaner exits when managed by a service manager.
+
 ## Monitoring
 
 ### Heartbeat Mechanism
@@ -252,9 +255,50 @@ The `check_heartbeat.py` script currently logs to stderr and simulates alert mes
     Then, schedule `run_heartbeat_check_and_alert.sh` in cron instead of `check_heartbeat.py` directly.
 
 *   **Option 2: Modify `check_heartbeat.py` Directly**
-    1.  Add libraries like `smtplib` (for email) or `requests` (for calling Telegram API, etc.) to `check_heartbeat.py`.
-    2.  Implement functions within the Python script to send notifications.
-    3.  Securely manage credentials for these notification services (e.g., via environment variables for the cron job, or a config file for the script).
+    1.  Add necessary Python libraries (e.g., `smtplib` for email, `requests` for generic HTTP APIs like Telegram) to your environment if they are not already standard.
+    2.  Implement notification functions within `check_heartbeat.py` (e.g., `send_email_alert`, `send_telegram_alert`).
+    3.  Call these functions from the `simulate_alert` function (perhaps renaming `simulate_alert` to `trigger_alert`).
+    4.  Securely manage credentials for these notification services (e.g., via environment variables accessible to the cron job, or a separate, secured configuration file read by `check_heartbeat.py`).
+
+    **Example: Sending Email with `smtplib` (conceptual snippet for `check_heartbeat.py`)**
+    ```python
+    # import smtplib
+    # from email.mime.text import MIMEText
+
+    # def send_email_alert(subject, body, to_email, from_email, smtp_server, smtp_port, smtp_user, smtp_pass):
+    #     msg = MIMEText(body)
+    #     msg['Subject'] = subject
+    #     msg['From'] = from_email
+    #     msg['To'] = to_email
+    #     try:
+    #         with smtplib.SMTP_SSL(smtp_server, smtp_port) as server: # Or SMTP for non-SSL
+    #             server.login(smtp_user, smtp_pass)
+    #             server.sendmail(from_email, [to_email], msg.as_string())
+    #         print(f"Email alert sent to {to_email}", file=sys.stderr)
+    #     except Exception as e:
+    #         print(f"Failed to send email alert: {e}", file=sys.stderr)
+    ```
+
+    **Example: Sending Telegram Message with `requests` (conceptual snippet for `check_heartbeat.py`)**
+    ```python
+    # import requests
+    # TELEGRAM_ALERT_BOT_TOKEN = os.getenv("TELEGRAM_ALERT_BOT_TOKEN")
+    # TELEGRAM_ALERT_CHAT_ID = os.getenv("TELEGRAM_ALERT_CHAT_ID")
+
+    # def send_telegram_alert(message_text):
+    #     if not TELEGRAM_ALERT_BOT_TOKEN or not TELEGRAM_ALERT_CHAT_ID:
+    #         print("CRITICAL: Telegram alert bot token or chat ID not configured.", file=sys.stderr)
+    #         return
+    #     url = f"https://api.telegram.org/bot{TELEGRAM_ALERT_BOT_TOKEN}/sendMessage"
+    #     payload = {"chat_id": TELEGRAM_ALERT_CHAT_ID, "text": message_text, "parse_mode": "Markdown"}
+    #     try:
+    #         response = requests.post(url, data=payload, timeout=10)
+    #         response.raise_for_status() # Raise an exception for HTTP error codes
+    #         print(f"Telegram alert sent to chat ID {TELEGRAM_ALERT_CHAT_ID}", file=sys.stderr)
+    #     except requests.exceptions.RequestException as e:
+    #         print(f"Failed to send Telegram alert: {e}", file=sys.stderr)
+    ```
+    Remember to handle API keys and chat IDs securely, likely via environment variables set for the cron job.
 
 ### Future Monitoring Enhancements (Conceptual)
 
@@ -294,4 +338,14 @@ The `check_heartbeat.py` script currently logs to stderr and simulates alert mes
 *   **Service fails to stay running (systemd/supervisor):**
     *   Check `journalctl -u katana_bot.service` (for systemd) or Supervisor's log files for the bot process. These logs will contain startup errors or runtime exceptions from `katana_bot.py`.
     *   Ensure `RestartSec` (systemd) or `startsecs`/`startretries` (Supervisor) are configured to allow for recovery time if there are transient issues.
+*   **Graceful Shutdown Issues**:
+    *   If the bot doesn't shut down cleanly with `Ctrl+C` or service stop commands, check that the `signal` handlers in `katana_bot.py` are correctly registered and that `bot.stop_polling()` behaves as expected.
+    *   Ensure the user running the bot process has permissions to receive and handle `SIGINT`/`SIGTERM`.
+
+### Adapting Service Files for Different Environments
+
+*   **Paths**: The most common change needed in `katana_bot.service` (systemd) and `katana_bot.conf` (Supervisor) will be the absolute paths in `WorkingDirectory`, `ExecStart` (for systemd), `command`, and `directory` (for Supervisor), and log file paths. Always use absolute paths for these in service configurations.
+*   **Python Interpreter**: If you use a virtual environment (recommended), ensure `ExecStart`/`command` points to the Python interpreter *inside* the `venv` (e.g., `/path/to/project/venv/bin/python`). If using a system Python, ensure it's the correct version (`python3`).
+*   **User/Group**: Change `User=your_user` and `Group=your_group` (systemd) or `user=your_user` (Supervisor) to a dedicated, non-root user with appropriate permissions for the project directory, log directories, and heartbeat file.
+*   **Environment Variables**: The method of setting environment variables (directly in the service file, via `EnvironmentFile`, or through a wrapper script for Supervisor) should be chosen based on your security needs and server setup. `EnvironmentFile` is generally preferred for systemd when managing multiple secrets.
 ```

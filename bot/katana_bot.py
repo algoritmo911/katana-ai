@@ -249,49 +249,73 @@ def handle_message(message):
         except Exception as reply_e:
             logger.critical(f"Failed to send error reply to chat {chat_id}: {reply_e}", exc_info=True)
 
+def run_bot_polling_loop(bot_instance, current_project_root, hb_file_path_obj, stop_flag_check_func):
+    """
+    Main polling loop for the bot, including heartbeat and restart logic.
+    Args:
+        bot_instance: The telebot.TeleBot instance.
+        current_project_root: Path object for the project root. (Used for heartbeat path)
+        hb_file_path_obj: Path object for the heartbeat file.
+        stop_flag_check_func: A function that returns True if shutdown is requested.
+    """
+    logger.info("Bot polling loop initiated.")
+
+    # heartbeat_interval_seconds = 60 # Defined but not used for an active inner loop
+    # last_heartbeat_time = 0 # Defined but not used for an active inner loop
+
+    while not stop_flag_check_func():
+        try:
+            current_timestamp = time.time() # Renamed from current_time to avoid conflict
+            try:
+                with open(hb_file_path_obj, "w") as f:
+                    f.write(str(current_timestamp))
+                logger.info(f"Heartbeat updated at {hb_file_path_obj} with timestamp {current_timestamp}")
+            except IOError as ioe:
+                logger.error(f"Failed to write heartbeat to {hb_file_path_obj}: {ioe}", exc_info=True)
+
+            logger.info("Bot polling started with none_stop=True.")
+            bot_instance.polling(none_stop=True, interval=0)
+
+        except Exception as e:
+            if stop_flag_check_func():
+                logger.error(f"Bot polling error during shutdown: {e}", exc_info=True)
+                break
+            logger.error(f"Bot polling encountered an error: {e}", exc_info=True)
+            logger.info("Restarting polling in 15 seconds...")
+
+            for _ in range(15):
+                if stop_flag_check_func():
+                    logger.info("Shutdown requested during polling error sleep. Aborting restart.")
+                    break
+                time.sleep(1)
+            if stop_flag_check_func(): break
+
+        else:
+            if stop_flag_check_func():
+                logger.info("Bot polling exited cleanly due to shutdown request.")
+                break
+            else:
+                logger.warning("Bot polling exited cleanly but no shutdown signal was received. Restarting in 5 seconds...")
+                for _ in range(5):
+                    if stop_flag_check_func():
+                         logger.info("Shutdown requested during clean exit sleep. Aborting restart.")
+                         break
+                    time.sleep(1)
+                if stop_flag_check_func(): break
+
+    logger.info("Bot polling loop terminated.")
+
 
 if __name__ == '__main__':
-    # log_local_bot_event("Bot starting...") # Already logged by logger.info("Initializing Katana Bot...")
-    logger.info("Attempting to start bot polling...")
+    logger.info("Attempting to start Katana Bot...") # Changed log message slightly
 
-    # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, graceful_shutdown_handler)
     signal.signal(signal.SIGTERM, graceful_shutdown_handler)
     logger.info("Signal handlers for SIGINT and SIGTERM registered.")
 
-    heartbeat_file_path = project_root / "katana_heartbeat.txt" # Heartbeat file in project root
-    heartbeat_interval_seconds = 60 # How often to update heartbeat if we had an active loop
-    last_heartbeat_time = 0
+    heartbeat_file = project_root / "katana_heartbeat.txt" # Use module-level project_root
 
-    while not shutdown_requested: # Continue polling until shutdown is requested
-        try:
-            # Update heartbeat at the start of each polling attempt/iteration
-            current_time = time.time()
-            try:
-                with open(heartbeat_file_path, "w") as f:
-                    f.write(str(current_time))
-                # Log less frequently for heartbeat, e.g., if it's part of a more active loop
-                # For this setup, it logs on each polling restart/start.
-                logger.info(f"Heartbeat updated at {heartbeat_file_path} with timestamp {current_time}")
-            except IOError as ioe:
-                logger.error(f"Failed to write heartbeat to {heartbeat_file_path}: {ioe}", exc_info=True)
-
-            logger.info("Bot polling started with none_stop=True.")
-            # In a real threaded scenario, the heartbeat write would be in a loop here too.
-            # For now, it just means the polling *attempt* started.
-            bot.polling(none_stop=True, interval=0) # interval=0 is default, can be omitted or tuned
-        except Exception as e:
-            logger.error(f"Bot polling encountered an error: {e}", exc_info=True)
-            logger.info("Restarting polling in 15 seconds...")
-            time.sleep(15)
-        else: # This block executes if the try block completes without an exception
-            if shutdown_requested:
-                logger.info("Bot polling exited cleanly due to shutdown request.")
-                break # Exit the while loop, effectively stopping the bot
-            else:
-                # This case means bot.polling() returned without an exception,
-                # but shutdown was not requested via signal. This might be unexpected.
-                logger.warning("Bot polling exited cleanly but no shutdown signal was received. Restarting in 5 seconds...")
-                time.sleep(5)
+    # The 'bot' global is used by graceful_shutdown_handler and now passed to run_bot_polling_loop
+    run_bot_polling_loop(bot, project_root, heartbeat_file, lambda: shutdown_requested)
 
     logger.info("Katana Bot has shut down.")
