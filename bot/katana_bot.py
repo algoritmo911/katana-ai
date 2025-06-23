@@ -4,6 +4,7 @@ import os
 import logging
 from pathlib import Path
 from datetime import datetime, timezone
+from typing import Optional
 
 import threading
 import time
@@ -85,13 +86,55 @@ def get_katana_response(history: list[dict]) -> str:
     last_message = history[-1]['content']
     return f"Размышляю над вашим последним сообщением: '{last_message}'... (это заглушка)"
 
-# Словарь для хранения состояний чатов (истории сообщений)
-# Ключ: chat_id, Значение: list сообщений [{'role': 'user'/'assistant', 'content': 'message_text'}]
-katana_states = {}
-
 # Типы сообщений в истории
 MESSAGE_ROLE_USER = "user"
 MESSAGE_ROLE_ASSISTANT = "assistant"
+
+# --- MemoryManager Initialization ---
+# Ensure src is in PYTHONPATH or adjust import accordingly
+# Assuming `src` is in PYTHONPATH for cleaner imports
+try:
+    from src.memory.memory_manager import MemoryManager
+except ImportError:
+    # Fallback for local execution if PYTHONPATH isn't set, e.g. when running katana_bot.py directly for testing
+    # This assumes katana_bot.py is in bot/ and src/ is a sibling directory
+    import sys
+    project_root = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(project_root))
+    from src.memory.memory_manager import MemoryManager
+
+
+redis_host = os.getenv('REDIS_HOST', 'localhost')
+redis_port = int(os.getenv('REDIS_PORT', '6379'))
+redis_password = os.getenv('REDIS_PASSWORD', None)
+redis_db = int(os.getenv('REDIS_DB', '0'))
+chat_ttl_str = os.getenv('REDIS_CHAT_HISTORY_TTL_SECONDS')
+chat_ttl = int(chat_ttl_str) if chat_ttl_str else None
+
+# memory_manager will be initialized by init_dependencies()
+memory_manager: Optional[MemoryManager] = None
+
+def init_dependencies():
+    """Initializes global dependencies like MemoryManager."""
+    global memory_manager
+    if memory_manager is None:
+        logger.info("Initializing MemoryManager...")
+        # These variables are already defined at module level
+        # redis_host, redis_port, redis_db, redis_password, chat_ttl
+        memory_manager = MemoryManager(
+            host=redis_host,
+            port=redis_port,
+            db=redis_db,
+            password=redis_password,
+            chat_history_ttl_seconds=chat_ttl
+        )
+        logger.info("MemoryManager initialized.")
+    else:
+        logger.info("MemoryManager already initialized.")
+
+# --- End MemoryManager Initialization ---
+
+
 # --- Конец заглушек ---
 
 # Получаем токен из переменной окружения
@@ -125,36 +168,37 @@ COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 #     """Логирование события бота."""
 #     logger.info(message)
 
-def handle_log_event(command_data, chat_id):
+def handle_log_event(command_data, chat_id_str: str): # chat_id is now string
     """Обработка команды 'log_event' (заглушка)."""
-    logger.info(f"handle_log_event called for chat_id {chat_id} with data: {command_data}")
+    logger.info(f"handle_log_event called for chat_id {chat_id_str} with data: {command_data}")
 
-def handle_mind_clearing(command_data, chat_id):
+def handle_mind_clearing(command_data, chat_id_str: str): # chat_id is now string
     """Обработка команды 'mind_clearing' (заглушка)."""
-    logger.info(f"handle_mind_clearing called for chat_id {chat_id} with data: {command_data}")
+    logger.info(f"handle_mind_clearing called for chat_id {chat_id_str} with data: {command_data}")
 
 def handle_message_impl(message):
     """
     Реализация полного цикла обработки сообщения:
     - Приём и логирование входящих сообщений.
-    - Формирование контекста из KatanaState.
+    - Формирование контекста из MemoryManager.
     - Вызов get_katana_response с правильной историей.
     - Отправка ответа через bot.reply_to.
-    - Запись в состояние как входящего, так и исходящего сообщения.
+    - Запись в MemoryManager как входящего, так и исходящего сообщения.
     - Обработка и логирование ошибок с понятными русскими сообщениями пользователю.
     """
-    chat_id = message.chat.id
+    chat_id_str = str(message.chat.id) # Use string chat_id for MemoryManager consistency
     user_message_text = message.text
 
     # 1. Логирование входящего сообщения (уже сделано в handle_message)
-    # logger.info(f"Processing message from chat_id {chat_id}: {user_message_text}")
+    # logger.info(f"Processing message from chat_id {chat_id_str}: {user_message_text}")
 
-    # 2. Формирование контекста из KatanaState
-    if chat_id not in katana_states:
-        katana_states[chat_id] = []
-        logger.info(f"New chat session started for chat_id {chat_id}. Initialized empty history.")
+    # 2. Формирование контекста из MemoryManager
+    # No explicit initialization like `if chat_id not in katana_states:` needed.
+    # get_history will return empty list if no history.
+    # For now, we retrieve full history. Later, a limit can be passed based on token constraints.
+    current_history = memory_manager.get_history(chat_id_str)
+    logger.info(f"Retrieved history for chat_id {chat_id_str}. Length: {len(current_history)}")
 
-    current_history = katana_states[chat_id]
 
     # Попытка разобрать сообщение как JSON-команду
     is_json_command = False
@@ -180,10 +224,10 @@ def handle_message_impl(message):
             is_json_command = True
             command_data = parsed_json
         else:
-            logger.info(f"Message from chat_id {chat_id} parsed as JSON but not a valid command structure: {user_message_text}")
+            logger.info(f"Message from chat_id {chat_id_str} parsed as JSON but not a valid command structure: {user_message_text}")
 
     except json.JSONDecodeError:
-        logger.info(f"Message from chat_id {chat_id} is not JSON, treating as natural language: {user_message_text}")
+        logger.info(f"Message from chat_id {chat_id_str} is not JSON, treating as natural language: {user_message_text}")
         pass # Не JSON, значит, обычное сообщение
 
     # Добавляем сообщение пользователя в историю
@@ -191,29 +235,32 @@ def handle_message_impl(message):
 
     if is_json_command and command_data:
         command_type = command_data.get("type")
-        logger.info(f"Processing JSON command: type='{command_type}' for chat_id {chat_id}")
+        logger.info(f"Processing JSON command: type='{command_type}' for chat_id {chat_id_str}")
 
         if command_type == "log_event":
-            handle_log_event(command_data, chat_id)
+            handle_log_event(command_data, chat_id_str) # Corrected
             bot_response_text = "✅ 'log_event' обработан (заглушка)."
             bot.reply_to(message, bot_response_text)
-            logger.info(f"Replied to chat_id {chat_id}: {bot_response_text}")
-            current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+            logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}") # Corrected
+            # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced by memory_manager call
+            memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
             return
         elif command_type == "mind_clearing":
-            handle_mind_clearing(command_data, chat_id)
-            katana_states[chat_id] = [] # Очищаем историю
-            logger.info(f"Mind clearing for chat_id {chat_id}. History reset.")
+            handle_mind_clearing(command_data, chat_id_str) # Corrected
+            # katana_states[chat_id_str] = [] # Replaced by memory_manager call
+            memory_manager.clear_history(chat_id_str)
+            logger.info(f"Mind clearing for chat_id {chat_id_str}. History reset.") # Corrected
             bot_response_text = "✅ Контекст диалога очищен. Начинаем с чистого листа."
             bot.reply_to(message, bot_response_text)
-            logger.info(f"Replied to chat_id {chat_id}: {bot_response_text}")
+            logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}") # Corrected
             # Добавляем ответ ассистента как первое сообщение после очистки
-            katana_states[chat_id].append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+            # katana_states[chat_id_str].append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced
+            memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
             return
         else: # Другие JSON команды (сохранение файла)
             logger.info(f"Command type '{command_type}' not specifically handled, proceeding with default save.")
             timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')
-            command_file_name = f"{timestamp_str}_{chat_id}.json"
+            command_file_name = f"{timestamp_str}_{chat_id_str}.json" # Corrected
             module_name = command_data.get('module', 'telegram_general')
             module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{module_name}" if module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
             module_command_dir.mkdir(parents=True, exist_ok=True)
@@ -224,31 +271,34 @@ def handle_message_impl(message):
 
             bot_response_text = f"✅ Команда принята и сохранена как `{command_file_path}`."
             bot.reply_to(message, bot_response_text)
-            logger.info(f"Replied to chat_id {chat_id}: {bot_response_text}")
-            current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
-            logger.info(f"Saved command from {chat_id} to {command_file_path}")
+            logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}") # Corrected
+            # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced
+            memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+            logger.info(f"Saved command from {chat_id_str} to {command_file_path}") # Corrected
             return
     else:
         # Это не JSON-команда или невалидная JSON-команда, значит, обычное текстовое сообщение
         # 3. Вызов get_katana_response с правильной историей
-        logger.info(f"Calling get_katana_response for chat_id {chat_id} with history length {len(current_history)}")
+        # current_history already includes the user message due to local append after get_history
+        logger.info(f"Calling get_katana_response for chat_id {chat_id_str} with history length {len(current_history)}") # Corrected
 
         try:
             # 3. Вызов get_katana_response с правильной историей
             katana_response_text = get_katana_response(current_history)
-            logger.info(f"Katana response for chat_id {chat_id}: {katana_response_text}")
+            logger.info(f"Katana response for chat_id {chat_id_str}: {katana_response_text}") # Corrected
 
             # 4. Отправка ответа через bot.reply_to
             bot.reply_to(message, katana_response_text)
-            logger.info(f"Replied to chat_id {chat_id}: {katana_response_text}")
+            logger.info(f"Replied to chat_id {chat_id_str}: {katana_response_text}") # Corrected
 
             # 5. Запись исходящего сообщения в состояние
-            current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text})
-            logger.info(f"Appended assistant response to history for chat_id {chat_id}. History length: {len(current_history)}")
+            # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text}) # Replaced
+            memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text})
+            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}. History length: {len(memory_manager.get_history(chat_id_str))}") # Corrected, log current length from manager
 
         except Exception as e:
             error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
-            logger.error(f"[ErrorID: {error_id}] Error during get_katana_response or reply for chat_id {chat_id}: {e}", exc_info=True)
+            logger.error(f"[ErrorID: {error_id}] Error during get_katana_response or reply for chat_id {chat_id_str}: {e}", exc_info=True) # Corrected
             # Формируем сообщение для пользователя
             user_error_message = (
                 "😕 Произошла внутренняя ошибка при обработке вашего запроса. "
@@ -256,7 +306,7 @@ def handle_message_impl(message):
                 f"Пожалуйста, попробуйте позже. (Код ошибки: {error_id})"
             )
             bot.reply_to(message, user_error_message)
-            logger.info(f"Replied to chat_id {chat_id} with error message: {user_error_message}")
+            logger.info(f"Replied to chat_id {chat_id_str} with error message: {user_error_message}") # Corrected
             # Важно: не добавляем ошибочный ответ ассистента в историю,
             # но сообщение пользователя там уже есть.
 
@@ -264,14 +314,23 @@ def handle_message_impl(message):
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     """Ответ на /start"""
+    chat_id_str = str(message.chat.id)
     response_text = "Привет! Я — Katana. Готов к диалогу или JSON-команде."
     bot.reply_to(message, response_text)
-    logger.info(f"Replied to chat_id {message.chat.id}: {response_text}")
-    logger.info(f"/start received from {message.chat.id}")
-    # Инициализируем состояние для нового пользователя при /start
-    if message.chat.id not in katana_states:
-        katana_states[message.chat.id] = []
-    katana_states[message.chat.id].append({"role": MESSAGE_ROLE_ASSISTANT, "content": "Привет! Я — Katana. Готов к диалогу или JSON-команде."})
+    logger.info(f"Replied to chat_id {chat_id_str}: {response_text}")
+    logger.info(f"/start received from {chat_id_str}")
+
+    # For /start, we might want to clear any existing short-term history
+    # or simply add the welcome message. Current behavior of just adding is fine.
+    # If we wanted to ensure a clean slate on /start:
+    # memory_manager.clear_history(chat_id_str)
+
+    # Add the assistant's welcome message to the history.
+    memory_manager.add_message_to_history(
+        chat_id_str,
+        {"role": MESSAGE_ROLE_ASSISTANT, "content": response_text}
+    )
+    logger.info(f"Welcome message added to history for chat_id {chat_id_str} via MemoryManager.")
 
 
 @bot.message_handler(func=lambda message: True)
@@ -306,6 +365,7 @@ if __name__ == '__main__':
         logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     logger.info("Bot starting directly from katana_bot.py...")
+    init_dependencies() # Initialize dependencies including MemoryManager
     start_heartbeat_thread()  # Start heartbeat when run directly
     try:
         # bot.polling() # Old call
