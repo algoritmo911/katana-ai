@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
+import time # Added for user activity tracking
+import random # Added for heartbeat loop
 import subprocess # Added for run_katana_command
 from nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
@@ -16,6 +18,11 @@ load_dotenv()
 # Using a format-valid dummy token for testing purposes if no env var is set.
 API_TOKEN = os.environ.get('TELEGRAM_API_TOKEN', '12345:dummytoken')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+
+# --- Global Dictionaries for User Activity Tracking ---
+user_last_active_time: dict[int, float] = {}
+user_last_topic: dict[int, str] = {}
+# --- END Global Dictionaries ---
 
 bot = telebot.async_telebot.AsyncTeleBot(API_TOKEN) # Use AsyncTeleBot
 if OPENAI_API_KEY:
@@ -109,6 +116,10 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
     Handles NLP, JSON commands, or falls back to GPT.
     """
     log_local_bot_event(f"Processing user message for chat {chat_id}: '{text[:100]}...'")
+
+    # Update user activity trackers
+    user_last_active_time[chat_id] = time.time()
+    user_last_topic[chat_id] = text # Store the full text for now, can be summarized later
 
     # Attempt to interpret the text as a natural language command
     nlp_command = interpret(text)
@@ -428,16 +439,129 @@ async def get_gpt_streamed_response(user_text: str, chat_id: int):
         log_local_bot_event(f"log_event({chat_id}, \"gpt_unexpected_error\", \"Error: {str(e).replacechr(10), '\\n'}\")")
         yield f"🤖 Unexpected error with GPT: {str(e)}"
 
+# --- Heartbeat Loop ---
+async def heartbeat_loop():
+    """
+    Periodically performs proactive checks and generates self-thoughts.
+    """
+    log_local_bot_event("Heartbeat loop started.")
+    while True:
+        interval = random.uniform(30, 60)
+        await asyncio.sleep(interval)
+        log_local_bot_event(f"Heartbeat: Tick. Next check in {interval:.2f} seconds.")
+
+        if not user_last_active_time:
+            log_local_bot_event("Heartbeat: No users active yet.")
+            continue
+
+        active_chat_ids = list(user_last_active_time.keys())
+        log_local_bot_event(f"Heartbeat: Checking activity for chat IDs: {active_chat_ids}")
+
+        for chat_id in active_chat_ids:
+            # This is where the "thinking" logic will go in the next step.
+            # For now, just a placeholder log.
+            last_active_timestamp = user_last_active_time.get(chat_id)
+            current_time = time.time()
+            time_since_last_active = current_time - last_active_timestamp if last_active_timestamp else float('inf')
+            last_topic = user_last_topic.get(chat_id, "nothing specific")
+
+            log_local_bot_event(f"Heartbeat: Chat {chat_id} - Last active: {datetime.fromtimestamp(last_active_timestamp if last_active_timestamp else 0).isoformat()} ({time_since_last_active:.0f}s ago), Last topic: '{last_topic[:50]}...'.")
+
+            if OPENAI_API_KEY: # Only attempt if API key is available
+                thought = await generate_self_thought(chat_id, time_since_last_active, last_topic)
+                log_to_file(f"[HEARTBEAT_THOUGHT] ChatID: {chat_id} | Thought: {thought}", filename=LOG_DIR / "heartbeat.log")
+                log_local_bot_event(f"Heartbeat: Chat {chat_id} | Generated thought: {thought[:100]}...") # Log preview to console
+
+                # Basic Proactive Action Logic
+                # Define keywords that might trigger a check-in
+                check_in_keywords = ["reminder", "check-in", "follow up", "been a while"]
+                thought_lower = thought.lower()
+                should_check_in = any(keyword in thought_lower for keyword in check_in_keywords)
+
+                # Define inactivity threshold (e.g., 5 minutes = 300 seconds)
+                inactivity_threshold_seconds = 300
+
+                if should_check_in and time_since_last_active > inactivity_threshold_seconds:
+                    try:
+                        log_local_bot_event(f"Heartbeat: Chat {chat_id} | Proactive action: Sending check-in message.")
+                        await bot.send_message(chat_id, "Just checking in! Is there anything I can help you with?")
+                        log_to_file(f"[HEARTBEAT_ACTION] ChatID: {chat_id} | Action: Sent check-in message.", filename=LOG_DIR / "heartbeat.log")
+                        # Optionally, update last active time for the bot's own message to avoid immediate re-trigger
+                        # user_last_active_time[chat_id] = time.time() # Or a dedicated bot_last_messaged_time
+                    except Exception as e:
+                        log_local_bot_event(f"Heartbeat: Chat {chat_id} | Error sending proactive message: {e}")
+                        log_to_file(f"[HEARTBEAT_ERROR] ChatID: {chat_id} | Error sending proactive message: {e}", filename=LOG_DIR / "heartbeat.log")
+
+            else:
+                log_local_bot_event(f"Heartbeat: Chat {chat_id} | Skipping thought generation (OPENAI_API_KEY not set).")
+            # Further proactive actions can be developed here.
+
+
+async def generate_self_thought(chat_id: int, time_since_last_active: float, last_topic: str) -> str:
+    """
+    Generates a "self-thought" for the bot using OpenAI GPT.
+    """
+    prompt_parts = [
+        "I am a proactive AI assistant. I need to think about my current interaction.",
+        f"Context: I am interacting with user (chat_id: {chat_id}).",
+        f"The user was last active {time_since_last_active:.0f} seconds ago.",
+        f"The last thing the user talked about was: '{last_topic}'.",
+        "Based on this, what should I be considering? Should I send a reminder if they've been inactive too long? A relevant joke or tip? Or just make an observation about the situation? What are my internal monologue/thoughts right now?"
+    ]
+    prompt = "\n".join(prompt_parts)
+
+    try:
+        import functools
+        loop = asyncio.get_event_loop()
+
+        def _create_openai_completion():
+            # Using ChatCompletion for consistency, though Completion could also work for simpler prompts.
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo", # Or your preferred model, e.g., gpt-4o-mini
+                messages=[
+                    {"role": "system", "content": "You are the internal monologue of a helpful AI assistant. Generate a brief thought process or reflection based on the user's status."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=150, # Keep thoughts relatively brief
+                temperature=0.7, # Allow for some creativity in thought
+            )
+            return response.choices[0].message.content.strip() if response.choices else "No thought generated."
+
+        thought = await loop.run_in_executor(None, _create_openai_completion)
+        return thought
+    except openai.APIError as e:
+        log_local_bot_event(f"OpenAI API Error during self-thought generation for chat {chat_id}: {e}")
+        return f"Error generating thought: API Error - {e}"
+    except Exception as e:
+        log_local_bot_event(f"Unexpected error during self-thought generation for chat {chat_id}: {e}")
+        return f"Error generating thought: Unexpected error - {e}"
+
 
 if __name__ == '__main__':
     # asyncio.run(main()) # This was the correct way from previous step
     # Re-ensure main() is called correctly
     async def main_runner():
         log_local_bot_event("Bot starting...")
+        heartbeat_task = None # Initialize heartbeat_task to None
         try:
+            # Start the heartbeat loop as a concurrent task
+            heartbeat_task = asyncio.create_task(heartbeat_loop())
+            log_local_bot_event("Heartbeat task created and started.")
+
             await bot.polling(non_stop=True, request_timeout=30)
+
         except Exception as e:
             log_local_bot_event(f"Bot polling error: {e}")
+        finally:
+            if heartbeat_task:
+                log_local_bot_event("Stopping heartbeat task...")
+                heartbeat_task.cancel()
+                try:
+                    await heartbeat_task
+                except asyncio.CancelledError:
+                    log_local_bot_event("Heartbeat task successfully cancelled.")
+                except Exception as e_heartbeat:
+                    log_local_bot_event(f"Exception during heartbeat task cancellation: {e_heartbeat}")
         finally:
             log_local_bot_event("Bot stopped.")
     asyncio.run(main_runner())
