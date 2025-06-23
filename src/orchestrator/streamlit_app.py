@@ -1,6 +1,18 @@
 import streamlit as st
 import json
 from datetime import datetime
+import time # Для имитации задержки ответа Katana
+
+# --- Инициализация состояния ---
+def init_session_state():
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
+    if 'chat_visible' not in st.session_state:
+        st.session_state.chat_visible = False
+    if 'monitoring_visible' not in st.session_state:
+        st.session_state.monitoring_visible = True
+    if 'user_input' not in st.session_state:
+        st.session_state.user_input = ""
 
 def load_data(filepath: str) -> list[dict]:
     """Loads and parses the JSON log file."""
@@ -64,21 +76,74 @@ def display_round_data(round_data: dict):
 def main():
     """Main function to run the Streamlit application."""
     st.set_page_config(page_title="Katana Orchestrator Dashboard", layout="wide")
-    st.title("Katana Orchestrator Dashboard")
+    init_session_state() # Инициализация состояния сессии
 
-    # Assuming orchestrator_log.json is in the root directory relative to where streamlit is run
-    # or in the same directory as the script if run directly.
-    # For robustness, one might want to make this path configurable.
-    log_file_path = "orchestrator_log.json"
+    # --- Боковая панель для управления видимостью ---
+    with st.sidebar:
+        st.header("Управление панелями")
+        if st.button("Toggle Chat Window", key="toggle_chat_btn"):
+            st.session_state.chat_visible = not st.session_state.chat_visible
 
-    orchestrator_data = load_data(log_file_path)
+        if st.button("Toggle Monitoring Dashboard", key="toggle_monitoring_btn"):
+            st.session_state.monitoring_visible = not st.session_state.monitoring_visible
 
-    if orchestrator_data:
-        st.success(f"Successfully loaded {len(orchestrator_data)} round(s) from '{log_file_path}'.")
-        for round_entry in orchestrator_data:
-            display_round_data(round_entry)
-    else:
-        st.info("No data to display. Ensure 'orchestrator_log.json' exists and is correctly formatted.")
+        st.markdown("---") # Разделитель
+
+    # --- Основной контент ---
+    main_container = st.container()
+
+    with main_container:
+        st.title("Katana Orchestrator Dashboard & Chat")
+
+    # --- Чат-интерфейс (может быть в сайдбаре или как плавающее окно) ---
+    # Для простоты пока разместим его под дашбордом или сбоку, если дашборд скрыт.
+    # Более сложное позиционирование (например, кнопка в углу) требует CSS/HTML.
+
+    if st.session_state.chat_visible:
+        chat_container = st.expander("Katana Chat", expanded=True)
+        with chat_container:
+            # Отображение истории сообщений
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+            # Поле ввода пользователя
+            def handle_submit():
+                user_message_content = st.session_state.current_user_input # Получаем значение из ключа
+                if user_message_content:
+                    # Добавляем сообщение пользователя в историю
+                    st.session_state.messages.append({"role": "user", "content": user_message_content})
+
+                    # Заглушка ответа Katana
+                    with st.chat_message("assistant"):
+                        st.markdown(f"Katana: Принял: \"{user_message_content}\"")
+                        st.session_state.messages.append({"role": "assistant", "content": f"Katana: Принял: \"{user_message_content}\""})
+
+                    # Очищаем поле ввода после отправки
+                    st.session_state.current_user_input = ""
+
+            st.text_input("Ваше сообщение:", key="current_user_input", on_change=handle_submit)
+
+            # Кнопка "Отправить" - теперь обработка идет через on_change text_input
+            # if st.button("Отправить", key="send_chat_message"):
+            #    handle_submit(st.session_state.user_input) # Передаем текущее значение
+
+    # --- Дашборд Мониторинга ---
+    if st.session_state.monitoring_visible:
+        dashboard_container = st.container()
+        with dashboard_container:
+            st.header("Orchestrator Monitoring")
+            log_file_path = "orchestrator_log.json"
+            orchestrator_data = load_data(log_file_path)
+
+            if orchestrator_data:
+                st.success(f"Successfully loaded {len(orchestrator_data)} round(s) from '{log_file_path}'.")
+                for round_entry in orchestrator_data:
+                    display_round_data(round_entry)
+            else:
+                st.info("No data to display. Ensure 'orchestrator_log.json' exists and is correctly formatted.")
+    elif not st.session_state.chat_visible and not st.session_state.monitoring_visible:
+        st.info("Обе панели (Чат и Мониторинг) скрыты. Используйте кнопки в боковой панели для их отображения.")
 
 if __name__ == "__main__":
     main()
