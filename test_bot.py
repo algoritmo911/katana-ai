@@ -7,6 +7,40 @@ import shutil # For robust directory removal
 # Assuming bot.py is in the same directory or accessible in PYTHONPATH
 import bot
 import telebot # Added import
+import asyncio # For asyncio.sleep and Event in tests
+
+# Helper async generator for mocking OpenAI stream with controllable delay/cancellation
+async def mock_openai_stream_generator(chunks_data, delay=0.01, cancel_event_check=None):
+    """
+    Simulates the OpenAI streaming API.
+    - chunks_data: A list of strings, each being a content of a chunk.
+    - delay: Time to sleep after yielding each chunk.
+    - cancel_event_check: An asyncio.Event to check for cancellation.
+    """
+    try:
+        for chunk_content in chunks_data:
+            if cancel_event_check and cancel_event_check.is_set():
+                # print(f"Mock Stream ({id(cancel_event_check)}): Cancellation detected in generator, breaking.") # Debug
+                break
+            # print(f"Mock Stream ({id(cancel_event_check)}): Yielding '{chunk_content}'") # Debug
+            yield {"choices": [{"delta": {"content": chunk_content}}]}
+            if delay > 0:
+                await asyncio.sleep(delay)
+        # print(f"Mock Stream ({id(cancel_event_check)}): Finished yielding data or cancelled.") # Debug
+    except asyncio.CancelledError:
+        # print(f"Mock Stream ({id(cancel_event_check)}): Generator itself cancelled.") # Debug
+        raise
+    finally:
+        # print(f"Mock Stream ({id(cancel_event_check)}): In finally block.") # Debug
+        # Simulate final empty chunk if not cancelled mid-way, or if that's expected.
+        # For this mock, we'll just ensure it stops.
+        # If the real API always sends a final empty delta even on cancel, adjust here.
+        pass # No final empty delta from this mock if cancelled.
+             # If loop completes naturally, OpenAI sends one last empty delta.
+             # Let's add it if not cancelled.
+    if not (cancel_event_check and cancel_event_check.is_set()):
+        yield {"choices": [{"delta": {}}]} # Final empty delta if not cancelled.
+
 
 class TestBot(unittest.TestCase):
 
@@ -121,10 +155,12 @@ class TestBot(unittest.TestCase):
         # There was a duplicate rmtree here, removing it.
         # bot.COMMAND_FILE_DIR should be restored.
         bot.COMMAND_FILE_DIR = self.original_command_file_dir
+        bot.active_gpt_streams.clear() # Clear active streams after each test
 
 
     def _create_mock_message(self, text_payload):
-        mock_message = MagicMock()
+        mock_message = MagicMock(spec=telebot.types.Message) # Add spec
+        mock_message.chat = MagicMock(spec=telebot.types.Chat) # Add spec
         mock_message.chat.id = 12345
         mock_message.text = json.dumps(text_payload)
         return mock_message
@@ -816,3 +852,138 @@ if __name__ == '__main__':
             ],
             stream=True
         )
+
+    async def test_gpt_stream_cancellation_by_new_message(self):
+        chat_id = 111222
+        first_message_text = "Tell me a very long story"
+        second_message_text = "Actually, stop and tell me a joke"
+
+        # --- Setup for the first (long) stream ---
+        first_stream_chunks = ["Part1", "Part2", "Part3", "Part4", "Part5"]
+        # This event will be created by the bot code, we need to find it or rely on logs/effects
+
+        # Mock the OpenAI API to return our controlled slow generator
+        # We'll use a side_effect to provide different generators for different calls if needed,
+        # and to pass the cancellation event created by the bot.
+
+        # Store cancellation events that our mock generator sees
+        seen_cancel_events = []
+
+        async def first_stream_gen_wrapper(*args, **kwargs):
+            # The real get_gpt_streamed_response creates its own cancel event.
+            # The bot's process_user_message will create a cancel event and pass it.
+            # Our mock_openai_stream_generator needs to receive this event.
+            # However, openai.ChatCompletion.create is mocked, not get_gpt_streamed_response directly.
+            # The cancellation_event is an arg to get_gpt_streamed_response, not to ChatCompletion.create
+            # This means the test needs to observe the effect of cancellation (e.g. logs, fewer edit calls)
+            # rather than directly passing a cancel_event to the mock of ChatCompletion.create's generator.
+
+            # The actual cancellation event is managed by process_user_message.
+            # We can retrieve it from active_gpt_streams if needed for the mock generator.
+            active_task_info = bot.active_gpt_streams.get(chat_id)
+            current_cancel_event = active_task_info[1] if active_task_info else None
+            if current_cancel_event:
+                seen_cancel_events.append(current_cancel_event)
+            # print(f"Mock Create (1st call): cancel_event is {current_cancel_event}") # Debug
+            return mock_openai_stream_generator(first_stream_chunks, delay=0.1, cancel_event_check=current_cancel_event)
+
+        async def second_stream_gen_wrapper(*args, **kwargs):
+            active_task_info = bot.active_gpt_streams.get(chat_id)
+            current_cancel_event = active_task_info[1] if active_task_info else None
+            if current_cancel_event:
+                seen_cancel_events.append(current_cancel_event)
+            # print(f"Mock Create (2nd call): cancel_event is {current_cancel_event}") # Debug
+            return mock_openai_stream_generator(["Joke!", " Ha ha!"], delay=0.01, cancel_event_check=current_cancel_event)
+
+        self.mock_openai_chat_completion_create.side_effect = [
+            first_stream_gen_wrapper(), # For the first call
+            second_stream_gen_wrapper() # For the second call
+        ]
+
+        # --- Create mock messages ---
+        mock_msg1 = MagicMock(spec=telebot.types.Message)
+        mock_msg1.chat = MagicMock(spec=telebot.types.Chat); mock_msg1.chat.id = chat_id
+        mock_msg1.text = first_message_text
+        mock_msg1.message_id = 1000 # Original message_id for reply_to context
+
+        mock_msg2 = MagicMock(spec=telebot.types.Message)
+        mock_msg2.chat = MagicMock(spec=telebot.types.Chat); mock_msg2.chat.id = chat_id
+        mock_msg2.text = second_message_text
+        mock_msg2.message_id = 1001
+
+        # --- Mock bot replies to get message_id for editing ---
+        # process_user_message uses reply_to for the first part of GPT stream
+        # We need to return a mock message object that has a .message_id
+        mock_bot_sent_msg1 = MagicMock(spec=telebot.types.Message); mock_bot_sent_msg1.message_id = 2000
+        mock_bot_sent_msg2 = MagicMock(spec=telebot.types.Message); mock_bot_sent_msg2.message_id = 2001
+
+        self.mock_bot_instance.reply_to.side_effect = [mock_bot_sent_msg1, mock_bot_sent_msg2]
+
+        # --- Start the first message processing (don't await to full completion yet) ---
+        # Ensure it's not an NLP command
+        with patch('bot.interpret', return_value=None):
+            # We are calling process_user_message directly as handle_text_message just wraps it
+            # The task is created inside process_user_message. We don't await it here.
+            asyncio.create_task(bot.process_user_message(chat_id, mock_msg1.text, mock_msg1))
+
+        await asyncio.sleep(0.05) # Allow first task to start and potentially send first chunk
+
+        # Check that the first stream started
+        self.mock_bot_instance.send_chat_action.assert_any_call(chat_id, 'typing')
+        self.mock_bot_instance.reply_to.assert_any_call(mock_msg1, "Part1") # First chunk of first message
+        self.assertEqual(len(bot.active_gpt_streams), 1, "One active stream should exist")
+        self.assertIn(chat_id, bot.active_gpt_streams, "Chat ID should be in active streams")
+
+        original_task, original_cancel_event, _ = bot.active_gpt_streams[chat_id]
+
+        await asyncio.sleep(0.15) # Allow another chunk of the first message to be edited
+        self.mock_bot_instance.edit_message_text.assert_any_call("Part1Part2", chat_id, mock_bot_sent_msg1.message_id)
+
+        # --- Send the second message to interrupt ---
+        # Reset edit_message_text mock to only capture calls for the second stream or aftermath of first
+        edit_calls_before_interrupt = self.mock_bot_instance.edit_message_text.call_count
+
+        with patch('bot.interpret', return_value=None):
+            # This call should trigger cancellation of the first task
+            asyncio.create_task(bot.process_user_message(chat_id, mock_msg2.text, mock_msg2))
+
+        await asyncio.sleep(0.05) # Allow cancellation signal to propagate and new task to start
+
+        # --- Assertions ---
+        self.assertTrue(original_cancel_event.is_set(), "Original stream's cancellation event was not set.")
+
+        # Wait a bit longer to ensure the first task, if not immediately cancelled by event,
+        # gets cancelled by the wait_for in process_user_message or its own checks.
+        await asyncio.sleep(0.3)
+
+        # Check that no more edits were made to the first message after interruption point
+        # This is the tricky part: how many edits *should* have happened for msg1?
+        # Part1 (reply_to), Part1Part2 (edit). If interrupted before Part3, then only one edit.
+        # The exact number of edits can be timing-dependent.
+        # Better to check that the content of edits for mock_bot_sent_msg1.message_id does not include Part3, Part4, etc.
+
+        # Collect all edit calls for the first message ID
+        first_message_edits = []
+        for call_obj in self.mock_bot_instance.edit_message_text.call_args_list:
+            if call_obj.args[2] == mock_bot_sent_msg1.message_id:
+                first_message_edits.append(call_obj.args[0])
+
+        # print(f"First message edits: {first_message_edits}") # Debug
+        self.assertNotIn("Part1Part2Part3", first_message_edits, "Stream 1 should have been cancelled before Part3")
+        self.assertLessEqual(len(first_message_edits), 2, "Stream 1 should not have too many edits after interruption")
+
+
+        # Check that the second stream started and sent its first chunk
+        self.mock_bot_instance.reply_to.assert_any_call(mock_msg2, "Joke!")
+
+        # Ensure the active stream is now for the second task (or none if it finished quickly)
+        # Wait for tasks to settle, including cleanup from active_gpt_streams
+        await asyncio.sleep(0.5) # Allow tasks to fully complete or timeout
+
+        if chat_id in bot.active_gpt_streams:
+            current_task, _, current_msg_id = bot.active_gpt_streams[chat_id]
+            self.assertNotEqual(current_task, original_task, "The active task should be the new one if any.")
+            self.assertEqual(current_msg_id, mock_bot_sent_msg2.message_id, "Active stream should be for the second message if any.")
+
+        # Check total calls to openai.ChatCompletion.create (should be 2)
+        self.assertEqual(self.mock_openai_chat_completion_create.call_count, 2)

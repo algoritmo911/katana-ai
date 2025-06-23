@@ -4,8 +4,6 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
-import time # Added for user activity tracking
-import random # Added for heartbeat loop
 import subprocess # Added for run_katana_command
 from nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
@@ -18,11 +16,6 @@ load_dotenv()
 # Using a format-valid dummy token for testing purposes if no env var is set.
 API_TOKEN = os.environ.get('TELEGRAM_API_TOKEN', '12345:dummytoken')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-
-# --- Global Dictionaries for User Activity Tracking ---
-user_last_active_time: dict[int, float] = {}
-user_last_topic: dict[int, str] = {}
-# --- END Global Dictionaries ---
 
 bot = telebot.async_telebot.AsyncTeleBot(API_TOKEN) # Use AsyncTeleBot
 if OPENAI_API_KEY:
@@ -38,6 +31,10 @@ COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR = Path('logs')
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 TELEGRAM_LOG_FILE = LOG_DIR / 'telegram.log'
+
+# Dictionary to store active GPT streaming tasks and their cancellation events
+# Key: chat_id, Value: tuple(asyncio.Task, asyncio.Event, telegram_message_id_being_edited)
+active_gpt_streams = {}
 
 def log_to_file(message, filename=TELEGRAM_LOG_FILE):
     """Appends a message to the specified log file."""
@@ -116,10 +113,6 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
     Handles NLP, JSON commands, or falls back to GPT.
     """
     log_local_bot_event(f"Processing user message for chat {chat_id}: '{text[:100]}...'")
-
-    # Update user activity trackers
-    user_last_active_time[chat_id] = time.time()
-    user_last_topic[chat_id] = text # Store the full text for now, can be summarized later
 
     # Attempt to interpret the text as a natural language command
     nlp_command = interpret(text)
@@ -211,49 +204,112 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
     except json.JSONDecodeError:
         # Not NLP, not JSON -> Fallback to GPT
         log_local_bot_event(f"Text from {chat_id} ('{text[:50]}...') is not NLP or JSON. Attempting GPT stream.")
-        await bot.send_chat_action(chat_id, 'typing')
 
-        full_response_message = ""
-        sent_message_id = None
+        # --- Start of new task management for GPT streaming ---
+        if chat_id in active_gpt_streams:
+            old_task, old_cancel_event, old_msg_id = active_gpt_streams[chat_id]
+            log_local_bot_event(f"log_event({chat_id}, \"gpt_interrupt_request\", \"New message received, attempting to cancel previous stream for message {old_msg_id}.\")")
+            old_cancel_event.set()
+            try:
+                await asyncio.wait_for(old_task, timeout=2.0) # Wait for old task to finish/cancel
+                log_local_bot_event(f"log_event({chat_id}, \"gpt_previous_stream_cancelled\", \"Previous stream task for message {old_msg_id} completed/cancelled.\")")
+            except asyncio.TimeoutError:
+                log_local_bot_event(f"log_event({chat_id}, \"gpt_previous_stream_timeout\", \"Timeout waiting for previous stream task for message {old_msg_id} to cancel.\")")
+            # Removal from active_gpt_streams is handled by the task itself in its finally block
 
-        async for chunk in get_gpt_streamed_response(text, chat_id):
-            full_response_message += chunk
-            if not sent_message_id:
-                try:
-                    # Try to reply to original message if possible, else send new.
-                    # GPT responses are not direct replies in terms of quoting, but this keeps context.
-                    sent_msg = await bot.reply_to(original_message, full_response_message) if original_message else await bot.send_message(chat_id, full_response_message)
-                    sent_message_id = sent_msg.message_id
-                    log_local_bot_event(f"GPT stream: Sent initial message {sent_message_id} to chat {chat_id}.")
-                except Exception as e:
-                    log_local_bot_event(f"Error sending initial GPT message to {chat_id} (attempted reply: {bool(original_message)}): {e}. Sending as new message.")
+        # Define the coroutine that will handle the actual streaming for this new request
+        async def _handle_gpt_streaming_for_chat(current_text, current_chat_id, current_original_message, current_cancellation_event):
+            sent_message_id = None
+            full_response_message = ""
+            try:
+                await bot.send_chat_action(current_chat_id, 'typing')
+
+                async for chunk in get_gpt_streamed_response(current_text, current_chat_id, current_cancellation_event):
+                    if current_cancellation_event.is_set(): # Double check, get_gpt_streamed_response should also handle this
+                        log_local_bot_event(f"log_event({current_chat_id}, \"gpt_streaming_loop_cancelled\", \"Cancellation detected in process_user_message loop.\")")
+                        break
+
+                    full_response_message += chunk
+                    if not sent_message_id:
+                        try:
+                            sent_msg = await bot.reply_to(current_original_message, full_response_message) if current_original_message else await bot.send_message(current_chat_id, full_response_message)
+                            sent_message_id = sent_msg.message_id
+                            # Store/update message_id in active_gpt_streams if needed, though it's tricky with task structure
+                            # For now, the initial message_id is what we might care about for context if we re-implement cancellation details
+                            if current_chat_id in active_gpt_streams: # Update message_id if task is still current
+                                task, cancel_event, _ = active_gpt_streams[current_chat_id]
+                                active_gpt_streams[current_chat_id] = (task, cancel_event, sent_message_id)
+
+                            log_local_bot_event(f"GPT stream: Sent initial message {sent_message_id} to chat {current_chat_id}.")
+                        except Exception as e_send:
+                            log_local_bot_event(f"Error sending initial GPT message to {current_chat_id}: {e_send}. Sending as new message.")
+                            try:
+                                sent_msg = await bot.send_message(current_chat_id, full_response_message)
+                                sent_message_id = sent_msg.message_id
+                                if current_chat_id in active_gpt_streams: # Update message_id
+                                   task, cancel_event, _ = active_gpt_streams[current_chat_id]
+                                   active_gpt_streams[current_chat_id] = (task, cancel_event, sent_message_id)
+                                log_local_bot_event(f"GPT stream: Sent initial message {sent_message_id} (fallback) to chat {current_chat_id}.")
+                            except Exception as e_fallback:
+                                log_local_bot_event(f"Error sending fallback initial GPT message to {current_chat_id}: {e_fallback}")
+                                await bot.send_message(current_chat_id, "⚠️ Error sending GPT response.")
+                                return # Exit this specific handler coroutine
+                    else:
+                        if chunk and sent_message_id: # Ensure there's new content and a message to edit
+                            try:
+                                await asyncio.sleep(0.1) # Keep small delay
+                                await bot.edit_message_text(full_response_message, current_chat_id, sent_message_id)
+                                log_local_bot_event(f"GPT stream: Edited message {sent_message_id} in chat {current_chat_id}.")
+                            except telebot.async_telebot.apihelper.ApiTelegramException as e_edit:
+                                if "message is not modified" in str(e_edit).lower():
+                                    log_local_bot_event(f"GPT stream: Message {sent_message_id} not modified, skipping edit.")
+                                elif "message to edit not found" in str(e_edit).lower() or "message can't be edited" in str(e_edit).lower() :
+                                    log_local_bot_event(f"GPT stream: Message {sent_message_id} not found or can't be edited. Stopping edits for this stream. Error: {e_edit}")
+                                    break # Stop trying to edit this message
+                                else:
+                                    log_local_bot_event(f"Error editing GPT message {sent_message_id} in chat {current_chat_id}: {e_edit}")
+                            except Exception as e_gen_edit:
+                                log_local_bot_event(f"General error editing GPT message {sent_message_id} in chat {current_chat_id}: {e_gen_edit}")
+
+                if not sent_message_id and full_response_message and not current_cancellation_event.is_set():
+                     await bot.send_message(current_chat_id, full_response_message)
+                elif not sent_message_id and not full_response_message:
+                    log_local_bot_event(f"GPT stream for chat {current_chat_id} resulted in no content to send.")
+
+            except asyncio.CancelledError:
+                log_local_bot_event(f"log_event({current_chat_id}, \"gpt_streaming_task_cancelled\", \"Task for GPT streaming was cancelled externally.\")")
+                # Potentially send a message like "Previous response generation cancelled." - but might be noisy
+            except Exception as e_outer:
+                log_local_bot_event(f"log_event({current_chat_id}, \"gpt_streaming_task_error\", \"Error in GPT streaming task: {e_outer}\")")
+                if sent_message_id and not full_response_message: # Error before any content, or message was deleted
+                    pass # Avoid sending generic error if we couldn't even start
+                elif not current_cancellation_event.is_set(): # Don't send error if it was cancelled.
                     try:
-                        sent_msg = await bot.send_message(chat_id, full_response_message)
-                        sent_message_id = sent_msg.message_id
-                        log_local_bot_event(f"GPT stream: Sent initial message {sent_message_id} (fallback) to chat {chat_id}.")
-                    except Exception as e_fallback:
-                        log_local_bot_event(f"Error sending fallback initial GPT message to {chat_id}: {e_fallback}")
-                        await bot.send_message(chat_id, "⚠️ Error sending GPT response.")
-                        return
-            else:
-                if chunk and sent_message_id:
-                    try:
-                        await asyncio.sleep(0.1)
-                        await bot.edit_message_text(full_response_message, chat_id, sent_message_id)
-                        log_local_bot_event(f"GPT stream: Edited message {sent_message_id} in chat {chat_id}.")
-                    except telebot.async_telebot.apihelper.ApiTelegramException as e:
-                        if "message is not modified" in str(e).lower():
-                            log_local_bot_event(f"GPT stream: Message {sent_message_id} not modified, skipping edit.")
-                        else:
-                            log_local_bot_event(f"Error editing GPT message {sent_message_id} in chat {chat_id}: {e}")
-                    except Exception as e:
-                        log_local_bot_event(f"General error editing GPT message {sent_message_id} in chat {chat_id}: {e}")
+                        await bot.send_message(current_chat_id, "⚠️ An error occurred while generating the response.")
+                    except Exception:
+                        pass # Best effort
+            finally:
+                log_local_bot_event(f"log_event({current_chat_id}, \"gpt_streaming_task_finally\", \"Finishing GPT task. Sent message ID: {sent_message_id}\")")
+                # Remove this task from active streams
+                if active_gpt_streams.get(current_chat_id) and active_gpt_streams[current_chat_id][0] is asyncio.current_task():
+                    del active_gpt_streams[current_chat_id]
+                    log_local_bot_event(f"log_event({current_chat_id}, \"gpt_active_stream_removed\", \"Task removed from active streams.\")")
+                else:
+                    # This might happen if a new task rapidly replaced this one due to quick succession of messages
+                    log_local_bot_event(f"log_event({current_chat_id}, \"gpt_active_stream_mismatch_on_remove\", \"Task not found or already replaced in active streams during cleanup.\")")
 
-        if not sent_message_id and full_response_message:
-             await bot.send_message(chat_id, full_response_message)
-        elif not sent_message_id and not full_response_message:
-            log_local_bot_event(f"GPT stream for chat {chat_id} resulted in no content to send.")
+
+        # Create and store the new task
+        new_cancellation_event = asyncio.Event()
+        # Pass the original_message to the handler for reply context
+        gpt_task = asyncio.create_task(
+            _handle_gpt_streaming_for_chat(text, chat_id, original_message, new_cancellation_event)
+        )
+        active_gpt_streams[chat_id] = (gpt_task, new_cancellation_event, None) # Initially no message_id to edit
+        log_local_bot_event(f"log_event({chat_id}, \"gpt_new_stream_task_created\", \"New GPT stream task started.\")")
+        # Note: We don't await gpt_task here, it runs in the background.
         return
+        # --- End of new task management ---
 
 # This will be the new text handler
 @bot.message_handler(func=lambda message: True, content_types=['text'])
@@ -384,20 +440,25 @@ async def handle_voice_message(message):
         await loop.run_in_executor(None, _check_and_delete_temp_file)
 
 # --- GPT Streaming ---
-async def get_gpt_streamed_response(user_text: str, chat_id: int):
+async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_event: asyncio.Event):
     """
     Gets a streamed response from OpenAI GPT asynchronously.
     Yields chunks of text as they are received.
+    Stops if cancellation_event is set.
     """
     if not OPENAI_API_KEY:
         log_local_bot_event(f"log_event({chat_id}, \"gpt_skipped_no_api_key\", \"OpenAI API key not configured.\")")
         yield "⚠️ GPT functionality is not configured on the server."
         return
 
-    log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_start\", \"User text: {user_text[:100].replace('\"', 'QUOTE').replacechr(10), '\\n'}...\")")
+    log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_start\", \"User text: {user_text[:100].replace('\"', 'QUOTE').replace('\n', '\\n')}...\")")
     try:
         import functools
         loop = asyncio.get_event_loop()
+
+        if cancellation_event.is_set(): # Check before even making the API call
+            log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_before_start\", \"Cancellation event set before API call.\")")
+            return
 
         def _create_openai_stream():
             return openai.ChatCompletion.create(
@@ -413,128 +474,42 @@ async def get_gpt_streamed_response(user_text: str, chat_id: int):
 
         _SENTINEL = object()
         while True:
-            # Default to None if next fails to avoid StopIteration in executor thread if stream ends abruptly
+            if cancellation_event.is_set():
+                log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_pre_chunk_fetch\", \"Cancellation event set before fetching next chunk.\")")
+                break
+
             chunk_item = await loop.run_in_executor(None, next, stream_iterator, _SENTINEL)
 
+            if cancellation_event.is_set(): # Check again immediately after the blocking call returns
+                log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_post_chunk_fetch\", \"Cancellation event set after fetching chunk.\")")
+                break
+
             if chunk_item is _SENTINEL:
-                # This debug log can be noisy if streams often end this way.
-                # log_local_bot_event(f"log_event({chat_id}, \"gpt_stream_exhausted\", \"Sentinel reached.\")")
                 break
 
             content = chunk_item.choices[0].get("delta", {}).get("content")
             if content:
-                # Escape newlines and quotes for cleaner single-line logging
                 log_content = content[:50].replace('\n', '\\n').replace('"', 'QUOTE')
                 log_local_bot_event(f"log_event({chat_id}, \"gpt_chunk_received\", \"{log_content}...\")")
                 yield content
 
-        log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_finished\", \"Stream completed.\")")
+        if not cancellation_event.is_set(): # Only log 'finished' if not cancelled
+            log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_finished\", \"Stream completed naturally.\")")
+        else:
+            log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_ended_by_cancellation\", \"Stream processing stopped due to cancellation.\")")
+
 
     except StopIteration:
-        log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_stopped_iteration\", \"StopIteration received, stream likely ended.\")")
+        if not cancellation_event.is_set(): # Avoid double logging if cancellation happened near end
+            log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_stopped_iteration\", \"StopIteration received, stream likely ended.\")")
     except openai.APIError as e:
-        log_local_bot_event(f"log_event({chat_id}, \"gpt_api_error\", \"Error: {str(e).replacechr(10), '\\n'}\")")
-        yield f"🤖 GPT Error: {str(e)}"
+        log_local_bot_event(f"log_event({chat_id}, \"gpt_api_error\", \"Error: {str(e).replace('\n', '\\n')}\")")
+        if not cancellation_event.is_set(): # Don't yield error if cancelled, it's not relevant to user
+            yield f"🤖 GPT Error: {str(e)}"
     except Exception as e:
-        log_local_bot_event(f"log_event({chat_id}, \"gpt_unexpected_error\", \"Error: {str(e).replacechr(10), '\\n'}\")")
-        yield f"🤖 Unexpected error with GPT: {str(e)}"
-
-# --- Heartbeat Loop ---
-async def heartbeat_loop():
-    """
-    Periodically performs proactive checks and generates self-thoughts.
-    """
-    log_local_bot_event("Heartbeat loop started.")
-    while True:
-        interval = random.uniform(30, 60)
-        await asyncio.sleep(interval)
-        log_local_bot_event(f"Heartbeat: Tick. Next check in {interval:.2f} seconds.")
-
-        if not user_last_active_time:
-            log_local_bot_event("Heartbeat: No users active yet.")
-            continue
-
-        active_chat_ids = list(user_last_active_time.keys())
-        log_local_bot_event(f"Heartbeat: Checking activity for chat IDs: {active_chat_ids}")
-
-        for chat_id in active_chat_ids:
-            # This is where the "thinking" logic will go in the next step.
-            # For now, just a placeholder log.
-            last_active_timestamp = user_last_active_time.get(chat_id)
-            current_time = time.time()
-            time_since_last_active = current_time - last_active_timestamp if last_active_timestamp else float('inf')
-            last_topic = user_last_topic.get(chat_id, "nothing specific")
-
-            log_local_bot_event(f"Heartbeat: Chat {chat_id} - Last active: {datetime.fromtimestamp(last_active_timestamp if last_active_timestamp else 0).isoformat()} ({time_since_last_active:.0f}s ago), Last topic: '{last_topic[:50]}...'.")
-
-            if OPENAI_API_KEY: # Only attempt if API key is available
-                thought = await generate_self_thought(chat_id, time_since_last_active, last_topic)
-                log_to_file(f"[HEARTBEAT_THOUGHT] ChatID: {chat_id} | Thought: {thought}", filename=LOG_DIR / "heartbeat.log")
-                log_local_bot_event(f"Heartbeat: Chat {chat_id} | Generated thought: {thought[:100]}...") # Log preview to console
-
-                # Basic Proactive Action Logic
-                # Define keywords that might trigger a check-in
-                check_in_keywords = ["reminder", "check-in", "follow up", "been a while"]
-                thought_lower = thought.lower()
-                should_check_in = any(keyword in thought_lower for keyword in check_in_keywords)
-
-                # Define inactivity threshold (e.g., 5 minutes = 300 seconds)
-                inactivity_threshold_seconds = 300
-
-                if should_check_in and time_since_last_active > inactivity_threshold_seconds:
-                    try:
-                        log_local_bot_event(f"Heartbeat: Chat {chat_id} | Proactive action: Sending check-in message.")
-                        await bot.send_message(chat_id, "Just checking in! Is there anything I can help you with?")
-                        log_to_file(f"[HEARTBEAT_ACTION] ChatID: {chat_id} | Action: Sent check-in message.", filename=LOG_DIR / "heartbeat.log")
-                        # Optionally, update last active time for the bot's own message to avoid immediate re-trigger
-                        # user_last_active_time[chat_id] = time.time() # Or a dedicated bot_last_messaged_time
-                    except Exception as e:
-                        log_local_bot_event(f"Heartbeat: Chat {chat_id} | Error sending proactive message: {e}")
-                        log_to_file(f"[HEARTBEAT_ERROR] ChatID: {chat_id} | Error sending proactive message: {e}", filename=LOG_DIR / "heartbeat.log")
-
-            else:
-                log_local_bot_event(f"Heartbeat: Chat {chat_id} | Skipping thought generation (OPENAI_API_KEY not set).")
-            # Further proactive actions can be developed here.
-
-
-async def generate_self_thought(chat_id: int, time_since_last_active: float, last_topic: str) -> str:
-    """
-    Generates a "self-thought" for the bot using OpenAI GPT.
-    """
-    prompt_parts = [
-        "I am a proactive AI assistant. I need to think about my current interaction.",
-        f"Context: I am interacting with user (chat_id: {chat_id}).",
-        f"The user was last active {time_since_last_active:.0f} seconds ago.",
-        f"The last thing the user talked about was: '{last_topic}'.",
-        "Based on this, what should I be considering? Should I send a reminder if they've been inactive too long? A relevant joke or tip? Or just make an observation about the situation? What are my internal monologue/thoughts right now?"
-    ]
-    prompt = "\n".join(prompt_parts)
-
-    try:
-        import functools
-        loop = asyncio.get_event_loop()
-
-        def _create_openai_completion():
-            # Using ChatCompletion for consistency, though Completion could also work for simpler prompts.
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo", # Or your preferred model, e.g., gpt-4o-mini
-                messages=[
-                    {"role": "system", "content": "You are the internal monologue of a helpful AI assistant. Generate a brief thought process or reflection based on the user's status."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=150, # Keep thoughts relatively brief
-                temperature=0.7, # Allow for some creativity in thought
-            )
-            return response.choices[0].message.content.strip() if response.choices else "No thought generated."
-
-        thought = await loop.run_in_executor(None, _create_openai_completion)
-        return thought
-    except openai.APIError as e:
-        log_local_bot_event(f"OpenAI API Error during self-thought generation for chat {chat_id}: {e}")
-        return f"Error generating thought: API Error - {e}"
-    except Exception as e:
-        log_local_bot_event(f"Unexpected error during self-thought generation for chat {chat_id}: {e}")
-        return f"Error generating thought: Unexpected error - {e}"
+        log_local_bot_event(f"log_event({chat_id}, \"gpt_unexpected_error\", \"Error: {str(e).replace('\n', '\\n')}\")")
+        if not cancellation_event.is_set():
+            yield f"🤖 Unexpected error with GPT: {str(e)}"
 
 
 if __name__ == '__main__':
@@ -542,26 +517,10 @@ if __name__ == '__main__':
     # Re-ensure main() is called correctly
     async def main_runner():
         log_local_bot_event("Bot starting...")
-        heartbeat_task = None # Initialize heartbeat_task to None
         try:
-            # Start the heartbeat loop as a concurrent task
-            heartbeat_task = asyncio.create_task(heartbeat_loop())
-            log_local_bot_event("Heartbeat task created and started.")
-
             await bot.polling(non_stop=True, request_timeout=30)
-
         except Exception as e:
             log_local_bot_event(f"Bot polling error: {e}")
-        finally:
-            if heartbeat_task:
-                log_local_bot_event("Stopping heartbeat task...")
-                heartbeat_task.cancel()
-                try:
-                    await heartbeat_task
-                except asyncio.CancelledError:
-                    log_local_bot_event("Heartbeat task successfully cancelled.")
-                except Exception as e_heartbeat:
-                    log_local_bot_event(f"Exception during heartbeat task cancellation: {e_heartbeat}")
         finally:
             log_local_bot_event("Bot stopped.")
     asyncio.run(main_runner())
