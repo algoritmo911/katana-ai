@@ -4,3 +4,4 @@ pytest
 pytest-cov
 coverage
 requests
+python-telegram-bot

@@ -76,6 +76,49 @@ When you push changes to `main` or create a pull request targeting `main`, the C
 
 If any of these steps fail, the CI build will be marked as failed, helping to catch issues early.
 
+## Telegram Notifications
+
+This project is configured to send notifications to a specified Telegram chat upon the success or failure of CI/CD workflows executed via GitHub Actions.
+
+### How it Works
+The `.github/workflows/main.yml` workflow includes steps to execute the `tools/notifier.py` script. This script uses the `python-telegram-bot` library to send messages.
+
+Supported notifications:
+- ✅ **CI/Deploy Success**: Sent when the `run_checks.sh` script (and any future deployment steps) complete successfully.
+- ❌ **Deploy Failure**: Sent if a deployment step fails. It will attempt to include content from an `error.log` if available. (Note: Current workflow focuses on CI, deployment notifications are placeholders).
+- 🔧 **CI Failure**: Sent if the `run_checks.sh` script fails. It will include a generic message or details from a specified failure log.
+
+### Setup Instructions
+
+To enable Telegram notifications, you need to:
+
+1.  **Create a Telegram Bot:**
+    *   Open Telegram and search for "BotFather".
+    *   Start a chat with BotFather by sending `/start`.
+    *   Create a new bot by sending `/newbot`. Follow the instructions to choose a name and username for your bot.
+    *   BotFather will provide you with an **HTTP API token**. Keep this token secure, as it's used to control your bot. This will be your `BOT_NOTIFY_TOKEN`.
+
+2.  **Get Your Chat ID:**
+    *   You can send notifications to a personal chat or a group chat.
+    *   **For a personal chat (with yourself):**
+        *   Search for the bot "@userinfobot" in Telegram.
+        *   Start a chat with it and it will reply with your user ID. This is your `NOTIFY_CHAT_ID`.
+    *   **For a group chat:**
+        1.  Add your newly created bot to the desired group.
+        2.  Send any message to the group (e.g., `/start`).
+        3.  Open your browser and go to the URL: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates` (replace `<YOUR_BOT_TOKEN>` with the token from BotFather).
+        4.  Look for the JSON response. Find the `chat` object within the `message` or `my_chat_member` object. The `id` field here is your group's chat ID. It will likely be a negative number. This is your `NOTIFY_CHAT_ID`.
+        *   **Important**: Ensure your bot has permission to post messages in the group.
+
+3.  **Configure GitHub Actions Secrets:**
+    *   In your GitHub repository, go to `Settings` > `Secrets and variables` > `Actions`.
+    *   Click on `New repository secret`.
+    *   Add the following secrets:
+        *   `BOT_NOTIFY_TOKEN`: The HTTP API token for your Telegram bot.
+        *   `NOTIFY_CHAT_ID`: The chat ID where notifications should be sent.
+
+Once these secrets are configured, the GitHub Actions workflow will automatically send notifications upon completion of the CI jobs.
+
 ## Guidelines for Writing New Tests
 
 *   **New Features, New Tests:** Every new feature, component, or significant piece of logic should have corresponding unit tests.

@@ -22,8 +22,48 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install python-telegram-bot # Added for notifier
 
     - name: Run checks
+      id: run_checks # Added id to reference outcome
       run: |
         chmod +x ./run_checks.sh
         ./run_checks.sh
+
+    - name: Notify Success
+      if: success() && steps.run_checks.outcome == 'success'
+      env:
+        BOT_NOTIFY_TOKEN: ${{ secrets.BOT_NOTIFY_TOKEN }}
+        NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
+      run: |
+        python tools/notifier.py success
+
+    - name: Notify CI Failure
+      if: failure() || steps.run_checks.outcome == 'failure'
+      env:
+        BOT_NOTIFY_TOKEN: ${{ secrets.BOT_NOTIFY_TOKEN }}
+        NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
+      run: |
+        # Attempt to get output from run_checks.sh if it created a log or output directly
+        # This is a placeholder. A more robust solution would be for run_checks.sh to output to a known file.
+        echo "CI run failed. See workflow logs for details." > ci_failure_details.txt
+        python tools/notifier.py ci_fail --failed_tests "ci_failure_details.txt"
+
+    # The following steps are commented out as per the original request's focus on CI failure.
+    # If actual deployment steps were present, similar notification steps would be added.
+    # - name: Notify Deploy Success
+    #   if: success() # And previous deploy step succeeded
+    #   env:
+    #     BOT_NOTIFY_TOKEN: ${{ secrets.BOT_NOTIFY_TOKEN }}
+    #     NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
+    #   run: |
+    #     python tools/notifier.py success
+
+    # - name: Notify Deploy Failure
+    #   if: failure() # And previous deploy step failed
+    #   env:
+    #     BOT_NOTIFY_TOKEN: ${{ secrets.BOT_NOTIFY_TOKEN }}
+    #     NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
+    #   run: |
+    #     # Assuming error.log is created by the deployment script on failure
+    #     python tools/notifier.py deploy_fail --error_log "error.log"
