@@ -1,8 +1,9 @@
-import unittest # Changed from pytest to unittest for consistency with other new tests
+import unittest
 import logging
+import os # Added for os.environ patching
 from unittest.mock import patch, MagicMock
-from katana_bot import KatanaBot, setup_logging as bot_setup_logging # To avoid conflict
-from katana_agent import KatanaAgent # KatanaBot uses KatanaAgent
+from katana_bot import KatanaBot, setup_logging as bot_setup_logging
+from katana_agent import KatanaAgent
 
 # Original pytest tests, commented out or to be converted
 # import pytest

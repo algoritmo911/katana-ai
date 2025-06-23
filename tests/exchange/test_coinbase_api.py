@@ -4,6 +4,14 @@ import logging
 import os
 import requests # Required for requests.exceptions.HTTPError etc.
 
+# Define default environment variables for tests to prevent TypeErrors with None
+# These are common variables that libraries like 'requests' might use.
+TEST_DEFAULT_ENV = {
+    "HTTP_PROXY": "",
+    "HTTPS_PROXY": "",
+    "NO_PROXY": "",
+}
+
 # Assuming katana.exchange.coinbase_api can be imported.
 # This might require PYTHONPATH adjustments (e.g., export PYTHONPATH=.) when running tests.
 from katana.exchange.coinbase_api import get_spot_price, COINBASE_LOG_FILE, LOG_DIR
