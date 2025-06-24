@@ -1,109 +1,163 @@
 # katana-ai
 
-## Logging System & UI
+## Development Environment Setup
 
-This project includes a comprehensive logging system with a user interface for viewing and configuring logs.
+### Prerequisites
+- Python 3.x
+- pip
 
-### Features
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd katana-ai
+```
 
-*   **Centralized Backend Logging:** All Python components utilize a standardized logging setup (`katana/logging_config.py`) that outputs to both console and a rotating file (`katana_events.log`).
-*   **Log Viewer UI:** A dedicated "Logs" page in the web interface (`/logs`) allows users to:
-    *   View log entries. The current implementation fetches logs on demand. Real-time polling or WebSocket updates are potential future enhancements.
-    *   Paginate through logs.
-    *   Filter logs by level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-    *   Search log messages for specific keywords.
-*   **Log Configuration UI:** From the "Logs" page, users can:
-    *   View the current application-wide logging level and the path to the log file.
-    *   Change the application's logging level dynamically.
+### 2. Install Dependencies
+It's recommended to use a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+```
+Install the required packages:
+```bash
+pip install -r requirements.txt
+```
 
-### Logging API Endpoints
+### 3. Set Up Pre-commit Hooks
+Pre-commit hooks help ensure code quality before you commit.
+```bash
+pip install pre-commit
+pre-commit install
+```
+Now, `black` and `flake8` will run automatically on changed files before each commit.
 
-The backend exposes the following API endpoints (typically running on `http://localhost:8000` if `katana/api/server.py` is run directly):
+### 4. Environment Variables (If Applicable)
+If the project requires specific environment variables for configuration (e.g., API keys, database URLs):
+- Create a `.env` file in the project root.
+- You can use `.env.example` as a template if it exists.
+- **Note:** `.env` files should be added to `.gitignore` to avoid committing secrets.
+  (At the moment, no specific environment variables are defined for this project).
 
-*   **`GET /api/logs`**: Fetches log entries.
-    *   Query Parameters:
-        *   `page` (int, default: 1): For pagination.
-        *   `limit` (int, default: 100): Entries per page.
-        *   `level` (str, optional): Filter by log level (e.g., "INFO", "ERROR"). Case-insensitive on the backend.
-        *   `search` (str, optional): Filter by a search term within log messages. Case-insensitive.
-    *   Returns: JSON array of log objects, newest first. Each object contains `timestamp`, `level`, `module`, `message`.
+### 5. API Keys and Secrets Management (`secrets.toml`)
 
-*   **`GET /api/logs/status`**: Retrieves the current logging status.
-    *   Returns: JSON object with `level` (current log level string) and `log_file` (path to log file).
+For integrations with external services that require API keys or other secrets (like Coinbase for authenticated actions in the future), this project uses a `secrets.toml` file.
 
-*   **`POST /api/logs/level`**: Sets the application's global log level.
-    *   Request Body (JSON): `{ "level": "DEBUG" }` (valid levels: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL").
-    *   Returns: Success or error message.
+-   **Template:** A template file `secrets.toml.example` is provided in the repository. It shows the expected structure for your secrets.
+-   **Local Setup:** To use services requiring secrets:
+    1.  Copy `secrets.toml.example` to a new file named `secrets.toml` in the project root.
+    2.  Edit `secrets.toml` and fill in your actual API keys and other secret values.
+-   **Security:**
+    -   The `secrets.toml` file is **explicitly ignored by Git** (via `.gitignore`).
+    -   **DO NOT COMMIT YOUR ACTUAL `secrets.toml` FILE OR YOUR SECRETS TO THE REPOSITORY.**
+    -   Currently, only unauthenticated API endpoints (like Coinbase spot prices) are used, so `secrets.toml` is for future-proofing authenticated requests.
 
----
+## Running Checks and Tests Locally
 
-**IMPORTANT: Current Environmental Limitations & Testing Status**
+To ensure your code is clean, formatted, and all tests pass before pushing changes, use the `run_checks.sh` script:
 
-As of the latest updates, there are significant environmental blockers that prevent the full execution of the testing suite.
+```bash
+./run_checks.sh
+```
+This script will:
+1. Run `flake8` for linting.
+2. Run `black` to format the code (it will reformat files if needed).
+3. Run `pytest` with `coverage` to execute unit tests and report test coverage.
 
-*   **Package Installation Timeouts:** Attempts to install both Python packages (via `pip`, e.g., `httpx` for backend tests) and Node.js packages (via `npm`, e.g., Jest, React Testing Library, Cypress for frontend tests) consistently time out after approximately 400 seconds. This appears to be a hard limit or severe network/resource throttling within the execution environment.
-*   **Impact on Testing:**
-    *   **Backend API Tests:** Written (`katana/api/tests/test_api_server.py`) but **cannot be run** due to the inability to install `httpx`.
-    *   **Frontend Unit Tests:** Configuration files for Jest/React Testing Library are in place (`katana/ui/jest.config.js`, etc.). Test files have been drafted for `LogViewer.tsx`, `LogConfiguration.tsx`, and `LogsPage.tsx` (`katana/ui/src/components/__tests__/` and `katana/ui/src/pages/__tests__/`). However, these tests **cannot be run** because the necessary `npm` packages (Jest, RTL) could not be installed.
-    *   **End-to-End (E2E) Tests:** Scenarios have been outlined for Cypress (see `katana/tests/e2e_scenarios_logging.md`). However, Cypress setup (via `npm install`) is also expected to fail under the current environmental constraints.
+## Continuous Integration (CI) Pipeline
 
-**Resolving these installation timeouts is crucial for enabling the test suites.**
+The project uses GitHub Actions for CI. The workflow is defined in `.github/workflows/main.yml`.
+When you push changes to `main` or create a pull request targeting `main`, the CI pipeline automatically:
+1. Sets up a clean Python environment.
+2. Installs all dependencies from `requirements.txt`.
+3. Runs the `./run_checks.sh` script, which includes:
+    - Linting with `flake8`.
+    - Formatting checks with `black`.
+    - Unit tests with `pytest` and coverage reporting.
 
----
+If any of these steps fail, a CI build will be marked as failed, helping to catch issues early.
 
-### Running Tests (If Environment is Functional)
+## CI/CD Pipeline with Deployment
 
-**1. Backend API Tests:**
+This project uses GitHub Actions for Continuous Integration (CI) and Continuous Deployment (CD). The primary workflow for this is defined in `.github/workflows/deploy.yml`.
 
-*   **Prerequisites:** Python, `pip`, and a functional environment allowing package installation.
-*   **Setup:**
+### Workflow Overview (`deploy.yml`)
+
+This workflow automates testing and deployment of the Telegram bot.
+
+**Triggers:**
+*   Push to `main` branch.
+*   Push to `dev` branch.
+*   Manual trigger via `workflow_dispatch` from the GitHub Actions UI.
+
+**Key Steps:**
+1.  **Checkout Code:** Fetches the latest version of your repository.
+2.  **Set up Python:** Configures the specified Python version (e.g., 3.10).
+3.  **Install Dependencies:** Installs all required packages from `requirements.txt`.
+4.  **Run Tests:** Executes the test suite using `pytest`. All tests must pass for the workflow to proceed to deployment.
+5.  **Generate `.env` File (Simulated in CI):**
+    *   During the CI/CD run, a `.env` file is generated using secrets stored in GitHub. This step ensures that sensitive information like API tokens are not hardcoded in the repository but are available to the application at runtime.
+    *   The actual deployment environment (e.g., Railway, Render, VPS) will need these environment variables set up.
+6.  **Deploy to Cloud (Placeholder):**
+    *   If tests pass, this step handles the deployment. The actual deployment commands will depend on the chosen hosting platform (e.g., Railway, Render, or a custom script for a VPS).
+    *   This step is currently a placeholder and needs to be configured with actual deployment logic.
+7.  **Send Telegram Notification (Placeholder):**
+    *   An optional step to send a notification (e.g., via a Telegram message) about the status (success or failure) of the deployment.
+
+### GitHub Secrets for CI/CD
+
+The `deploy.yml` workflow relies on GitHub Secrets to securely manage sensitive information like API keys and deployment tokens. These secrets are encrypted and can only be used by GitHub Actions.
+
+**Required Secrets (add these in your GitHub repository settings under `Settings > Secrets and variables > Actions`):**
+*   `TELEGRAM_BOT_TOKEN`: Your Telegram bot's API token.
+*   `OPENAI_API_KEY`: Your OpenAI API key (if used by the bot).
+*   `RAILWAY_TOKEN`: Your Railway API token (if deploying to Railway).
+*   `SSH_PRIVATE_KEY`: Your SSH private key for deploying to a VPS (if using SCP/SSH). *Ensure you store the private key securely and configure the corresponding public key on your server.*
+*   *(Add any other secrets your bot or deployment process might need).*
+
+**How to Add New Secrets:**
+1.  Go to your GitHub repository.
+2.  Click on "Settings".
+3.  In the left sidebar, navigate to "Secrets and variables" > "Actions".
+4.  Click the "New repository secret" button.
+5.  Enter the name of the secret (e.g., `TELEGRAM_BOT_TOKEN`) and its value.
+6.  Click "Add secret".
+
+### Local Testing of the Pipeline
+
+While direct local execution of GitHub Actions workflows can be complex, you can simulate parts of it:
+
+1.  **Run Checks Script:** Always run `./run_checks.sh` locally before pushing to ensure tests and linting pass. This script covers a significant portion of what the CI part of the `deploy.yml` workflow does.
+2.  **Test Branch:** Push your changes to a feature branch (e.g., `feat/test-cicd`) that is *not* `main` or `dev`. Then, create a Pull Request targeting `dev` or `main`. This will trigger the `main.yml` workflow (if configured for PRs) or you can temporarily modify `deploy.yml` to trigger on your feature branch for testing purposes.
+3.  **`act` (Advanced):** For more comprehensive local testing of GitHub Actions, you can use a tool like [`act`](https://github.com/nektos/act). It allows you to run your GitHub Actions workflows locally using Docker. Installation and usage instructions are available on its GitHub page. This requires Docker to be installed and running.
     ```bash
-    # From the project root
-    # (Optional: Create and activate a virtual environment)
-    # python -m venv venv
-    # source venv/bin/activate
-
-    # Install required packages for the API server and tests
-    pip install fastapi "uvicorn[standard]" httpx pytest
-
-    # Ensure PYTHONPATH is set to include the project root for imports like 'katana.api.server'
-    # This is often needed when running pytest from the root directory.
-    # export PYTHONPATH=.
-    ```
-*   **Execution:**
-    ```bash
-    # From the project root, ensuring PYTHONPATH includes the current directory
-    PYTHONPATH=. pytest katana/api/tests/test_api_server.py
+    # Example (after installing act):
+    # Dry run
+    # act -n
+    # Run the default event (push)
+    # act
+    # Run a specific job from a workflow
+    # act -j build -W .github/workflows/deploy.yml
     ```
 
-**2. Frontend Unit Tests:**
+## Guidelines for Writing New Tests
 
-*   **Prerequisites:** Node.js, `npm`, and a functional environment allowing `npm install`.
-*   **Setup (from `katana/ui/` directory):**
-    ```bash
-    cd katana/ui
-    npm install # This would install Jest, RTL, and other devDependencies
-    ```
-*   **Execution (from `katana/ui/` directory):**
-    ```bash
-    npm test
-    ```
-    This will run Jest and look for test files (e.g., `*.test.tsx`).
+*   **New Features, New Tests:** Every new feature, component, or significant piece of logic should have corresponding unit tests.
+*   **Test Public Interfaces:** Focus your tests on the public methods and interfaces of your modules and classes. Test the contract, not the implementation details.
+*   **Cover Critical Paths & Edge Cases:** Ensure your tests cover:
+    *   Happy paths (expected, correct usage).
+    *   Error conditions (e.g., invalid input, missing data).
+    *   Edge cases (e.g., empty inputs, zero values, boundary conditions).
+*   **Keep Tests Independent:** Each test case should be independent and not rely on the state or outcome of other tests.
+*   **Update Tests with Code:** If you refactor or change existing code, ensure you update the corresponding tests to reflect these changes. Outdated tests can be misleading.
+*   **Aim for Readability:** Write clear and understandable test code. Good test names and well-structured assertions help.
 
-**3. Frontend End-to-End Tests (Cypress - Conceptual):**
+## Troubleshooting
 
-*   **Prerequisites:** Node.js, `npm`, a functional environment allowing `npm install`, and the application (frontend and backend API) running.
-*   **Detailed Scenarios:** See `katana/tests/e2e_scenarios_logging.md`.
-*   **Setup (from `katana/ui/` directory):**
-    ```bash
-    cd katana/ui
-    npm install cypress --save-dev # Or as per project's Cypress setup
-    ```
-*   **Execution (from `katana/ui/` directory, typically):**
-    ```bash
-    npx cypress open # To open the Cypress Test Runner
-    # Or
-    npx cypress run # To run tests headlessly
-    ```
+For common issues and their solutions, please refer to [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
----
+### Common Issues & Solutions (Placeholder)
+
+*(This section can be expanded as common issues are identified with local setup or testing.)*
+
+*   **ModuleNotFoundError:** If you encounter `ModuleNotFoundError` when running tests, ensure your `PYTHONPATH` is correctly set to include the project's root directory (e.g., `export PYTHONPATH=.` from the project root) or that you have activated your virtual environment.
+*   **Dependency Issues:** Ensure all development dependencies (like `pytest`, `flake8`, `black`) are installed in your active virtual environment using `pip install -r requirements.txt`.

@@ -1,1 +1,0 @@
-# Katana Integrations Tests Package\n
