@@ -18,6 +18,8 @@ load_dotenv()
 API_TOKEN = os.environ.get('TELEGRAM_API_TOKEN', '12345:dummytoken')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
+BOT_START_TIME = datetime.utcnow() # For uptime calculation
+
 bot = telebot.async_telebot.AsyncTeleBot(API_TOKEN) # Use AsyncTeleBot
 katana_agent_instance = KatanaAgent() # Instantiate KatanaAgent
 
@@ -33,11 +35,50 @@ COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 # --- Logging Setup ---
 LOG_DIR = Path('logs')
 LOG_DIR.mkdir(parents=True, exist_ok=True)
-TELEGRAM_LOG_FILE = LOG_DIR / 'telegram.log'
+GENERAL_LOG_FILE = LOG_DIR / 'telegram.log' # Renamed for clarity
+COMMAND_LOG_FILE = LOG_DIR / 'commands.log'
+
+# Function to log command-specific structured data
+def log_command_event(message: str):
+    """Appends a structured command message to the command_events.log file."""
+    with open(COMMAND_LOG_FILE, 'a', encoding='utf-8') as f:
+        f.write(f"{datetime.utcnow().isoformat()} | {message}\n")
 
 # Dictionary to store active GPT streaming tasks and their cancellation events
 # Key: chat_id, Value: tuple(asyncio.Task, asyncio.Event, telegram_message_id_being_edited)
 active_gpt_streams = {}
+
+# --- Command Registry ---
+# Stores command_name: {"handler": handler_function, "description": "Command description"}
+_command_registry = {}
+
+def register_command(command_name: str, handler, description: str):
+    """Registers a slash command."""
+    if command_name.startswith('/'):
+        command_name = command_name[1:] # Store without leading slash for consistency
+    _command_registry[command_name] = {"handler": handler, "description": description}
+    log_local_bot_event(f"Command '{command_name}' registered with description: '{description}'")
+
+def unregister_command(command_name: str):
+    """Unregisters a slash command."""
+    if command_name.startswith('/'):
+        command_name = command_name[1:]
+    if command_name in _command_registry:
+        del _command_registry[command_name]
+        log_local_bot_event(f"Command '{command_name}' unregistered.")
+        return True
+    log_local_bot_event(f"Command '{command_name}' not found in registry for unregistration.")
+    return False
+
+def get_command_handler(command_name: str):
+    """Retrieves the handler for a registered command."""
+    if command_name.startswith('/'):
+        command_name = command_name[1:]
+    return _command_registry.get(command_name)
+
+def get_all_commands() -> dict:
+    """Retrieves all registered commands and their descriptions."""
+    return {cmd: data["description"] for cmd, data in _command_registry.items()}
 
 # --- Conversation History Management ---
 chat_histories = {}  # Stores conversation history for each chat_id
@@ -59,15 +100,15 @@ def get_history(chat_id: int) -> list:
     """Retrieves the history for a chat_id, or an empty list if none."""
     return chat_histories.get(chat_id, [])
 
-def log_to_file(message, filename=TELEGRAM_LOG_FILE):
-    """Appends a message to the specified log file."""
+def log_to_general_file(message, filename=GENERAL_LOG_FILE):
+    """Appends a message to the general log file."""
     with open(filename, 'a', encoding='utf-8') as f:
         f.write(f"{datetime.utcnow().isoformat()} | {message}\n")
 
 def log_local_bot_event(message):
-    """Logs an event to the console and to the telegram.log file."""
+    """Logs an event to the console and to the general log file."""
     print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
-    log_to_file(f"[BOT_EVENT] {message}")
+    log_to_general_file(f"[BOT_EVENT] {message}")
 
 # --- Katana Command Execution ---
 async def run_katana_command(command: str) -> str:
@@ -503,6 +544,14 @@ if __name__ == '__main__':
     # Re-ensure main() is called correctly
     async def main_runner():
         log_local_bot_event("Bot starting...")
+
+        # Register commands
+        register_command("status", command_status_impl, "Shows the current status of the bot.")
+        register_command("help", command_help_impl, "Lists all available commands.")
+        register_command("reset", command_reset_impl, "Resets user-specific bot data (e.g., conversation history).")
+        # Example of how to unregister, not typically done at startup unless for specific logic
+        # unregister_command("some_old_command")
+
         try:
             await bot.polling(non_stop=True, request_timeout=30)
         except Exception as e:
@@ -510,3 +559,134 @@ if __name__ == '__main__':
         finally:
             log_local_bot_event("Bot stopped.")
     asyncio.run(main_runner())
+
+
+
+
+# --- Slash Command Handlers ---
+
+# Note: The @bot.message_handler decorators will still be used by telebot for routing.
+# The registration system here is for our internal management (e.g., for /help command).
+
+async def command_status_impl(message):
+    """Implementation for the /status command."""
+    start_time = datetime.utcnow()
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    command_name = "/status"
+
+    log_entry_start = f"command='{command_name}' event_type='start' user_id={user_id} chat_id={chat_id}"
+    log_command_event(log_entry_start)
+    # log_local_bot_event(f"Executing command: {command_name} for user {user_id}") # Optional: General log for command initiation
+
+    try:
+        uptime_delta = datetime.utcnow() - BOT_START_TIME
+    days = uptime_delta.days
+    hours, remainder = divmod(uptime_delta.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
+
+    status_message = (
+        f"🤖 **Bot Status** 🤖\n\n"
+        f"**Uptime:** {uptime_str}\n"
+        # Add more status details here as needed in the future
+        # e.g., version, number of processed messages (if tracked globally)
+        f"**Version:** 1.0.0 (feat/command-handling-improvements)\n"
+        f"**Active Features:** Text, Voice, JSON commands, Slash commands"
+    )
+
+        await bot.reply_to(message, status_message, parse_mode="Markdown")
+        status = "success"
+    except Exception as e:
+        status = "error"
+        error_message = str(e).replace('\n', ' - ') # Sanitize error message for logging
+        log_command_event(f"command='{command_name}' event_type='error' user_id={user_id} chat_id={chat_id} error='{error_message}'")
+        log_local_bot_event(f"Error processing command {command_name} for user {user_id}: {error_message}")
+        await bot.reply_to(message, "An error occurred while fetching status.")
+    finally:
+        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        log_entry_end = f"command='{command_name}' event_type='end' user_id={user_id} chat_id={chat_id} status='{status}' duration_ms={duration_ms:.2f} details={{'uptime': '{uptime_str if status=='success' else 'N/A'}'}}"
+        log_command_event(log_entry_end)
+
+
+async def command_help_impl(message):
+    """Implementation for the /help command."""
+    start_time = datetime.utcnow()
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    command_name = "/help"
+
+    log_entry_start = f"command='{command_name}' event_type='start' user_id={user_id} chat_id={chat_id}"
+    log_command_event(log_entry_start)
+    # log_local_bot_event(f"Executing command: {command_name} for user {user_id}")
+
+    try:
+        all_commands = get_all_commands()
+    if not all_commands:
+        help_text = "No commands are currently registered."
+    else:
+        help_text = "📚 **Available Commands** 📚\n\n"
+        for cmd, desc in sorted(all_commands.items()): # Sort for consistent order
+            help_text += f"/{cmd} - {desc}\n"
+
+        await bot.reply_to(message, help_text.strip(), parse_mode="Markdown")
+        status = "success"
+    except Exception as e:
+        status = "error"
+        error_message = str(e).replace('\n', ' - ')
+        log_command_event(f"command='{command_name}' event_type='error' user_id={user_id} chat_id={chat_id} error='{error_message}'")
+        log_local_bot_event(f"Error processing command {command_name} for user {user_id}: {error_message}")
+        await bot.reply_to(message, "An error occurred while fetching help information.")
+    finally:
+        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        log_entry_end = f"command='{command_name}' event_type='end' user_id={user_id} chat_id={chat_id} status='{status}' duration_ms={duration_ms:.2f} details={{}}"
+        log_command_event(log_entry_end)
+
+
+async def command_reset_impl(message):
+    """Implementation for the /reset command."""
+    start_time = datetime.utcnow()
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    command_name = "/reset"
+    history_cleared_flag = False
+
+    log_entry_start = f"command='{command_name}' event_type='start' user_id={user_id} chat_id={chat_id}"
+    log_command_event(log_entry_start)
+    # log_local_bot_event(f"Executing command: {command_name} for user {user_id}")
+
+    try:
+        if chat_id in chat_histories:
+            del chat_histories[chat_id]
+            response_message = "🧹 Your conversation history with me in this chat has been cleared."
+            history_cleared_flag = True
+            log_local_bot_event(f"Cleared conversation history for chat_id {chat_id}.")
+        else:
+            response_message = "🤔 No conversation history found for you in this chat to clear."
+            log_local_bot_event(f"No conversation history to clear for chat_id {chat_id}.")
+
+        await bot.reply_to(message, response_message)
+        status = "success"
+    except Exception as e:
+        status = "error"
+        error_message = str(e).replace('\n', ' - ')
+        log_command_event(f"command='{command_name}' event_type='error' user_id={user_id} chat_id={chat_id} error='{error_message}'")
+        log_local_bot_event(f"Error processing command {command_name} for user {user_id}: {error_message}")
+        await bot.reply_to(message, "An error occurred while resetting history.")
+    finally:
+        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        log_entry_end = f"command='{command_name}' event_type='end' user_id={user_id} chat_id={chat_id} status='{status}' duration_ms={duration_ms:.2f} details={{'history_cleared': {history_cleared_flag}}}"
+        log_command_event(log_entry_end)
+
+# Keep the telebot handlers, but point them to the new _impl functions
+@bot.message_handler(commands=['status'])
+async def command_status_handler(message):
+    await command_status_impl(message)
+
+@bot.message_handler(commands=['help'])
+async def command_help_handler(message):
+    await command_help_impl(message)
+
+@bot.message_handler(commands=['reset'])
+async def command_reset_handler(message):
+    await command_reset_impl(message)
