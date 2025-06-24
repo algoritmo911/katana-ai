@@ -1,0 +1,1 @@
+{"message": "Testing console warning output for color.", "module": "test_logger", "funcName": "test_console_output", "lineno": 144, "user_id": "N/A", "chat_id": "N/A", "message_id": "N/A", "timestamp": "2025-06-24T21:06:44.504Z", "level": "WARNING"}

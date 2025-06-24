@@ -35,6 +35,11 @@ The backend exposes the following API endpoints (typically running on `http://lo
     *   Request Body (JSON): `{ "level": "DEBUG" }` (valid levels: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL").
     *   Returns: Success or error message.
 
+### Log Monitoring in Development
+
+For details on how to monitor and analyze `katana_events.log` in a development environment using tools like `jq`, and for notes on integrating with more advanced log management systems, please see:
+[Dev Log Monitoring Guide](./docs/logging_monitoring.md)
+
 ---
 
 **IMPORTANT: Current Environmental Limitations & Testing Status**

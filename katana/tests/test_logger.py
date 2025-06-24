@@ -13,6 +13,12 @@ TEST_LOG_FILE = Path("test_katana_events.log")
 # Regex for ISO 8601 timestamp: YYYY-MM-DDTHH:MM:SS.sssZ
 TIMESTAMP_REGEX = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z")
 
+# Expected top-level keys in every JSON log entry (excluding exc_info for general checks)
+EXPECTED_JSON_LOG_KEYS = sorted([
+    "timestamp", "level", "message", "module", "funcName", "lineno",
+    "user_id", "chat_id", "message_id"
+])
+
 def _parse_log_line(line):
     """Helper to parse a single JSON log line."""
     try:
@@ -20,19 +26,37 @@ def _parse_log_line(line):
     except json.JSONDecodeError as e:
         pytest.fail(f"Failed to parse log line as JSON: '{line}'. Error: {e}")
 
-def _check_common_log_fields(log_json, expected_level, expected_message_contains, expected_module_contains):
-    """Helper to check common fields in a parsed JSON log."""
-    assert 'timestamp' in log_json
-    assert TIMESTAMP_REGEX.match(log_json['timestamp']), f"Timestamp '{log_json['timestamp']}' does not match ISO 8601 format."
-    assert log_json.get('level') == expected_level
-    assert expected_message_contains in log_json.get('message', '')
-    assert 'module' in log_json
-    assert expected_module_contains in log_json['module']
-    assert 'funcName' in log_json # good to check its presence
-    assert 'lineno' in log_json # good to check its presence
-    assert log_json.get('user_id') == "N/A" # Default unless specified
-    assert log_json.get('chat_id') == "N/A" # Default unless specified
-    assert log_json.get('message_id') == "N/A" # Default unless specified
+def _check_json_log_structure_and_common_fields(
+    log_json,
+    expected_level,
+    expected_message_contains,
+    expected_module_contains,
+    expected_user_id="N/A",
+    expected_chat_id="N/A",
+    expected_message_id="N/A"
+):
+    """
+    Helper to check the exact structure and common fields of a parsed JSON log.
+    """
+    # Check for the exact set of expected keys
+    # Allow 'exc_info' as an optional key for error logs, handle it separately in its test
+    actual_keys = sorted([k for k in log_json.keys() if k != 'exc_info'])
+    assert actual_keys == EXPECTED_JSON_LOG_KEYS, \
+        f"JSON log keys mismatch. Expected: {EXPECTED_JSON_LOG_KEYS}, Got: {actual_keys}"
+
+    assert TIMESTAMP_REGEX.match(log_json['timestamp']), \
+        f"Timestamp '{log_json['timestamp']}' does not match ISO 8601 format."
+    assert log_json['level'] == expected_level
+    assert expected_message_contains in log_json['message'], \
+        f"Message '{log_json['message']}' does not contain '{expected_message_contains}'"
+    assert expected_module_contains in log_json['module'], \
+        f"Module '{log_json['module']}' does not contain '{expected_module_contains}'"
+    assert isinstance(log_json['funcName'], str) and log_json['funcName']
+    assert isinstance(log_json['lineno'], int) and log_json['lineno'] > 0
+
+    assert log_json['user_id'] == expected_user_id
+    assert log_json['chat_id'] == expected_chat_id
+    assert log_json['message_id'] == expected_message_id
 
 # Fixture to ensure cleanup of the test log file if it's created
 @pytest.fixture(autouse=True)
@@ -105,10 +129,12 @@ def test_log_file_creation_and_content():
     assert len(log_lines) == 1, "Expected a single log line."
     log_json = _parse_log_line(log_lines[0])
 
-    _check_common_log_fields(log_json,
-                             expected_level="INFO",
-                             expected_message_contains=unique_message,
-                             expected_module_contains=Path(__file__).stem) # module is this test file
+    _check_json_log_structure_and_common_fields(
+        log_json,
+        expected_level="INFO",
+        expected_message_contains=unique_message,
+        expected_module_contains=Path(__file__).stem # module is this test file's name
+    )
 
 def test_console_output(capsys):
     """Test console output using capsys fixture for colored text logs."""
@@ -166,12 +192,16 @@ def test_log_format_and_exc_info_file(capsys):
     assert len(log_lines_file) == 1, "Expected one log line in the file for exc_info test."
     log_json_file = _parse_log_line(log_lines_file[0])
 
-    _check_common_log_fields(log_json_file,
-                             expected_level="ERROR",
-                             expected_message_contains=error_message,
-                             expected_module_contains=Path(__file__).stem)
+    # Check common structure first
+    _check_json_log_structure_and_common_fields(
+        log_json_file,
+        expected_level="ERROR",
+        expected_message_contains=error_message,
+        expected_module_contains=Path(__file__).stem
+    )
 
     assert 'exc_info' in log_json_file, "exc_info field missing in JSON log."
+    assert isinstance(log_json_file['exc_info'], str), "exc_info should be a string."
     assert "ZeroDivisionError" in log_json_file['exc_info'], "exc_info should contain ZeroDivisionError details."
     assert "Traceback (most recent call last):" in log_json_file['exc_info'], "Traceback information missing from exc_info."
 
@@ -270,22 +300,46 @@ def test_custom_context_fields(capsys):
     log_lines_file = content_file.splitlines()
     assert len(log_lines_file) == 3, "Expected 3 log lines in file for context test."
 
-    log_json1_file = _parse_log_line(log_lines_file[0])
-    assert log_json1_file['user_id'] == extra1['user_id']
-    assert log_json1_file['chat_id'] == extra1['chat_id']
-    assert log_json1_file['message_id'] == extra1['message_id']
+    # Log 1: Full context
+    log_json1 = _parse_log_line(log_lines_file[0])
+    _check_json_log_structure_and_common_fields(
+        log_json1,
+        expected_level="INFO",
+        expected_message_contains=msg1,
+        expected_module_contains=Path(__file__).stem,
+        expected_user_id=extra1['user_id'],
+        expected_chat_id=extra1['chat_id'],
+        expected_message_id=extra1['message_id']
+    )
 
-    log_json2_file = _parse_log_line(log_lines_file[1])
-    assert log_json2_file['user_id'] == extra2['user_id']
-    assert log_json2_file['chat_id'] == "N/A"
+    # Log 2: Partial context
+    log_json2 = _parse_log_line(log_lines_file[1])
+    _check_json_log_structure_and_common_fields(
+        log_json2,
+        expected_level="INFO",
+        expected_message_contains=msg2,
+        expected_module_contains=Path(__file__).stem,
+        expected_user_id=extra2['user_id'],
+        expected_chat_id="N/A", # Default
+        expected_message_id="N/A"  # Default
+    )
 
-    log_json3_file = _parse_log_line(log_lines_file[2])
-    assert log_json3_file['message_id'] == "N/A"
+    # Log 3: No context (all defaults)
+    log_json3 = _parse_log_line(log_lines_file[2])
+    _check_json_log_structure_and_common_fields(
+        log_json3,
+        expected_level="INFO",
+        expected_message_contains=msg3,
+        expected_module_contains=Path(__file__).stem,
+        expected_user_id="N/A",
+        expected_chat_id="N/A",
+        expected_message_id="N/A"
+    )
 
 
 # It's good practice to also test if logging is disabled for levels below the set level.
 def test_log_level_filtering(capsys):
-    """Test that messages below the set log level are not emitted (JSON version)."""
+    """Test that messages below the set log level are not emitted to console or file."""
     setup_logging(log_level=logging.INFO, log_file_path=str(TEST_LOG_FILE))
     logger = get_logger(DEFAULT_LOGGER_NAME + ".level_filter_test")
 
@@ -295,29 +349,34 @@ def test_log_level_filtering(capsys):
     logger.debug(debug_msg)
     logger.info(info_msg)
 
-    # Check console output (stderr)
-    captured_err = capsys.readouterr().err.strip()
-    # Only INFO message should be there
-    assert debug_msg not in captured_err
-    assert info_msg in captured_err # Check raw message first
+    # Check console output (stderr) - should be text, not JSON
+    captured_console = capsys.readouterr().err.strip()
+    assert debug_msg not in captured_console, "Debug message found in console output when level is INFO."
+    assert info_msg in captured_console, "Info message not found in console output when level is INFO."
+    console_lines = captured_console.splitlines()
+    assert len(console_lines) == 1, "Expected only one log line (INFO) in console output."
+    assert "INFO" in console_lines[0] # Check level in text
+    with pytest.raises(json.JSONDecodeError): # Ensure console is not JSON
+        json.loads(console_lines[0]) # Directly use json.loads for the expected failure
 
-    log_lines_err = captured_err.splitlines()
-    assert len(log_lines_err) == 1, "Expected only INFO message in stderr."
-    log_json_err = _parse_log_line(log_lines_err[0])
-    assert log_json_err['message'] == info_msg
-    assert log_json_err['level'] == "INFO"
 
-    # Check file output
+    # Check file output - should be JSON
     assert TEST_LOG_FILE.exists(), "Log file should be created for level filtering test."
     content_file = TEST_LOG_FILE.read_text().strip()
-    assert debug_msg not in content_file # Raw check
-    assert info_msg in content_file # Raw check
+    assert debug_msg not in content_file, "Debug message found in file output when level is INFO."
+    assert info_msg in content_file, "Info message not found in file output when level is INFO."
 
     log_lines_file = content_file.splitlines()
-    assert len(log_lines_file) == 1, "Expected only INFO message in file."
+    assert len(log_lines_file) == 1, "Expected only one log line (INFO) in file output."
+
     log_json_file = _parse_log_line(log_lines_file[0])
-    assert log_json_file['message'] == info_msg
-    assert log_json_file['level'] == "INFO"
+    _check_json_log_structure_and_common_fields(
+        log_json_file,
+        expected_level="INFO",
+        expected_message_contains=info_msg,
+        expected_module_contains=Path(__file__).stem
+    )
+    assert log_json_file['message'] == info_msg # Also check exact message match
 
     # Ensure logger level is set correctly on the target logger
     target_logger = logging.getLogger(DEFAULT_LOGGER_NAME)
