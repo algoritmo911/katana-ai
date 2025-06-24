@@ -129,6 +129,31 @@ async def handle_mind_clearing(command_data, chat_id):
     log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
     # await bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
 
+# --- Slash Command Stub Handler ---
+async def handle_slash_command(chat_id: int, command: str, args_str: str, original_message: telebot.types.Message):
+    """
+    Handles slash commands by logging them and sending an acknowledgment.
+    This is a stub for backend processing.
+    """
+    log_local_bot_event(f"Handling slash command: '{command}' with args: '{args_str}' for chat_id {chat_id}")
+
+    # Placeholder for actual backend processing logic
+    # For example, for /sync:
+    # if command == "/sync":
+    #     # Call some backend_sync_function(args_str)
+    #     response_text = f"Command {command} is being processed with args: {args_str}"
+    # else:
+    #     response_text = f"Unknown command: {command}"
+
+    response_text = f"✅ Command `{command}` received with arguments: `{args_str}`. (Stub)"
+
+    try:
+        await bot.reply_to(original_message, response_text, parse_mode="Markdown")
+    except Exception as e:
+        log_local_bot_event(f"Error replying to slash command for chat_id {chat_id}: {e}")
+        # Fallback if reply_to fails
+        await bot.send_message(chat_id, response_text, parse_mode="Markdown")
+
 # --- Unified Message Processing ---
 async def process_user_message(chat_id: int, text: str, original_message: telebot.types.Message):
     """
@@ -136,6 +161,14 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
     Handles NLP, JSON commands, or falls back to GPT.
     """
     log_local_bot_event(f"Processing user message for chat {chat_id}: '{text[:100]}...'")
+
+    # Check for slash commands first
+    if text.startswith('/'):
+        parts = text.split(maxsplit=1)
+        command = parts[0]
+        args_str = parts[1] if len(parts) > 1 else ""
+        await handle_slash_command(chat_id, command, args_str, original_message)
+        return # Stop further processing for slash commands
 
     # Attempt to interpret the text as a natural language command
     nlp_command = interpret(text)
