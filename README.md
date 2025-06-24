@@ -343,3 +343,44 @@ All endpoints are prefixed with `/api`.
               "error": "Failed to process command due to an internal error."
             }
             ```
+
+## Katana UI — запуск и отладка
+
+This section describes how to run the Streamlit-based UI for Katana, which is useful for quick interface testing and development, particularly with features like SelfEvolver.
+
+### Prerequisites
+
+1.  **Python**: Ensure you have Python 3.x installed.
+2.  **Dependencies**: Install the required Python packages, including Streamlit and Watchdog. These are listed in `bot/requirements.txt`.
+    *   Navigate to the `bot` directory:
+        ```bash
+        cd bot
+        ```
+    *   **Recommended**: Create and activate a Python virtual environment if you haven't already:
+        ```bash
+        python -m venv venv
+        source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+        ```
+    *   Install dependencies:
+        ```bash
+        pip install -r requirements.txt
+        ```
+    *   Navigate back to the project root directory:
+        ```bash
+        cd ..
+        ```
+
+### Running the Streamlit UI
+
+1.  Ensure you are in the **root directory** of the Katana project.
+2.  Run the Streamlit application using the following command:
+    ```bash
+    streamlit run streamlit_app.py
+    ```
+3.  Streamlit will typically open the UI in your default web browser (e.g., at `http://localhost:8501`). The console output will also provide the URL.
+
+### Debugging and Development
+
+*   **Live Reload**: Streamlit apps automatically reload when you save changes to the source file (`streamlit_app.py` in this case) or any imported modules.
+*   **Watchdog**: The `watchdog` library (included in `bot/requirements.txt`) helps in monitoring file system events, which can be useful for more complex development workflows, although Streamlit's built-in live reload often suffices for UI changes.
+*   **Console Output**: Check the terminal where you launched Streamlit for any error messages or logs from your application.
