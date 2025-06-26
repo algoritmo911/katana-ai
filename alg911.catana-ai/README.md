@@ -30,6 +30,9 @@ Katana aims to integrate several key areas:
 - **`mind_clearing/`**: Placeholder for the "Модуль Очистки Сознания" (Mind Clearing) module.
   - `README.md`: Module description.
   - `thought_patterns.json`: Example data structure for diagnosing and managing background thoughts.
+- **`self_healing/`**: Implements the Katana Self-Healing System.
+  - `README.md`: Detailed description of the self-healing module, its components, and plugin architecture.
+  - This module automatically monitors system health, diagnoses issues, and attempts recovery actions to ensure Katana's operational stability.
 
 ## Next Steps
 

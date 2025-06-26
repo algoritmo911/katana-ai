@@ -3,9 +3,25 @@ import os
 import datetime
 import time # For command processing loop
 import uuid # For generating command IDs if needed (though API does it now)
+import threading # For running self-healing in a separate thread
 # import traceback # Not used
 
 import shared_config # Import the shared configuration
+# Attempt to import the self-healing orchestrator
+try:
+    from self_healing.orchestrator import SelfHealingOrchestrator
+    SELF_HEALING_ENABLED = True
+except ImportError as e:
+    SELF_HEALING_ENABLED = False
+    # Use shared_config.log_event if available, otherwise print
+    startup_log_message = f"Self-Healing module not found or import error: {e}. Continuing without self-healing capabilities."
+    if hasattr(shared_config, 'log_event'):
+        # This log might occur before shared_config.log_event's file handler is fully set up if there's an issue there,
+        # but it's better to try.
+        shared_config.log_event(startup_log_message, "warning", "KatanaAgentStartup")
+    else:
+        print(f"STARTUP WARNING: {startup_log_message}")
+
 
 # --- File Paths (from shared_config) ---
 COMMANDS_FILE = shared_config.COMMANDS_FILE_PATH
@@ -205,6 +221,21 @@ if __name__ == '__main__':
     # Load current memory state into global
     agent_memory_state = load_memory()
     log_event(f"katana_agent.py: Current memory state: {json.dumps(agent_memory_state)}", "debug", AGENT_LOG_PREFIX)
+
+    if SELF_HEALING_ENABLED:
+        log_event("Attempting to start Self-Healing Orchestrator...", "info", AGENT_LOG_PREFIX)
+        try:
+            orchestrator = SelfHealingOrchestrator()
+            if orchestrator.is_enabled:
+                healing_thread = threading.Thread(target=orchestrator.start, name="SelfHealingThread", daemon=True)
+                healing_thread.start()
+                log_event("Self-Healing Orchestrator started in a separate thread.", "info", AGENT_LOG_PREFIX)
+            else:
+                log_event("Self-Healing Orchestrator is configured but disabled internally. Not starting thread.", "warning", AGENT_LOG_PREFIX)
+        except Exception as e:
+            log_event(f"Failed to initialize or start Self-Healing Orchestrator: {e}", "error", AGENT_LOG_PREFIX)
+    else:
+        log_event("Self-Healing module is not available. Skipping orchestrator start.", "info", AGENT_LOG_PREFIX)
 
     # Start the main command processing loop
     agent_main_loop(loop_interval_seconds=5) # Check every 5 seconds for testing
