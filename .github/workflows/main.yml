@@ -2,28 +2,39 @@ name: CI
 
 on:
   push:
-    branches: [ main ] # Adjust if your main branch has a different name
+    branches: [ main, setup/dev-infrastructure ] # Added the new branch
   pull_request:
-    branches: [ main ] # Adjust if your main branch has a different name
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4 # Updated checkout action version
 
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5 # Updated setup-python action version
       with:
-        python-version: '3.x' # Specify a version if needed, e.g., '3.9'
+        python-version: '3.10' # Specified Python version
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r requirements.lock # Install from lock file
+        pip install pre-commit # Install pre-commit
 
-    - name: Run checks
+    - name: Run pre-commit checks
+      run: pre-commit run --all-files
+
+    - name: Run script checks (includes pytest with coverage)
       run: |
-        chmod +x ./run_checks.sh
-        ./run_checks.sh
+        chmod +x ./scripts/run_checks.sh
+        ./scripts/run_checks.sh
+
+    - name: Upload stderr log on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: run-checks-stderr-log
+        path: scripts/run_checks_stderr.log

@@ -15,3 +15,13 @@ repos:
     hooks:
     -   id: flake8
         args: [--max-line-length=127, --max-complexity=10, --select=E9,F63,F7,F82, --show-source, --statistics]
+-   repo: https://github.com/PyCQA/ruff
+    rev: 'v0.5.5'  # Replace with the latest version if desired
+    hooks:
+    -   id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+-   repo: https://github.com/PyCQA/bandit
+    rev: '1.7.9'  # Replace with the latest version if desired
+    hooks:
+    -   id: bandit
+        args: ['-r', 'katana/', '-s', 'B101'] # Example: run on katana dir, skip assert_used check

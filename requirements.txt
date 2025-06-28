@@ -8,3 +8,6 @@ fastapi
 uvicorn[standard]
 python-telegram-bot
 apscheduler
+pre-commit
+ruff
+bandit
