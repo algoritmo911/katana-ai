@@ -24,20 +24,26 @@ katana_bot_instance = KatanaBot("WebhookKatanaBot")
 
 # --- Telegram Bot Setup ---
 # It's better to get this from environment variables or a config file
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN" # User must replace this
-WEBHOOK_URL = "https://your-actual-domain-or-ngrok-url.com/webhook" # User must replace this
+TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # User must replace this
+WEBHOOK_URL = (
+    "https://your-actual-domain-or-ngrok-url.com/webhook"  # User must replace this
+)
 
-telegram_app = None # Will be initialized on startup
-scheduler = None    # Will be initialized on startup
+telegram_app = None  # Will be initialized on startup
+scheduler = None  # Will be initialized on startup
+
 
 # --- Scheduler Job ---
 async def scheduled_task_example():
     """Example of a task that runs periodically."""
-    logger.info("Scheduled task executed: Performing self-check or periodic synchronization.")
+    logger.info(
+        "Scheduled task executed: Performing self-check or periodic synchronization."
+    )
     # In a real application, this could be:
     # - katana_bot_instance.perform_self_check()
     # - katana_bot_instance.synchronize_data()
     # - Logging bot health metrics
+
 
 # --- FastAPI Event Handlers ---
 @app.on_event("startup")
@@ -46,35 +52,44 @@ async def startup_event():
 
     # 1. Initialize Telegram Application
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
-        logger.warning("TELEGRAM_BOT_TOKEN is not set. Webhook registration and Telegram functionality will be disabled.")
+        logger.warning(
+            "TELEGRAM_BOT_TOKEN is not set. Webhook registration and Telegram functionality will be disabled."
+        )
         telegram_app = None
     else:
         telegram_app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         # Set webhook
-        if not WEBHOOK_URL or WEBHOOK_URL == "https://your-actual-domain-or-ngrok-url.com/webhook":
-            logger.warning(f"WEBHOOK_URL is not properly set. Telegram webhook will not be registered.")
+        if (
+            not WEBHOOK_URL
+            or WEBHOOK_URL == "https://your-actual-domain-or-ngrok-url.com/webhook"
+        ):
+            logger.warning(
+                f"WEBHOOK_URL is not properly set. Telegram webhook will not be registered."
+            )
         else:
             try:
                 await telegram_app.bot.set_webhook(
                     url=WEBHOOK_URL,
                     allowed_updates=TelegramUpdate.ALL_TYPES,
-                    drop_pending_updates=True
+                    drop_pending_updates=True,
                 )
                 logger.info(f"Webhook successfully set to {WEBHOOK_URL}")
             except Exception as e:
-                logger.error(f"Failed to set webhook to {WEBHOOK_URL}: {e}", exc_info=True)
-                telegram_app = None # Disable telegram app if webhook fails
+                logger.error(
+                    f"Failed to set webhook to {WEBHOOK_URL}: {e}", exc_info=True
+                )
+                telegram_app = None  # Disable telegram app if webhook fails
 
     # 2. Initialize and Start Scheduler
-    scheduler = AsyncIOScheduler(timezone="UTC") # It's good practice to set a timezone
+    scheduler = AsyncIOScheduler(timezone="UTC")  # It's good practice to set a timezone
 
     # Add jobs to the scheduler
     scheduler.add_job(
         scheduled_task_example,
-        trigger=IntervalTrigger(seconds=300), # Example: run every 5 minutes
+        trigger=IntervalTrigger(seconds=300),  # Example: run every 5 minutes
         id="periodic_self_check",
         name="Periodic Self-Check/Sync",
-        replace_existing=True
+        replace_existing=True,
     )
     # Add more jobs as needed
     # scheduler.add_job(another_task, "cron", hour=3, minute=0) # Example: daily at 3 AM UTC
@@ -84,6 +99,7 @@ async def startup_event():
 
     logger.info("FastAPI application startup sequence complete.")
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     global scheduler, telegram_app
@@ -91,7 +107,9 @@ async def shutdown_event():
     # 1. Shutdown Scheduler
     if scheduler and scheduler.running:
         logger.info("Attempting to shut down APScheduler...")
-        scheduler.shutdown(wait=False) # wait=False for async context, or True if issues arise
+        scheduler.shutdown(
+            wait=False
+        )  # wait=False for async context, or True if issues arise
         logger.info("APScheduler shut down.")
 
     # 2. Clean up Telegram (optional webhook deletion)
@@ -108,12 +126,16 @@ async def shutdown_event():
 
     logger.info("FastAPI application shutdown sequence complete.")
 
+
 # --- API Endpoints ---
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     if not telegram_app:
         logger.error("Telegram app not initialized. Cannot process webhook.")
-        raise HTTPException(status_code=503, detail="Telegram integration not available. Bot token may not be configured.")
+        raise HTTPException(
+            status_code=503,
+            detail="Telegram integration not available. Bot token may not be configured.",
+        )
 
     try:
         data = await request.json()
@@ -134,30 +156,49 @@ async def telegram_webhook(request: Request):
                 logger.info(f"Sending response to chat_id {chat_id}: {response_text}")
                 await telegram_app.bot.send_message(chat_id=chat_id, text=response_text)
             else:
-                logger.warning(f"No response generated by handle_command for input: {command_text}")
+                logger.warning(
+                    f"No response generated by handle_command for input: {command_text}"
+                )
                 # Optionally send a default acknowledgement or error message
-                await telegram_app.bot.send_message(chat_id=chat_id, text="Command processed, but no specific reply was generated.")
+                await telegram_app.bot.send_message(
+                    chat_id=chat_id,
+                    text="Command processed, but no specific reply was generated.",
+                )
 
             return {"status": "ok", "message": "Command processed and response sent"}
-        elif tg_update.message: # Message received but no text (e.g. photo, sticker)
-            logger.info(f"Received non-text message from chat_id {tg_update.message.chat_id}. Type: {tg_update.message.chat.type if tg_update.message.chat else 'Unknown'}")
+        elif tg_update.message:  # Message received but no text (e.g. photo, sticker)
+            logger.info(
+                f"Received non-text message from chat_id {tg_update.message.chat_id}. Type: {tg_update.message.chat.type if tg_update.message.chat else 'Unknown'}"
+            )
             # Optionally handle other message types or inform the user
-            await telegram_app.bot.send_message(chat_id=tg_update.message.chat_id, text="I can currently only process text commands.")
+            await telegram_app.bot.send_message(
+                chat_id=tg_update.message.chat_id,
+                text="I can currently only process text commands.",
+            )
             return {"status": "ok", "message": "Non-text message received"}
         else:
-            logger.info(f"Received an update that is not a message or has no text: {tg_update}")
-            return {"status": "ok", "message": "Update received but not actionable by current logic"}
+            logger.info(
+                f"Received an update that is not a message or has no text: {tg_update}"
+            )
+            return {
+                "status": "ok",
+                "message": "Update received but not actionable by current logic",
+            }
 
     except Exception as e:
         logger.error(f"Error processing webhook update: {e}", exc_info=True)
         # Avoid sending detailed error messages back to Telegram for security reasons,
         # but ensure it's logged thoroughly.
-        raise HTTPException(status_code=500, detail="Internal server error processing update.")
+        raise HTTPException(
+            status_code=500, detail="Internal server error processing update."
+        )
+
 
 @app.get("/health")
 async def health_check():
     """Returns a simple health check indicating the API is running."""
     return {"status": "OK", "message": "API is healthy."}
+
 
 @app.get("/status")
 async def get_status():
@@ -177,10 +218,16 @@ async def get_status():
             jobs = scheduler.get_jobs()
             scheduled_jobs_count = len(jobs)
             for job in jobs:
-                next_run_times.append({
-                    "job_id": job.id,
-                    "next_run": job.next_run_time.isoformat() if job.next_run_time else "N/A"
-                })
+                next_run_times.append(
+                    {
+                        "job_id": job.id,
+                        "next_run": (
+                            job.next_run_time.isoformat()
+                            if job.next_run_time
+                            else "N/A"
+                        ),
+                    }
+                )
         except Exception as e:
             logger.error(f"Error retrieving scheduler job details: {e}", exc_info=True)
             scheduler_status = "error_retrieving_jobs"
@@ -190,18 +237,28 @@ async def get_status():
         "uptime": str(uptime_delta),
         "version": app.version,
         "telegram_integration": {
-            "bot_status": "active_and_webhook_set" if telegram_app and telegram_app.bot.token else "inactive_or_webhook_failed",
-            "token_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN != "YOUR_TELEGRAM_BOT_TOKEN"),
-            "webhook_url_configured": bool(WEBHOOK_URL and WEBHOOK_URL != "https://your-actual-domain-or-ngrok-url.com/webhook"),
-            "webhook_url_used": WEBHOOK_URL if telegram_app else "N/A"
+            "bot_status": (
+                "active_and_webhook_set"
+                if telegram_app and telegram_app.bot.token
+                else "inactive_or_webhook_failed"
+            ),
+            "token_configured": bool(
+                TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN != "YOUR_TELEGRAM_BOT_TOKEN"
+            ),
+            "webhook_url_configured": bool(
+                WEBHOOK_URL
+                and WEBHOOK_URL != "https://your-actual-domain-or-ngrok-url.com/webhook"
+            ),
+            "webhook_url_used": WEBHOOK_URL if telegram_app else "N/A",
         },
         "scheduler": {
             "status": scheduler_status,
             "running": scheduler_running,
             "jobs_count": scheduled_jobs_count,
-            "job_next_runs": next_run_times
-        }
+            "job_next_runs": next_run_times,
+        },
     }
+
 
 @app.get("/uptime")
 async def get_uptime():
@@ -209,6 +266,7 @@ async def get_uptime():
     uptime_seconds = time.time() - START_TIME
     uptime_delta = timedelta(seconds=uptime_seconds)
     return {"uptime_seconds": uptime_seconds, "uptime_human": str(uptime_delta)}
+
 
 if __name__ == "__main__":
     # This is for local development. For production, use a Gunicorn or Uvicorn process manager.
