@@ -7,9 +7,21 @@ import json # For status file later
 from datetime import datetime # For status output
 import traceback # For logging tracebacks
 
+# Attempt to import post_task_verifier, handle if it's not found during development phases
+try:
+    from katana import post_task_verifier
+except ImportError:
+    # This allows self_heal to potentially run or be imported even if post_task_verifier is missing,
+    # though verification features would be disabled.
+    # Consider if a hard failure is better if post_task_verifier is essential.
+    print("Warning: katana.post_task_verifier module not found. Task verification will be skipped.", file=sys.stderr)
+    post_task_verifier = None
+
+
 PID_FILE = "/tmp/katana_self_heal.pid"
 STATUS_FILE = "/tmp/self_healing_status.json"
 LOG_FILE = "/tmp/katana_self_heal.log"
+KATANA_RESULT_JSON = "/tmp/katana_result.json" # Default path for verification results
 
 MAX_RESTART_ATTEMPTS = 3
 RESTART_DELAY_SECONDS = 10 # Wait 10 seconds before restarting
@@ -133,9 +145,21 @@ def daemon_main_loop():
     _update_status_file_internal(health_status_global)
     # print("Initial status for this main loop iteration written.") # Can be verbose
 
+    # Define a list of task IDs to cycle through for verification
+    # These should match keys in DUMMY_TASK_EXPECTATIONS in post_task_verifier.py
+    simulated_task_ids = [
+        "create_config_file", # Will fail first, then succeed after simulated fix
+        "run_migrations",
+        "start_server",
+        "successful_task",
+        "unknown_task_force_fail" # Example of a task that fails verification
+    ]
+    task_id_index = 0
+
     loop_count = 0
     while True: # This is the core operational loop
         loop_count += 1
+        print(f"Daemon main loop iteration: {loop_count}")
 
         health_status_global["last_updated"] = time.time()
         # health_status_global["status"] = "running" # Already set at loop start
@@ -148,17 +172,76 @@ def daemon_main_loop():
             "details": {"cpu_load_1m": round(avg_load[0], 2), "loop_count_this_instance": loop_count}
         }
         health_status_global["checks"].append(current_check)
-        health_status_global["checks"] = health_status_global["checks"][-10:]
+        health_status_global["checks"] = health_status_global["checks"][-10:] # Keep last 10 checks
+
+        # --- SIMULATED TASK EXECUTION ---
+        print(f"Simulating execution of a task in loop iteration {loop_count}...")
+        # This is where actual task logic would go.
+        # For now, we just wait. The important part is the verification that follows.
+
+        # --- POST-TASK VERIFICATION ---
+        if post_task_verifier:
+            current_task_id = simulated_task_ids[task_id_index % len(simulated_task_ids)]
+            print(f"Attempting to verify simulated task: {current_task_id}")
+
+            # Special handling for 'create_config_file' to demonstrate success after failure
+            if current_task_id == "create_config_file":
+                config_file_path = post_task_verifier.DUMMY_TASK_EXPECTATIONS["create_config_file"]["filepath"]
+                # On the first attempt for this task ID (or if file doesn't exist), it should fail.
+                # On subsequent attempts for this task ID, simulate the file has been created.
+                # We use loop_count to make this behavior change over time if this task_id is hit multiple times.
+                # A more robust way would be to track attempts per task_id if the daemon is long-running.
+                # For simplicity, let's say if loop_count is even it exists, if odd it does not.
+                # This is just for daemon demonstration, manual verify will test more directly.
+                if loop_count % 2 == 0 : # Simulate file exists on even loops
+                    if not os.path.exists(config_file_path):
+                        print(f"Simulating creation of {config_file_path} for verification success.")
+                        with open(config_file_path, "w") as f: f.write("SIMULATED_CONTENT=true")
+                else: # Simulate file missing on odd loops
+                    if os.path.exists(config_file_path):
+                        print(f"Simulating removal of {config_file_path} for verification failure.")
+                        os.remove(config_file_path)
+
+            if current_task_id == "run_migrations":
+                log_file_path = post_task_verifier.DUMMY_TASK_EXPECTATIONS["run_migrations"]["log_file"]
+                # Clean up log from previous run of this task to ensure clean test
+                if os.path.exists(log_file_path):
+                    os.remove(log_file_path)
+
+
+            verification_result = post_task_verifier.verify_task(current_task_id)
+            post_task_verifier.write_katana_result(verification_result, KATANA_RESULT_JSON)
+
+            print(f"Verification result for task '{current_task_id}': {verification_result.get('status')}")
+            if verification_result.get('status') == 'failure':
+                print(f"  Reason: {verification_result.get('reason')}")
+                print(f"  Fix: {verification_result.get('fix_suggestion')}")
+
+            # Add verification result to daemon status
+            health_status_global.setdefault("last_task_verifications", []).append(verification_result)
+            health_status_global["last_task_verifications"] = health_status_global["last_task_verifications"][-5:] # Keep last 5
+
+            task_id_index += 1 # Move to next task for next iteration
+        else:
+            print("Task verification skipped as post_task_verifier module is not available.")
+
+        print(f"Finished simulated task and verification for loop {loop_count}.")
+        # --- END POST-TASK VERIFICATION ---
+
 
         # Example: Simulate a recoverable error to test restart
         # This will trigger after MAX_RESTART_ATTEMPTS + some loops to ensure it's not immediate
         if health_status_global.get("restart_attempts_count", 0) < MAX_RESTART_ATTEMPTS: # only simulate if restarts are allowed
-            if loop_count == 5 : # Simulate error on 5th iteration of a main_loop instance
+            # Shorten loop for testing crashes, e.g. crash on 3rd successful loop of this instance
+            if loop_count == 3 and not args.no_simulated_crash: # Added a simple arg flag to disable this for easier testing
                 print("Simulating a recoverable error in daemon_main_loop...")
                 raise ValueError(f"Simulated recoverable error for restart test (loop {loop_count})")
 
         _update_status_file_internal(health_status_global)
-        time.sleep(30)
+        # Shorten sleep for faster testing of verification cycling
+        print(f"Daemon sleeping for {args.daemon_sleep_interval} seconds...")
+        time.sleep(args.daemon_sleep_interval)
+
 
 def _shutdown_daemon(signal_name_or_reason):
     global health_status_global
@@ -263,6 +346,12 @@ def run_daemon(args):
     signal.signal(signal.SIGINT, sigint_handler)
     print("Signal handlers registered.")
 
+    # Store args for use in daemon_main_loop if needed
+    # This is a bit of a hack; proper daemons might pass config objects.
+    # For now, to control sleep interval and crash simulation from CLI:
+    run_daemon.args = args
+
+
     # Initialize health_status_global for the very first run
     health_status_global = {
         "pid": os.getpid(),
@@ -270,7 +359,8 @@ def run_daemon(args):
         "status": "initializing",
         "restart_attempts_count": 0,
         "checks": [],
-        "warnings": []
+        "warnings": [],
+        "last_task_verifications": []
     }
     _update_status_file_internal(health_status_global) # Initial status write
 
@@ -289,7 +379,8 @@ def run_daemon(args):
 
         print(f"Starting daemon main loop (Overall attempt {restart_attempts_done})...")
         try:
-            daemon_main_loop() # This is the blocking call to the daemon's work
+            # Pass the args to daemon_main_loop
+            daemon_main_loop(args) # This is the blocking call to the daemon's work
             # If daemon_main_loop returns, it implies a controlled shutdown from within itself.
             print("Daemon main loop returned cleanly. Initiating shutdown.")
             _shutdown_daemon("main_loop_returned")
