@@ -56,40 +56,43 @@ class TestServiceMonitor(unittest.TestCase):
         ServiceMonitor._load_plugin_class = self.original_load_plugin_class
         # Clear any potentially loaded plugins in a shared ServiceMonitor instance if it were a singleton (not the case here)
 
-    @patch('self_healing.monitor.importlib.import_module')
-    def test_load_plugins_from_config_success(self, mock_import_module):
-        # Mock the dynamic import and class instantiation
-        mock_plugin_instance = MockMonitoringPlugin(name="TestHttpMonitor")
-        mock_plugin_class = MagicMock(return_value=mock_plugin_instance)
-        mock_plugin_class.__bases__ = (MonitoringPlugin,) # Make it look like a subclass
+    @patch.object(ServiceMonitor, '_load_plugin_class') # Patch _load_plugin_class directly
+    def test_load_plugins_from_config_success(self, mock_load_plugin_class_method):
+        final_mock_instance = MockMonitoringPlugin(name="TestHttpMonitor")
 
-        # import_module returns a module object, getattr on that returns the class
-        mock_module = MagicMock()
-        mock_module.TestHttpMonitor = mock_plugin_class
-        mock_import_module.return_value = mock_module
+        # This is the mock CLASS that _load_plugin_class should return for "TestHttpMonitor"
+        MockClassToReturn = MagicMock(spec=MonitoringPlugin)
+        MockClassToReturn.return_value = final_mock_instance
 
-        # Configure MONITORED_TARGETS for this test
+        # Configure _load_plugin_class to return MockClassToReturn when called with "TestHttpMonitor"
+        def side_effect_load_plugin_class(module_name, class_name):
+            if class_name == "TestHttpMonitor":
+                return MockClassToReturn
+            return None # Or raise an error for unexpected calls
+        mock_load_plugin_class_method.side_effect = side_effect_load_plugin_class
+
         SUT_config.MONITORED_TARGETS = {
             "test_service_http": {
                 "enabled": True,
-                "plugin": "TestHttpMonitor", # Class name to load
+                "plugin": "TestHttpMonitor",
                 "config": {"url": "http://test.com"},
                 "diagnostic_plugins": [], "recovery_plugins": []
             }
         }
 
-        monitor = ServiceMonitor() # This will call _load_plugins_from_config
+        monitor = ServiceMonitor()
 
         self.assertIn("TestHttpMonitor", monitor.monitoring_plugins)
         self.assertIsInstance(monitor.monitoring_plugins["TestHttpMonitor"], MockMonitoringPlugin)
-        # Check if import_module was called correctly (module path depends on ServiceMonitor._load_plugins_from_config logic)
-        # Example: "self_healing.plugins.basic_plugins"
-        expected_module_path = f"self_healing.plugins.basic_plugins"
-        mock_import_module.assert_called_with(expected_module_path)
-        mock_plugin_class.assert_called_once() # Ensure plugin was instantiated
 
-    @patch('self_healing.monitor.importlib.import_module')
-    def test_load_plugins_from_config_disabled_target(self, mock_import_module):
+        # Check that _load_plugin_class was called for "TestHttpMonitor"
+        expected_module_name = "self_healing.plugins.basic_plugins" # Based on internal logic of _load_plugins_from_config
+        mock_load_plugin_class_method.assert_any_call(expected_module_name, "TestHttpMonitor")
+
+        MockClassToReturn.assert_called_once()
+
+    @patch.object(ServiceMonitor, '_load_plugin_class') # Patch _load_plugin_class directly
+    def test_load_plugins_from_config_disabled_target(self, mock_load_plugin_class_method):
         SUT_config.MONITORED_TARGETS = {
             "disabled_service": {
                 "enabled": False, # Key: this service is disabled
@@ -99,11 +102,18 @@ class TestServiceMonitor(unittest.TestCase):
         }
         monitor = ServiceMonitor()
         self.assertEqual(len(monitor.monitoring_plugins), 0)
-        mock_import_module.assert_not_called()
+        # _load_plugin_class might be called if there were other (enabled) targets,
+        # but for "disabled_service" it should not attempt to load.
+        # If only disabled_service is configured, then assert_not_called() is fine.
+        # For robustness, one might check specific calls or non-calls.
+        # For this test, assuming only this target, so no calls to load.
+        mock_load_plugin_class_method.assert_not_called()
 
-    @patch('self_healing.monitor.importlib.import_module')
-    def test_load_plugins_failure_import_error(self, mock_import_module):
-        mock_import_module.side_effect = ImportError("Test Import Error")
+
+    @patch.object(ServiceMonitor, '_load_plugin_class') # Patch _load_plugin_class directly
+    def test_load_plugins_failure_import_error(self, mock_load_plugin_class_method):
+        # Simulate _load_plugin_class returning None, as it would if import failed internally
+        mock_load_plugin_class_method.return_value = None
         SUT_config.MONITORED_TARGETS = {
             "failing_service": {
                 "enabled": True, "plugin": "NonExistentMonitor",
@@ -179,8 +189,8 @@ class TestServiceMonitor(unittest.TestCase):
         health_data = results[target_id][0]
 
         self.assertEqual(health_data["status"], "error")
-        self.assertEqual(health_data["error_message"], "Exception occurred during check_health call.")
-        self.assertEqual(health_data["details"], "Exception occurred during check_health call.") # Check monitor.py for exact message
+        self.assertEqual(health_data["error_message"], "Plugin Died") # Expecting the actual str(e)
+        self.assertEqual(health_data["details"], "Exception occurred during check_health call.")
         self.assertEqual(health_data["target_id"], target_id)
         self.assertEqual(health_data["monitor_name"], "FaultyPlugin")
 

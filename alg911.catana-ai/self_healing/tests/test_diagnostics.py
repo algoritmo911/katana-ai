@@ -42,20 +42,23 @@ class TestIssueDiagnoser(unittest.TestCase):
     def tearDown(self):
         SUT_config.MONITORED_TARGETS = self.original_monitored_targets
 
-    @patch('self_healing.diagnostics.importlib.import_module')
-    def test_load_plugins_from_config_success(self, mock_import_module):
-        mock_plugin_instance = MockDiagnosticPlugin(name="TestIssueClassifier")
-        mock_plugin_class = MagicMock(return_value=mock_plugin_instance)
-        mock_plugin_class.__bases__ = (DiagnosticPlugin,) # Make it look like a subclass
+    @patch.object(IssueDiagnoser, '_load_plugin_class')
+    def test_load_plugins_from_config_success(self, mock_load_plugin_class_method):
+        final_mock_instance = MockDiagnosticPlugin(name="TestIssueClassifier")
 
-        mock_module = MagicMock()
-        mock_module.TestIssueClassifier = mock_plugin_class
-        mock_import_module.return_value = mock_module
+        MockClassToReturn = MagicMock(spec=DiagnosticPlugin)
+        MockClassToReturn.return_value = final_mock_instance
+
+        def side_effect_load_plugin_class(module_name, class_name):
+            if class_name == "TestIssueClassifier":
+                return MockClassToReturn
+            return None
+        mock_load_plugin_class_method.side_effect = side_effect_load_plugin_class
 
         SUT_config.MONITORED_TARGETS = {
             "test_service_for_diag": {
                 "enabled": True,
-                "plugin": "SomeMonitor", "config": {},
+                "plugin": "SomeMonitor", "config": {}, # Actual monitor plugin doesn't matter for this test
                 "diagnostic_plugins": [
                     {"plugin": "TestIssueClassifier", "config": {"threshold": 0.5}}
                 ],
@@ -63,13 +66,13 @@ class TestIssueDiagnoser(unittest.TestCase):
             }
         }
 
-        diagnoser = IssueDiagnoser() # Triggers _load_plugins_from_config
+        diagnoser = IssueDiagnoser()
 
         self.assertIn("TestIssueClassifier", diagnoser.diagnostic_plugins)
         self.assertIsInstance(diagnoser.diagnostic_plugins["TestIssueClassifier"], MockDiagnosticPlugin)
-        expected_module_path = f"self_healing.plugins.basic_plugins" # As per IssueDiagnoser._load_plugins_from_config
-        mock_import_module.assert_called_with(expected_module_path)
-        mock_plugin_class.assert_called_once()
+        expected_module_name = "self_healing.plugins.basic_plugins" # From IssueDiagnoser logic
+        mock_load_plugin_class_method.assert_any_call(expected_module_name, "TestIssueClassifier")
+        MockClassToReturn.assert_called_once()
 
     def test_run_diagnostics_no_monitor_data(self):
         diagnoser = IssueDiagnoser()

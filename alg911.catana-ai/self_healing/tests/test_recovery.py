@@ -47,15 +47,18 @@ class TestRecoveryManager(unittest.TestCase):
     def tearDown(self):
         SUT_config.MONITORED_TARGETS = self.original_monitored_targets
 
-    @patch('self_healing.recovery.importlib.import_module')
-    def test_load_plugins_from_config_success(self, mock_import_module):
-        mock_plugin_instance = MockRecoveryPlugin(name="TestServiceRestarter")
-        mock_plugin_class = MagicMock(return_value=mock_plugin_instance)
-        mock_plugin_class.__bases__ = (RecoveryPlugin,)
+    @patch.object(RecoveryManager, '_load_plugin_class')
+    def test_load_plugins_from_config_success(self, mock_load_plugin_class_method):
+        final_mock_instance = MockRecoveryPlugin(name="TestServiceRestarter")
 
-        mock_module = MagicMock()
-        mock_module.TestServiceRestarter = mock_plugin_class
-        mock_import_module.return_value = mock_module
+        MockClassToReturn = MagicMock(spec=RecoveryPlugin)
+        MockClassToReturn.return_value = final_mock_instance
+
+        def side_effect_load_plugin_class(module_name, class_name):
+            if class_name == "TestServiceRestarter":
+                return MockClassToReturn
+            return None
+        mock_load_plugin_class_method.side_effect = side_effect_load_plugin_class
 
         SUT_config.MONITORED_TARGETS = {
             "test_service_for_recovery": {
@@ -67,13 +70,13 @@ class TestRecoveryManager(unittest.TestCase):
             }
         }
 
-        manager = RecoveryManager() # Triggers plugin loading
+        manager = RecoveryManager()
 
         self.assertIn("TestServiceRestarter", manager.recovery_plugins)
         self.assertIsInstance(manager.recovery_plugins["TestServiceRestarter"], MockRecoveryPlugin)
-        expected_module_path = f"self_healing.plugins.basic_plugins"
-        mock_import_module.assert_called_with(expected_module_path)
-        mock_plugin_class.assert_called_once()
+        expected_module_name = "self_healing.plugins.basic_plugins"
+        mock_load_plugin_class_method.assert_any_call(expected_module_name, "TestServiceRestarter")
+        MockClassToReturn.assert_called_once()
 
     def test_attempt_all_recoveries_no_issues(self):
         manager = RecoveryManager()

@@ -1,0 +1,90 @@
+2025-06-27 14:08:25,767 - SelfHealingModule - INFO - orchestrator - Initializing Self-Healing Orchestrator...
+2025-06-27 14:08:25,768 - SelfHealingModule - INFO - monitor - Loading monitoring plugins...
+2025-06-27 14:08:25,801 - SelfHealingModule - ERROR - monitor - Failed to import module self_healing.plugins.basic_plugins for plugin HttpAvailabilityMonitor.
+2025-06-27 14:08:25,801 - SelfHealingModule - ERROR - monitor - Failed to import module self_healing.plugins.basic_plugins for plugin ProcessRunningMonitor.
+2025-06-27 14:08:25,802 - SelfHealingModule - ERROR - monitor - Failed to import module self_healing.plugins.basic_plugins for plugin LogFileMonitor.
+2025-06-27 14:08:25,802 - SelfHealingModule - INFO - monitor - Loaded 0 unique monitoring plugin types.
+2025-06-27 14:08:25,802 - SelfHealingModule - INFO - diagnostics - Loading diagnostic plugins...
+2025-06-27 14:08:25,803 - SelfHealingModule - ERROR - diagnostics - Failed to import module self_healing.plugins.basic_plugins for diagnostic plugin HttpStatusIssueDiagnoser.
+2025-06-27 14:08:25,803 - SelfHealingModule - ERROR - diagnostics - Failed to import module self_healing.plugins.basic_plugins for diagnostic plugin ProcessNotRunningDiagnoser.
+2025-06-27 14:08:25,804 - SelfHealingModule - ERROR - diagnostics - Failed to import module self_healing.plugins.basic_plugins for diagnostic plugin LogPatternDiagnoser.
+2025-06-27 14:08:25,804 - SelfHealingModule - INFO - diagnostics - Loaded 0 unique diagnostic plugin types.
+2025-06-27 14:08:25,804 - SelfHealingModule - INFO - recovery - Loading recovery plugins...
+2025-06-27 14:08:25,805 - SelfHealingModule - ERROR - recovery - Failed to import module self_healing.plugins.basic_plugins for recovery plugin ServiceRestartRecovery.
+2025-06-27 14:08:25,805 - SelfHealingModule - INFO - recovery - Loaded 0 unique recovery plugin types.
+2025-06-27 14:08:25,805 - SelfHealingModule - INFO - orchestrator - Self-Healing Orchestrator initialized.
+2025-06-27 14:09:22,304 - SelfHealingModule - INFO - orchestrator - Initializing Self-Healing Orchestrator...
+2025-06-27 14:09:22,304 - SelfHealingModule - INFO - monitor - Loading monitoring plugins...
+2025-06-27 14:09:22,479 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: HttpAvailabilityMonitor
+2025-06-27 14:09:22,479 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: ProcessRunningMonitor
+2025-06-27 14:09:22,479 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: LogFileMonitor
+2025-06-27 14:09:22,479 - SelfHealingModule - INFO - monitor - Loaded 3 unique monitoring plugin types.
+2025-06-27 14:09:22,479 - SelfHealingModule - INFO - diagnostics - Loading diagnostic plugins...
+2025-06-27 14:09:22,479 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: HttpStatusIssueDiagnoser
+2025-06-27 14:09:22,479 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: ProcessNotRunningDiagnoser
+2025-06-27 14:09:22,479 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: LogPatternDiagnoser
+2025-06-27 14:09:22,479 - SelfHealingModule - INFO - diagnostics - Loaded 3 unique diagnostic plugin types.
+2025-06-27 14:09:22,479 - SelfHealingModule - INFO - recovery - Loading recovery plugins...
+2025-06-27 14:09:22,480 - SelfHealingModule - INFO - recovery - Successfully loaded and instantiated recovery plugin: ServiceRestartRecovery
+2025-06-27 14:09:22,480 - SelfHealingModule - INFO - recovery - Loaded 1 unique recovery plugin types.
+2025-06-27 14:09:22,480 - SelfHealingModule - INFO - orchestrator - Self-Healing Orchestrator initialized.
+2025-06-27 14:09:54,578 - SelfHealingModule - INFO - orchestrator - Initializing Self-Healing Orchestrator...
+2025-06-27 14:09:54,579 - SelfHealingModule - INFO - monitor - Loading monitoring plugins...
+2025-06-27 14:09:54,740 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: HttpAvailabilityMonitor
+2025-06-27 14:09:54,740 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: ProcessRunningMonitor
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: LogFileMonitor
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - monitor - Loaded 3 unique monitoring plugin types.
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - diagnostics - Loading diagnostic plugins...
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: HttpStatusIssueDiagnoser
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: ProcessNotRunningDiagnoser
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: LogPatternDiagnoser
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - diagnostics - Loaded 3 unique diagnostic plugin types.
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - recovery - Loading recovery plugins...
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - recovery - Successfully loaded and instantiated recovery plugin: ServiceRestartRecovery
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - recovery - Loaded 1 unique recovery plugin types.
+2025-06-27 14:09:54,741 - SelfHealingModule - INFO - orchestrator - Self-Healing Orchestrator initialized.
+2025-06-27 14:10:31,565 - SelfHealingModule - INFO - orchestrator - Initializing Self-Healing Orchestrator...
+2025-06-27 14:10:31,565 - SelfHealingModule - INFO - monitor - Loading monitoring plugins...
+2025-06-27 14:10:31,775 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: HttpAvailabilityMonitor
+2025-06-27 14:10:31,776 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: ProcessRunningMonitor
+2025-06-27 14:10:31,776 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: LogFileMonitor
+2025-06-27 14:10:31,776 - SelfHealingModule - INFO - monitor - Loaded 3 unique monitoring plugin types.
+2025-06-27 14:10:31,776 - SelfHealingModule - INFO - diagnostics - Loading diagnostic plugins...
+2025-06-27 14:10:31,776 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: HttpStatusIssueDiagnoser
+2025-06-27 14:10:31,776 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: ProcessNotRunningDiagnoser
+2025-06-27 14:10:31,777 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: LogPatternDiagnoser
+2025-06-27 14:10:31,777 - SelfHealingModule - INFO - diagnostics - Loaded 3 unique diagnostic plugin types.
+2025-06-27 14:10:31,777 - SelfHealingModule - INFO - recovery - Loading recovery plugins...
+2025-06-27 14:10:31,777 - SelfHealingModule - INFO - recovery - Successfully loaded and instantiated recovery plugin: ServiceRestartRecovery
+2025-06-27 14:10:31,777 - SelfHealingModule - INFO - recovery - Loaded 1 unique recovery plugin types.
+2025-06-27 14:10:31,777 - SelfHealingModule - INFO - orchestrator - Self-Healing Orchestrator initialized.
+2025-06-27 14:11:53,008 - SelfHealingModule - INFO - orchestrator - Initializing Self-Healing Orchestrator...
+2025-06-27 14:11:53,008 - SelfHealingModule - INFO - monitor - Loading monitoring plugins...
+2025-06-27 14:11:53,182 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: HttpAvailabilityMonitor
+2025-06-27 14:11:53,182 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: ProcessRunningMonitor
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: LogFileMonitor
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - monitor - Loaded 3 unique monitoring plugin types.
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - diagnostics - Loading diagnostic plugins...
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: HttpStatusIssueDiagnoser
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: ProcessNotRunningDiagnoser
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: LogPatternDiagnoser
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - diagnostics - Loaded 3 unique diagnostic plugin types.
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - recovery - Loading recovery plugins...
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - recovery - Successfully loaded and instantiated recovery plugin: ServiceRestartRecovery
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - recovery - Loaded 1 unique recovery plugin types.
+2025-06-27 14:11:53,183 - SelfHealingModule - INFO - orchestrator - Self-Healing Orchestrator initialized.
+2025-06-27 14:12:28,532 - SelfHealingModule - INFO - orchestrator - Initializing Self-Healing Orchestrator...
+2025-06-27 14:12:28,532 - SelfHealingModule - INFO - monitor - Loading monitoring plugins...
+2025-06-27 14:12:28,784 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: HttpAvailabilityMonitor
+2025-06-27 14:12:28,784 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: ProcessRunningMonitor
+2025-06-27 14:12:28,784 - SelfHealingModule - INFO - monitor - Successfully loaded and instantiated monitoring plugin: LogFileMonitor
+2025-06-27 14:12:28,784 - SelfHealingModule - INFO - monitor - Loaded 3 unique monitoring plugin types.
+2025-06-27 14:12:28,784 - SelfHealingModule - INFO - diagnostics - Loading diagnostic plugins...
+2025-06-27 14:12:28,784 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: HttpStatusIssueDiagnoser
+2025-06-27 14:12:28,784 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: ProcessNotRunningDiagnoser
+2025-06-27 14:12:28,784 - SelfHealingModule - INFO - diagnostics - Successfully loaded and instantiated diagnostic plugin: LogPatternDiagnoser
+2025-06-27 14:12:28,784 - SelfHealingModule - INFO - diagnostics - Loaded 3 unique diagnostic plugin types.
+2025-06-27 14:12:28,784 - SelfHealingModule - INFO - recovery - Loading recovery plugins...
+2025-06-27 14:12:28,785 - SelfHealingModule - INFO - recovery - Successfully loaded and instantiated recovery plugin: ServiceRestartRecovery
+2025-06-27 14:12:28,785 - SelfHealingModule - INFO - recovery - Loaded 1 unique recovery plugin types.
+2025-06-27 14:12:28,785 - SelfHealingModule - INFO - orchestrator - Self-Healing Orchestrator initialized.

@@ -1,5 +1,6 @@
 import time
 import os # Added for dummy log file creation in __main__
+import json # For writing status file
 from typing import Dict, List, Any
 
 from . import self_healing_config as config
@@ -33,6 +34,11 @@ class SelfHealingOrchestrator:
         # Key: A unique identifier for an issue (e.g., target_id + issue_type + specific details hash)
         # Value: Dict containing 'first_detected', 'last_detected', 'recovery_attempts_count', 'last_recovery_attempt_ts'
         self.active_issues_state: Dict[str, Dict[str, Any]] = {}
+        self.recent_recovery_actions: List[Dict[str, Any]] = [] # Store last N recovery actions
+        self.max_recent_actions = 5 # Max number of recent recovery actions to store
+
+        self.status_file_path = os.path.join(config.PROJECT_BASE_DIR, "self_healing_status.json")
+
         logger.info("Self-Healing Orchestrator initialized.")
 
     def _generate_issue_key(self, issue: Dict[str, Any]) -> str:
@@ -124,15 +130,89 @@ class SelfHealingOrchestrator:
                     self.active_issues_state[issue_key_for_result]["last_recovery_attempt_ts"] = current_time
                     if result.get("status") == "success":
                         logger.info(f"Recovery successful for issue related to '{issue_key_for_result}'. It might be cleared in the next cycle if checks pass.")
-                        # Consider removing from active_issues_state immediately if recovery is definitively successful and verifiable.
-                        # However, it's safer to let the next monitoring cycle confirm resolution.
                     else:
                         logger.warning(f"Recovery failed or skipped for issue related to '{issue_key_for_result}'. Status: {result.get('status')}")
+                    self._add_recovery_action_to_history(result) # Add to history regardless of success/failure
                 else:
                     logger.warning(f"Recovery result for an untracked or differently keyed issue: {result}")
+                    # Potentially add to history even if untracked, if result has enough info
+                    # self._add_recovery_action_to_history(result)
 
         self._cleanup_resolved_issues(monitor_data)
+        self._write_status_file(monitor_data) # Pass current monitor_data for target statuses
         logger.info("Self-healing cycle complete.")
+
+    def _add_recovery_action_to_history(self, recovery_result: Dict[str, Any]):
+        """Adds a recovery action to the recent history, maintaining max size."""
+        if not recovery_result or not isinstance(recovery_result, dict):
+            return
+
+        action_summary = {
+            "timestamp": recovery_result.get("timestamp", time.time()), # Ensure timestamp from result or now
+            "target_id": recovery_result.get("target_id"),
+            "issue_type": recovery_result.get("issue_type"),
+            "action": recovery_result.get("action_taken", "Unknown action"),
+            "outcome": recovery_result.get("status", "unknown")
+        }
+        self.recent_recovery_actions.append(action_summary)
+        # Keep only the last N actions
+        if len(self.recent_recovery_actions) > self.max_recent_actions:
+            self.recent_recovery_actions = self.recent_recovery_actions[-self.max_recent_actions:]
+
+    def _write_status_file(self, current_monitor_data: Dict[str, List[Dict[str, Any]]]):
+        """Writes the current operational status to a JSON file."""
+        logger.debug(f"Writing self-healing status to {self.status_file_path}")
+
+        # Prepare monitored targets status
+        monitored_targets_summary = {}
+        if current_monitor_data:
+            for target_id, data_list in current_monitor_data.items():
+                if data_list: # Should always have at least one entry from monitor
+                    # Use the first (often only) data point for summary
+                    # A more complex summary might aggregate if multiple data_points exist
+                    dp = data_list[0]
+                    monitored_targets_summary[target_id] = {
+                        "last_check_ts": dp.get("timestamp"), # Assuming monitor adds this
+                        "status": dp.get("status", "unknown"),
+                        "details": dp.get("error_message") or dp.get("details", "") # Prioritize error_message
+                    }
+                else:
+                     monitored_targets_summary[target_id] = {"status": "nodata", "details": "No data from monitor"}
+
+        # Prepare active issues summary
+        active_issues_summary_list = []
+        for key, issue_data in self.active_issues_state.items():
+            original_details = issue_data.get("original_issue_details", {})
+            active_issues_summary_list.append({
+                "key": key,
+                "target_id": original_details.get("target_id"),
+                "issue_type": original_details.get("issue_type"),
+                "first_detected_ts": issue_data.get("first_detected_ts"),
+                "last_detected_ts": issue_data.get("last_detected_ts"),
+                "attempts": issue_data.get("recovery_attempts_count")
+            })
+
+        status_payload = {
+            "last_updated_ts": time.time(),
+            "daemon_status": "RUNNING", # Could be more dynamic later
+            "pid": os.getpid(), # PID of the orchestrator process itself
+            "active_issues_count": len(self.active_issues_state),
+            "active_issues_summary": active_issues_summary_list,
+            "monitored_targets_status": monitored_targets_summary,
+            "recent_recovery_actions": self.recent_recovery_actions # Already pruned
+        }
+
+        try:
+            temp_status_file_path = self.status_file_path + ".tmp"
+            with open(temp_status_file_path, "w") as f:
+                json.dump(status_payload, f, indent=2)
+            os.replace(temp_status_file_path, self.status_file_path) # Atomic replace
+            logger.debug(f"Successfully wrote status to {self.status_file_path}")
+        except IOError as e:
+            logger.error(f"Failed to write self-healing status to {self.status_file_path}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error writing status file: {e}", exc_info=True)
+
 
     def _cleanup_resolved_issues(self, current_monitor_data: Dict[str, List[Dict[str, Any]]]):
         """
@@ -164,7 +244,14 @@ class SelfHealingOrchestrator:
         for issue_key, issue_state_data in list(self.active_issues_state.items()):
             original_issue = issue_state_data.get("original_issue_details", {})
             target_id = original_issue.get("target_id")
-            # issue_type = original_issue.get("issue_type") # For more granular check
+
+            # DEBUG LOGGING FOR TEST 5
+            if target_id == "service_B" and issue_key == "service_b_disk_full": # Matches key2 from test
+                # Ensure logger is at a level that will show warnings during tests if not CRITICAL
+                # Test setup has logger.setLevel("CRITICAL"), so this won't show unless changed.
+                # Forcing a print for test debug purposes:
+                print(f"DEBUG_CLEANUP: Key {issue_key}, Target {target_id}. In currently_ok: {target_id in currently_ok_targets_and_aspects}. Is stale: {time.time() - issue_state_data['last_detected_ts'] > (self.loop_interval_seconds * 5)}. Staleness threshold: {self.loop_interval_seconds*5}, time_diff: {time.time() - issue_state_data['last_detected_ts']}")
+
 
             # Simplistic check: If the target_id associated with the issue is now reporting "OK"
             # and no specific error matching the issue type is found for that target in current diagnostics (harder to check here without re-diagnosing),
