@@ -15,19 +15,63 @@ pytestmark = pytest.mark.asyncio
 @pytest.fixture
 def mock_julius_agent(mocker):
     """Fixture to create a mock JuliusAgent."""
-    agent = mocker.MagicMock(spec=JuliusAgent) # Use MagicMock for the class itself
-    agent.process_tasks = AsyncMock() # Specifically make process_tasks an AsyncMock
+    agent = mocker.MagicMock(spec=JuliusAgent)
+    agent.process_tasks = AsyncMock()
     return agent
 
 @pytest.fixture
-def orchestrator(mock_julius_agent):
-    """Fixture to create a TaskOrchestrator instance with a mocked agent."""
-    # Patching _initialize_metrics_log_file and _log_metric_to_file to prevent actual file I/O during tests
-    with patch.object(TaskOrchestrator, '_initialize_metrics_log_file', return_value=None), \
+def mock_self_evolver(mocker):
+    """Fixture to create a mock SelfEvolver."""
+    evolver = mocker.MagicMock() # Not using spec here as it might not be available if import fails
+    evolver.generate_patch = mocker.MagicMock(return_value=None) # Default: no patch
+    evolver.apply_patch = mocker.MagicMock(return_value=False)  # Default: apply fails
+    return evolver
+
+@pytest.fixture
+def orchestrator(mock_julius_agent, mock_self_evolver, mocker):
+    """Fixture to create a TaskOrchestrator instance with mocked agent and evolver."""
+    # Patch the SelfEvolver class where TaskOrchestrator looks for it
+    # This ensures that TaskOrchestrator uses our mock_self_evolver instance.
+    # We also need to handle the case where SelfEvolver might be None if the import failed.
+    # So, we patch 'src.orchestrator.task_orchestrator.SelfEvolver'
+
+    # To correctly mock SelfEvolver, especially its conditional import and instantiation:
+    # 1. If SelfEvolver is imported and used as a class: patch('...SelfEvolver')
+    # 2. If an instance is created and assigned: patch.object(module, 'instance_name')
+
+    # In TaskOrchestrator, `self.self_evolver = SelfEvolver()` happens if SelfEvolver is not None.
+    # So, we patch the class `SelfEvolver` that is imported at the module level.
+
+    # Temporarily allow SelfEvolver to be mocked even if it's None in the actual import
+    # This is a bit tricky due to the conditional import.
+    # The easiest way is to ensure `task_orchestrator.SelfEvolver` points to our mock class,
+    # which then returns our mock_self_evolver instance when called.
+
+    mock_self_evolver_class = mocker.MagicMock(return_value=mock_self_evolver)
+
+    with patch('src.orchestrator.task_orchestrator.SelfEvolver', mock_self_evolver_class) as mock_evolver_cls_ref, \
+         patch.object(TaskOrchestrator, '_initialize_metrics_log_file', return_value=None), \
          patch.object(TaskOrchestrator, '_log_metric_to_file', return_value=None) as mock_log_to_file:
 
+        # If SelfEvolver was None due to import error, the mock_evolver_cls_ref won't be used by TaskOrchestrator.
+        # We need to ensure TaskOrchestrator *thinks* SelfEvolver was imported.
+        # A simple way for testing is to force task_orchestrator.SelfEvolver to our mock class *before* TaskOrchestrator is init'd.
+        # The patch above should handle this. If SelfEvolver was originally None, TaskOrchestrator would have self.self_evolver = None.
+        # By patching it to a mock class, TaskOrchestrator will try to instantiate it.
+
         instance = TaskOrchestrator(agent=mock_julius_agent, batch_size=2, max_batch=5)
-        instance.mock_log_to_file = mock_log_to_file # Attach mock for assertions if needed
+
+        # If the mock_evolver_cls_ref was used, instance.self_evolver should be our mock_self_evolver.
+        # If SelfEvolver was None in the module after import, instance.self_evolver would be None.
+        # The test setup needs to ensure that for auto-patching tests, self.self_evolver is the mock.
+        # The patch effectively makes src.orchestrator.task_orchestrator.SelfEvolver the mock_self_evolver_class.
+        # So, when TaskOrchestrator initializes, it calls mock_self_evolver_class() which returns mock_self_evolver.
+
+        # We can assert this:
+        if mock_evolver_cls_ref is not None : # If SelfEvolver was patchable (i.e., not None from failed import)
+             assert instance.self_evolver == mock_self_evolver, "SelfEvolver mock not correctly injected"
+
+        instance.mock_log_to_file = mock_log_to_file
         yield instance
 
 
@@ -297,3 +341,219 @@ async def test_run_round_no_tasks_in_batch_after_pop(orchestrator, mock_julius_a
     # The current code is robust against this unless `self.task_queue.pop(0)` itself raises an error
     # not caught, which would fail the test anyway.
     pass
+
+
+# --- Auto-Patching Test Cases ---
+
+async def test_run_round_autopatch_success(orchestrator, mock_julius_agent, mock_self_evolver):
+    """Test successful auto-patching: fail -> patch generated -> patch applied -> re-verify success."""
+    task_content = "failed_task_to_patch"
+    orchestrator.add_tasks([task_content])
+    # Ensure the orchestrator instance uses the mock_self_evolver from the fixture
+    # This should be handled by the fixture's patching of 'src.orchestrator.task_orchestrator.SelfEvolver'
+    assert orchestrator.self_evolver is mock_self_evolver
+
+
+    # Initial processing: task fails
+    mock_julius_agent.process_tasks.side_effect = [
+        [TaskResult(success=False, details="Initial error", task_content=task_content)], # Initial call
+        [TaskResult(success=True, details="Fixed by patch", task_content=task_content)]  # Re-verification call
+    ]
+
+    mock_self_evolver.generate_patch.return_value = "dummy_patch_content"
+    mock_self_evolver.apply_patch.return_value = True
+
+    await orchestrator.run_round()
+
+    assert mock_julius_agent.process_tasks.call_count == 2
+    mock_julius_agent.process_tasks.assert_any_call([task_content]) # Both calls process this single task
+
+    mock_self_evolver.generate_patch.assert_called_once_with("Initial error")
+    mock_self_evolver.apply_patch.assert_called_once_with("dummy_patch_content")
+
+    assert len(orchestrator.metrics_history) == 1
+    metric = orchestrator.metrics_history[0]
+    assert metric['successful_tasks_count'] == 1 # Final success
+    assert metric['failed_tasks_count'] == 0
+
+    summary = metric['results_summary'][0]
+    assert summary['task'] == task_content
+    assert summary['success'] is True # Final success
+    assert summary['details'] == "Initial error" # Original error
+    assert summary['patched_attempted'] is True
+    assert summary['patch_suggested_content'] == "dummy_patch_content"
+    assert summary['patch_applied_successfully'] is True
+    assert summary['success_after_patch'] is True
+    assert summary['details_after_patch'] == "Fixed by patch"
+    orchestrator.mock_log_to_file.assert_called_once()
+
+
+async def test_run_round_autopatch_generation_fails(orchestrator, mock_julius_agent, mock_self_evolver):
+    """Test auto-patching: fail -> no patch generated -> task remains failed."""
+    task_content = "failed_task_no_patch"
+    orchestrator.add_tasks([task_content])
+    assert orchestrator.self_evolver is mock_self_evolver
+
+    mock_julius_agent.process_tasks.return_value = [
+        TaskResult(success=False, details="Error, no patch expected", task_content=task_content)
+    ]
+    mock_self_evolver.generate_patch.return_value = None # No patch generated
+
+    await orchestrator.run_round()
+
+    mock_julius_agent.process_tasks.assert_called_once_with([task_content])
+    mock_self_evolver.generate_patch.assert_called_once_with("Error, no patch expected")
+    mock_self_evolver.apply_patch.assert_not_called()
+
+    metric = orchestrator.metrics_history[0]
+    assert metric['successful_tasks_count'] == 0
+    assert metric['failed_tasks_count'] == 1
+
+    summary = metric['results_summary'][0]
+    assert summary['success'] is False
+    assert summary['patched_attempted'] is True
+    assert summary['patch_suggested_content'] is None
+    assert summary['patch_applied_successfully'] is None
+    assert summary['success_after_patch'] is None
+
+
+async def test_run_round_autopatch_application_fails(orchestrator, mock_julius_agent, mock_self_evolver):
+    """Test auto-patching: fail -> patch generated -> patch apply fails -> task remains failed."""
+    task_content = "failed_task_apply_fails"
+    orchestrator.add_tasks([task_content])
+    assert orchestrator.self_evolver is mock_self_evolver
+
+    mock_julius_agent.process_tasks.return_value = [
+        TaskResult(success=False, details="Error, patch apply will fail", task_content=task_content)
+    ]
+    mock_self_evolver.generate_patch.return_value = "dummy_patch_content"
+    mock_self_evolver.apply_patch.return_value = False # Patch application fails
+
+    await orchestrator.run_round()
+
+    mock_julius_agent.process_tasks.assert_called_once_with([task_content]) # Only initial call
+    mock_self_evolver.generate_patch.assert_called_once_with("Error, patch apply will fail")
+    mock_self_evolver.apply_patch.assert_called_once_with("dummy_patch_content")
+
+    metric = orchestrator.metrics_history[0]
+    assert metric['successful_tasks_count'] == 0
+    assert metric['failed_tasks_count'] == 1
+
+    summary = metric['results_summary'][0]
+    assert summary['success'] is False
+    assert summary['patched_attempted'] is True
+    assert summary['patch_suggested_content'] == "dummy_patch_content"
+    assert summary['patch_applied_successfully'] is False
+    assert summary['success_after_patch'] is None
+
+
+async def test_run_round_autopatch_reverify_fails(orchestrator, mock_julius_agent, mock_self_evolver):
+    """Test auto-patching: fail -> patch generated -> patch applied -> re-verify fails."""
+    task_content = "failed_task_reverify_fails"
+    orchestrator.add_tasks([task_content])
+    assert orchestrator.self_evolver is mock_self_evolver
+
+    mock_julius_agent.process_tasks.side_effect = [
+        [TaskResult(success=False, details="Initial error", task_content=task_content)],
+        [TaskResult(success=False, details="Still fails after patch", task_content=task_content)] # Re-verification fails
+    ]
+    mock_self_evolver.generate_patch.return_value = "dummy_patch_content"
+    mock_self_evolver.apply_patch.return_value = True
+
+    await orchestrator.run_round()
+
+    assert mock_julius_agent.process_tasks.call_count == 2
+    mock_self_evolver.generate_patch.assert_called_once_with("Initial error")
+    mock_self_evolver.apply_patch.assert_called_once_with("dummy_patch_content")
+
+    metric = orchestrator.metrics_history[0]
+    assert metric['successful_tasks_count'] == 0
+    assert metric['failed_tasks_count'] == 1
+
+    summary = metric['results_summary'][0]
+    assert summary['success'] is False # Final status
+    assert summary['details'] == "Initial error"
+    assert summary['patched_attempted'] is True
+    assert summary['patch_suggested_content'] == "dummy_patch_content"
+    assert summary['patch_applied_successfully'] is True
+    assert summary['success_after_patch'] is False
+    assert summary['details_after_patch'] == "Still fails after patch"
+
+
+async def test_run_round_no_self_evolver(orchestrator, mock_julius_agent, mock_self_evolver):
+    """Test behavior when self_evolver is None (e.g., import failed)."""
+    task_content = "failed_task_no_evolver"
+    orchestrator.add_tasks([task_content])
+
+    # To simulate SelfEvolver not being available, we set orchestrator.self_evolver to None directly.
+    # This overrides what the fixture might have set up if SelfEvolver class was successfully patched.
+    orchestrator.self_evolver = None
+
+    mock_julius_agent.process_tasks.return_value = [
+        TaskResult(success=False, details="Error, no evolver", task_content=task_content)
+    ]
+
+    await orchestrator.run_round()
+
+    mock_julius_agent.process_tasks.assert_called_once_with([task_content])
+    # mock_self_evolver is the mock object that would have been used if orchestrator.self_evolver was not None.
+    # Since orchestrator.self_evolver is None, its methods should not be called.
+    mock_self_evolver.generate_patch.assert_not_called()
+    mock_self_evolver.apply_patch.assert_not_called()
+
+    metric = orchestrator.metrics_history[0]
+    assert metric['successful_tasks_count'] == 0
+    assert metric['failed_tasks_count'] == 1
+
+    summary = metric['results_summary'][0]
+    assert summary['success'] is False
+    # Default values from TaskResult for patch fields should be used
+    # The TaskResult is created with defaults if not patched.
+    assert summary['patched_attempted'] is False # Because self_evolver was None
+    assert summary['patch_suggested_content'] is None
+    assert summary['patch_applied_successfully'] is None
+    assert summary['success_after_patch'] is None
+
+
+async def test_run_round_initial_success_no_patch_attempt(orchestrator, mock_julius_agent, mock_self_evolver):
+    """Test that patching is not attempted if task is initially successful."""
+    task_content = "successful_task"
+    orchestrator.add_tasks([task_content])
+    assert orchestrator.self_evolver is mock_self_evolver
+
+
+    mock_julius_agent.process_tasks.return_value = [
+        TaskResult(success=True, details="Initial success", task_content=task_content)
+    ]
+
+    await orchestrator.run_round()
+
+    mock_julius_agent.process_tasks.assert_called_once_with([task_content])
+    # Check against the instance of evolver used by orchestrator
+    orchestrator.self_evolver.generate_patch.assert_not_called()
+    orchestrator.self_evolver.apply_patch.assert_not_called()
+
+    metric = orchestrator.metrics_history[0]
+    assert metric['successful_tasks_count'] == 1
+    assert metric['failed_tasks_count'] == 0
+
+    summary = metric['results_summary'][0]
+    assert summary['success'] is True
+    assert summary['details'] == "Initial success"
+    # These fields should reflect that no patching was done or attempted
+    # The TaskResult is created with defaults.
+    assert summary['patched_attempted'] is False
+    assert summary['patch_suggested_content'] is None
+    assert summary['patch_applied_successfully'] is None
+    assert summary['success_after_patch'] is None
+    assert summary['details_after_patch'] is None
+
+# Ensure the orchestrator fixture correctly injects the mock_self_evolver
+# The `orchestrator` fixture has been updated to patch `src.orchestrator.task_orchestrator.SelfEvolver`
+# so that the TaskOrchestrator instance uses the provided `mock_self_evolver`.
+# The assertion `assert instance.self_evolver == mock_self_evolver` in the fixture helps confirm this.
+# If `src.orchestrator.task_orchestrator.SelfEvolver` is `None` (due to import failure in actual code),
+# then `instance.self_evolver` will be `None`. The test `test_run_round_no_self_evolver` covers this.
+# For other autopatching tests, we assume `instance.self_evolver` is the `mock_self_evolver`.
+# The fixture's patch ensures this by making `src.orchestrator.task_orchestrator.SelfEvolver` (the class)
+# return `mock_self_evolver` (the instance) when called.

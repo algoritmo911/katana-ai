@@ -1,7 +1,17 @@
 import time
 import json
 import os
-from typing import List, Any, NamedTuple, Dict
+import logging # Added for logging
+from typing import List, Any, NamedTuple, Dict, Optional # Added Optional
+
+# Attempt to import SelfEvolver, handling potential ImportError
+try:
+    from katana.self_evolve import SelfEvolver
+except ImportError:
+    print("WARNING: katana.self_evolve.SelfEvolver could not be imported. Auto-patching will be disabled.")
+    SelfEvolver = None
+
+logger = logging.getLogger(__name__) # Added logger
 
 # Forward declaration for JuliusAgent
 class JuliusAgent:
@@ -10,8 +20,15 @@ class JuliusAgent:
 
 class TaskResult(NamedTuple):
     success: bool
-    details: str
+    details: str # This can be a simple string or a JSON string with more structured info
     task_content: str
+    # New fields for auto-patching information
+    patched_attempted: bool = False
+    patch_suggested_content: Optional[str] = None
+    patch_applied_successfully: Optional[bool] = None
+    success_after_patch: Optional[bool] = None
+    details_after_patch: Optional[str] = None
+
 
 class TaskOrchestrator:
     def __init__(self, agent: JuliusAgent, batch_size: int = 3, max_batch: int = 10, metrics_log_file: str = "orchestrator_log.json"):
@@ -20,8 +37,16 @@ class TaskOrchestrator:
         self.min_batch_size = 1
         self.max_batch = max_batch
         self.task_queue: List[str] = []
-        self.metrics_history: List[Dict[str, Any]] = [] # Renamed from self.metrics to avoid confusion with a single metric entry
+        self.metrics_history: List[Dict[str, Any]] = []
         self.metrics_log_file = metrics_log_file
+
+        if SelfEvolver:
+            self.self_evolver = SelfEvolver()
+            logger.info("SelfEvolver initialized for auto-patching.")
+        else:
+            self.self_evolver = None
+            logger.warning("SelfEvolver not available. Auto-patching will be disabled.")
+
         self._initialize_metrics_log_file()
 
     def _initialize_metrics_log_file(self):
@@ -84,35 +109,134 @@ class TaskOrchestrator:
             return
 
         start_time = time.time()
-        results: List[TaskResult] = await self.agent.process_tasks(batch_tasks)
-        elapsed_time = time.time() - start_time
+        initial_results: List[TaskResult] = await self.agent.process_tasks(batch_tasks)
+        elapsed_time = time.time() - start_time # Initial processing time
 
-        successful_tasks_count = sum(1 for r in results if r.success)
-        failed_tasks_count = len(results) - successful_tasks_count
-        success_rate = (successful_tasks_count / len(results)) if results else 0.0
+        processed_results: List[TaskResult] = []
+
+        for i, initial_res in enumerate(initial_results):
+            task_content = batch_tasks[i] # Assuming initial_results matches order of batch_tasks
+            current_res = initial_res
+
+            if not current_res.success and self.self_evolver:
+                logger.info(f"Task '{task_content}' failed. Attempting auto-patching. Error: {current_res.details}")
+                patch_suggested_content = self.self_evolver.generate_patch(current_res.details)
+
+                if patch_suggested_content:
+                    logger.info(f"Patch suggested for task '{task_content}':\n{patch_suggested_content}")
+                    patch_applied_successfully = self.self_evolver.apply_patch(patch_suggested_content)
+                    logger.info(f"Patch application for task '{task_content}' was: {'successful' if patch_applied_successfully else 'failed'}")
+
+                    if patch_applied_successfully:
+                        # Re-verify the task
+                        logger.info(f"Re-verifying task '{task_content}' after patch application.")
+                        # This is a critical part: re-processing a single task.
+                        # We expect process_tasks to return a list, so we take the first element.
+                        # Ensure agent.process_tasks can handle a single task list and returns TaskResult objects.
+                        retry_results: List[TaskResult] = await self.agent.process_tasks([task_content])
+                        if retry_results:
+                            retry_res = retry_results[0]
+                            processed_results.append(TaskResult(
+                                success=retry_res.success, # Final success is success after patch
+                                details=current_res.details, # Original error details
+                                task_content=task_content,
+                                patched_attempted=True,
+                                patch_suggested_content=patch_suggested_content,
+                                patch_applied_successfully=True,
+                                success_after_patch=retry_res.success,
+                                details_after_patch=retry_res.details
+                            ))
+                        else: # Should not happen if agent behaves
+                            logger.error(f"No result returned after re-verifying task '{task_content}'. Treating as failure after patch.")
+                            processed_results.append(TaskResult(
+                                success=False, # Failed after patch attempt
+                                details=current_res.details,
+                                task_content=task_content,
+                                patched_attempted=True,
+                                patch_suggested_content=patch_suggested_content,
+                                patch_applied_successfully=True, # Patch was applied
+                                success_after_patch=False,
+                                details_after_patch="Error: No result from agent on re-verification."
+                            ))
+                    else: # Patch application failed
+                        processed_results.append(TaskResult(
+                            success=False, # Still False as patch application failed
+                            details=current_res.details,
+                            task_content=task_content,
+                            patched_attempted=True,
+                            patch_suggested_content=patch_suggested_content,
+                            patch_applied_successfully=False,
+                            success_after_patch=None, # No re-verification attempted
+                            details_after_patch=None
+                        ))
+                else: # No patch suggested
+                    logger.info(f"No patch suggested for task '{task_content}'.")
+                    processed_results.append(TaskResult(
+                        success=False, # Still False
+                        details=current_res.details,
+                        task_content=task_content,
+                        patched_attempted=True, # Attempted to generate
+                        patch_suggested_content=None,
+                        patch_applied_successfully=None,
+                        success_after_patch=None,
+                        details_after_patch=None
+                    ))
+            else: # Task was initially successful, or self_evolver is not available, or auto-patching was not attempted for other reasons
+                # Ensure all fields are present in the final stored result, using defaults for patch-related fields
+                processed_results.append(TaskResult(
+                    success=current_res.success,
+                    details=current_res.details,
+                    task_content=task_content, # Use task_content from the loop context
+                    patched_attempted=getattr(current_res, 'patched_attempted', False), # Keep if already set, else False
+                    patch_suggested_content=getattr(current_res, 'patch_suggested_content', None),
+                    patch_applied_successfully=getattr(current_res, 'patch_applied_successfully', None),
+                    success_after_patch=getattr(current_res, 'success_after_patch', None),
+                    details_after_patch=getattr(current_res, 'details_after_patch', None)
+                ))
+
+        # Recalculate success based on final outcomes
+        successful_tasks_count = sum(1 for r in processed_results if r.success) # Final success
+        failed_tasks_count = len(processed_results) - successful_tasks_count
+        success_rate = (successful_tasks_count / len(processed_results)) if processed_results else 0.0
+
+        total_elapsed_time = time.time() - start_time # Total time including patching attempts
+
+        # Prepare results_summary with all fields from TaskResult
+        results_summary_list = []
+        for r in processed_results:
+            results_summary_list.append({
+                'task': r.task_content,
+                'success': r.success, # Final success
+                'details': r.details, # Original details
+                'patched_attempted': r.patched_attempted,
+                'patch_suggested_content': r.patch_suggested_content,
+                'patch_applied_successfully': r.patch_applied_successfully,
+                'success_after_patch': r.success_after_patch,
+                'details_after_patch': r.details_after_patch
+            })
 
         round_metric = {
             'timestamp': time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             'batch_size_at_round_start': self.batch_size,
             'tasks_processed_count': len(batch_tasks),
-            'successful_tasks_count': successful_tasks_count,
-            'failed_tasks_count': failed_tasks_count,
-            'success_rate': round(success_rate, 2),
-            'time_taken_seconds': round(elapsed_time, 2),
-            'batch_tasks_content': batch_tasks,
-            'results_summary': [{'task': r.task_content, 'success': r.success, 'details': r.details} for r in results]
+            'successful_tasks_count': successful_tasks_count, # Final successful count
+            'failed_tasks_count': failed_tasks_count, # Final failed count
+            'success_rate': round(success_rate, 2), # Final success rate
+            'time_taken_seconds': round(total_elapsed_time, 2),
+            'batch_tasks_content': batch_tasks, # Original tasks for this round
+            'results_summary': results_summary_list
         }
 
         self.metrics_history.append(round_metric)
-        self._log_metric_to_file(round_metric) # Log this round's metric to file
+        self._log_metric_to_file(round_metric)
 
-        # Adjust batch_size based on results
-        if successful_tasks_count == len(results) and len(results) > 0:
+        # Adjust batch_size based on final results
+        if successful_tasks_count == len(processed_results) and len(processed_results) > 0:
             self.batch_size = min(self.batch_size + 1, self.max_batch)
-        elif failed_tasks_count > 1:
+        elif failed_tasks_count > 1: # Consider adjusting based on initial failures vs. final failures
             self.batch_size = max(self.min_batch_size, self.batch_size - 1)
 
-        print(f"Round completed. New Batch_size: {self.batch_size}. Processed: {len(batch_tasks)}. Success: {successful_tasks_count}. Failed: {failed_tasks_count}. Time: {elapsed_time:.2f}s. Success Rate: {success_rate:.0%}")
+        print(f"Round completed. New Batch_size: {self.batch_size}. Processed: {len(batch_tasks)}. Final Success: {successful_tasks_count}. Final Failed: {failed_tasks_count}. Time: {total_elapsed_time:.2f}s. Final Success Rate: {success_rate:.0%}")
 
     def get_status(self) -> Dict[str, Any]:
         """Возвращает текущий статус и историю последних 10 раундов из памяти."""
