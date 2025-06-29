@@ -518,3 +518,34 @@ def get_status(args):
     except Exception as e_get_status_unexpected:
         print(f"An unexpected error occurred while reading status: {e_get_status_unexpected}")
         print(f"Traceback:\n{traceback.format_exc()}")
+
+@trace_command
+def simulate_failure_command(args):
+    """
+    Simulates a failure condition for the self-healing mechanism to detect.
+    This command will log a critical error message.
+    The self-healing daemon (if running) should pick this up.
+    """
+    print("Simulating a failure condition for self-heal...")
+    # Log a critical error message that the daemon might be configured to detect
+    # For demonstration, we'll just print a message to the daemon's log.
+    # A more integrated approach would be to write to a specific error file
+    # or trigger a condition the daemon actively monitors.
+
+    log_message = f"{datetime.now().isoformat()} - CRITICAL: Simulated failure triggered by CLI command.\n"
+    try:
+        # Attempt to append to the main daemon log file
+        with open(LOG_FILE, "a") as f_log:
+            f_log.write(log_message)
+        print(f"Simulated critical error written to {LOG_FILE}")
+        print("If the self-heal daemon is running and configured to monitor this log, it should react.")
+    except IOError as e:
+        print(f"Error writing simulated failure to log file {LOG_FILE}: {e}")
+        print("Please ensure the daemon's log path is accessible or the daemon is running to create it.")
+    except Exception as e_general:
+        print(f"An unexpected error occurred during failure simulation: {e_general}")
+
+    # Additionally, could update status file to 'error' if that's a trigger
+    # This is a simplified simulation. A real one might corrupt a file,
+    # stop a dependent service, or send a specific signal.
+    # For now, logging is a direct way to inject a detectable event.

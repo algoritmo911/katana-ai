@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from katana.cli import self_heal
 from katana.cli import trader # Added import for trader module
+from katana.cli import misc # Added import for misc module
 
 def main():
     parser = argparse.ArgumentParser(description="Katana CLI tool.")
@@ -34,6 +35,10 @@ def main():
     # self-heal status
     status_parser = self_heal_subparsers.add_parser("status", help="Get the status of the self-healing daemon.")
     status_parser.set_defaults(func=self_heal.get_status)
+
+    # self-heal simulate-failure
+    simulate_failure_parser = self_heal_subparsers.add_parser("simulate-failure", help="Simulate a failure for the self-healing daemon.")
+    simulate_failure_parser.set_defaults(func=self_heal.simulate_failure_command)
 
     # self-heal verify <task_id>
     # verify_parser = self_heal_subparsers.add_parser("verify", help="Manually verify a specific task.")
@@ -65,6 +70,15 @@ def main():
     # trader reset
     trader_reset_parser = trader_subparsers.add_parser("reset", help="Reset the Katana Trader to a default state.")
     trader_reset_parser.set_defaults(func=trader.reset_trader)
+
+    # trader dashboard
+    trader_dashboard_parser = trader_subparsers.add_parser("dashboard", help="Display trader dashboard.")
+    trader_dashboard_parser.set_defaults(func=trader.display_dashboard)
+
+    # Misc module - say command
+    say_parser = subparsers.add_parser("say", help="Misc commands like say.")
+    say_parser.add_argument("--text", type=str, required=True, help="Text to say.")
+    say_parser.set_defaults(func=misc.say)
 
     args = parser.parse_args()
     args.func(args)

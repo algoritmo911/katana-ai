@@ -228,6 +228,90 @@ def reset_trader(args):
     print("Katana Trader reset successfully (Simulated).")
     return {"status": "reset_complete", "message": "Trader reset to default state."}
 
+@trace_command
+def display_dashboard(args):
+    """
+    Displays a simple text-based dashboard for the Katana Trader.
+    """
+    print("--- Katana Trader Dashboard ---")
+    status_data = _read_status_file()
+
+    if not status_data:
+        print("Trader status not available. No status file found.")
+        pid_from_file = _read_pid_file()
+        if pid_from_file:
+            print(f"A PID file exists ({TRADER_PID_FILE}) for PID {pid_from_file}, but status details are missing.")
+        else:
+            print(f"No PID file ({TRADER_PID_FILE}) found either. Trader is likely stopped or has never run.")
+        return
+
+    status = status_data.get("status", "Unknown")
+    pid = status_data.get("pid", "N/A")
+    start_time_ts = status_data.get("start_time")
+
+    print(f"Status: {status.capitalize()}")
+    print(f"PID: {pid}")
+
+    if start_time_ts and status == "active":
+        try:
+            start_dt = datetime.fromtimestamp(start_time_ts)
+            uptime_seconds = (datetime.now() - start_dt).total_seconds()
+            uptime_str = time.strftime("%H:%M:%S", time.gmtime(uptime_seconds)) if uptime_seconds > 0 else "0s"
+            days = int(uptime_seconds // (24 * 3600))
+            if days > 0:
+                uptime_str = f"{days}d {uptime_str}"
+
+            print(f"  Started: {start_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"  Uptime: {uptime_str}")
+        except Exception as e:
+            print(f"  Error parsing start time or calculating uptime: {e}")
+    elif status == "stopped" and "stop_time" in status_data:
+        try:
+            stop_dt = datetime.fromtimestamp(status_data['stop_time'])
+            print(f"  Stopped: {stop_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+        except Exception as e:
+            print(f"  Error parsing stop time: {e}")
+
+
+    exchange = status_data.get("exchange", "N/A")
+    strategy = status_data.get("strategy", "N/A")
+    balance = status_data.get("balance", {})
+
+    print(f"Exchange: {exchange}")
+    print(f"Strategy: {strategy}")
+    print(f"Balance: {json.dumps(balance) if balance else 'N/A'}")
+
+    # Simplified log display: show last few lines from command_telemetry.log related to trader
+    # This is a basic approach. A more robust solution would use a dedicated trader log.
+    print("\n--- Recent Activity (from command_telemetry.log) ---")
+    try:
+        log_file_path = "logs/command_telemetry.log" # Assuming this is the correct path from telemetry_logger
+        if os.path.exists(log_file_path):
+            trader_log_lines = []
+            with open(log_file_path, "r") as f_log:
+                for line in f_log:
+                    try:
+                        log_entry = json.loads(line)
+                        if "trader" in log_entry.get("command_name", "").lower():
+                            trader_log_lines.append(
+                                f"[{log_entry.get('timestamp', '')}] {log_entry.get('command_name', '')} - Success: {log_entry.get('success', 'N/A')}"
+                            )
+                    except json.JSONDecodeError:
+                        continue # Skip malformed lines
+
+            if trader_log_lines:
+                for log_line in trader_log_lines[-5:]: # Display last 5 relevant entries
+                    print(log_line)
+            else:
+                print("No trader-related activity found in telemetry log.")
+        else:
+            print(f"Telemetry log file not found at {log_file_path}")
+    except Exception as e:
+        print(f"Error reading or parsing telemetry log: {e}")
+
+    print("\n--- End of Dashboard ---")
+
+
 if __name__ == '__main__':
     # Basic testing (not part of the CLI integration yet)
     class Args: pass
