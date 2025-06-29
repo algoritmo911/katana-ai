@@ -18,9 +18,10 @@ AGENT_LOG_PREFIX = "[KatanaAgent_MCP_v1]"
 agent_memory_state = {} # In-memory representation of katana_memory.json
 
 # --- Logging ---
-def log_event(event_message, level="info"):
+def log_event(event_message, level="info", initiator=None):
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    log_entry_line = f"[{timestamp}] {level.upper()}: {AGENT_LOG_PREFIX} {event_message}\n"
+    initiator_prefix = f"[Initiator: {initiator}] " if initiator else ""
+    log_entry_line = f"[{timestamp}] {level.upper()}: {initiator_prefix}{AGENT_LOG_PREFIX} {event_message}\n"
     try:
         log_dir = os.path.dirname(EVENTS_LOG_FILE)
         if log_dir and not os.path.exists(log_dir): # Ensure directory exists for the log file
@@ -126,9 +127,9 @@ def initialize_katana_files():
 # Note: agent_memory_state is the global dictionary for memory.
 # log_event is the existing logging function.
 
-def handle_agent_get_config(command_params=None):
+def handle_agent_get_config(command_params=None, initiator=None):
     # command_params is included for consistency, though not used in this version
-    log_event("Processing 'get_agent_config' command internally.", "info")
+    log_event("Processing 'get_agent_config' command internally.", "info", initiator=initiator)
     config_data = {
         "agent_version": "1.0.0-agent", # Distinct from UI backend version
         "status": "online", # Placeholder
@@ -151,55 +152,56 @@ def handle_agent_get_config(command_params=None):
     # Ensure 'katana_config' key is used as expected by UI (KatanaStatus.js)
     agent_memory_state["katana_config"] = config_data
     save_memory() # Persist the updated memory
-    log_event("Agent configuration updated in agent_memory_state['katana_config'] and saved.", "info")
+    log_event("Agent configuration updated in agent_memory_state['katana_config'] and saved.", "info", initiator=initiator)
     return config_data
 
-def handle_agent_reload_settings(command_params=None):
-    log_event("Processing 'reload_core_settings' command internally.", "info")
+def handle_agent_reload_settings(command_params=None, initiator=None):
+    log_event("Processing 'reload_core_settings' command internally.", "info", initiator=initiator)
     # Placeholder action: re-initialize core files, as discussed.
     try:
         initialize_katana_files() # This re-checks/re-creates files if needed
-        log_event("Core settings reload attempted (file initialization re-triggered).", "info")
+        log_event("Core settings reload attempted (file initialization re-triggered).", "info", initiator=initiator)
         agent_memory_state["last_settings_reload_status"] = "success"
         agent_memory_state["last_settings_reload_time_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         save_memory()
         return {"status": "success", "message": "Core settings reload process initiated (file initialization re-triggered)."}
     except Exception as e:
-        log_event(f"Error during settings reload attempt: {str(e)}", "error")
+        log_event(f"Error during settings reload attempt: {str(e)}", "error", initiator=initiator)
         agent_memory_state["last_settings_reload_status"] = "error"
         agent_memory_state["last_settings_reload_error"] = str(e)
         agent_memory_state["last_settings_reload_time_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         save_memory()
         return {"status": "error", "message": f"Failed to reload settings: {str(e)}"}
 
-def handle_agent_ping_received(command_params=None):
-    log_event("Processing 'ping_received' command internally.", "info")
+def handle_agent_ping_received(command_params=None, initiator=None):
+    log_event("Processing 'ping_received' command internally.", "info", initiator=initiator)
     agent_memory_state["last_agent_ping_processed_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     if command_params:
-        log_event(f"Ping command parameters: {command_params}", "debug")
+        log_event(f"Ping command parameters: {command_params}", "debug", initiator=initiator)
     save_memory()
     return {"status": "success", "message": "Ping processed by agent."}
 
 # --- Stub for future command processing loop ---
-def process_agent_command(command_object):
+def process_agent_command(command_object, initiator=None): # Added initiator
     action = command_object.get("action")
     params = command_object.get("parameters")
     command_id = command_object.get("command_id", "unknown_id")
 
-    log_event(f"Agent attempting to process command: {command_id}, Action: {action}", "info")
+    # Log with initiator if available, otherwise log as system/general
+    log_event(f"Agent attempting to process command: {command_id}, Action: {action}", "info", initiator=initiator)
     result = {"status": "unknown_action", "message": f"Action '{action}' not recognized by agent."}
 
     if action == "get_agent_config":
-        get_config_result = handle_agent_get_config(params)
+        get_config_result = handle_agent_get_config(params, initiator=initiator)
         result = {"status": "success", "data": get_config_result}
     elif action == "reload_core_settings":
-        result = handle_agent_reload_settings(params)
+        result = handle_agent_reload_settings(params, initiator=initiator)
     elif action == "ping_received_from_ui_backend":
-        result = handle_agent_ping_received(params)
+        result = handle_agent_ping_received(params, initiator=initiator)
     else:
-        log_event(f"Agent received unknown action: '{action}' for command_id: {command_id}", "warning")
+        log_event(f"Agent received unknown action: '{action}' for command_id: {command_id}", "warning", initiator=initiator)
 
-    log_event(f"Agent processing finished for command: {command_id}. Result status: {result.get('status')}", "info")
+    log_event(f"Agent processing finished for command: {command_id}. Result status: {result.get('status')}", "info", initiator=initiator)
     return result
 
 if __name__ == '__main__':
@@ -224,17 +226,27 @@ if __name__ == '__main__':
 
             for cmd in commands_list:
                 if not cmd.get("processed", False):
-                    log_event(f"New command found: {cmd.get('command_id')}, Action: {cmd.get('action')}", "info")
+                    command_source = cmd.get("source", "unknown")
+                    initiator_log_tag = "unknown"
+                    if "katana_dashboard_ui" in command_source:
+                        initiator_log_tag = "ui"
+                    elif "katana" in command_source: # Covers "katana" and "katana_internal"
+                        initiator_log_tag = "katana"
+
+                    log_event(f"New command found: {cmd.get('command_id')}, Action: {cmd.get('action')}", "info", initiator=initiator_log_tag)
                     try:
-                        result = process_agent_command(cmd)
+                        # Pass the initiator to process_agent_command if its sub-handlers need to log with it
+                        # For now, process_agent_command itself doesn't take initiator, but its internal calls to log_event could be updated
+                        # Or, more simply, ensure all logs directly related to this cmd in this loop use the initiator_log_tag
+                        result = process_agent_command(cmd, initiator=initiator_log_tag) # Pass initiator
                         cmd["processed"] = True
                         cmd["processed_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                         cmd["status_after_execution"] = result.get("status")
                         cmd["result"] = result.get("data") if result.get("status") == "success" else result.get("message")
-                        log_event(f"Command {cmd.get('command_id')} processed. Status: {cmd['status_after_execution']}", "info")
+                        log_event(f"Command {cmd.get('command_id')} processed. Status: {cmd['status_after_execution']}", "info", initiator=initiator_log_tag)
                     except Exception as e:
                         error_msg = f"Error processing command {cmd.get('command_id')}: {str(e)}"
-                        log_event(error_msg, "error")
+                        log_event(error_msg, "error", initiator=initiator_log_tag)
                         cmd["processed"] = True # Mark as processed to avoid reprocessing a failing command
                         cmd["processed_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                         cmd["status_after_execution"] = "error"
@@ -245,6 +257,7 @@ if __name__ == '__main__':
                     updated_commands_list.append(cmd)
 
             if new_command_processed_in_this_cycle:
+                # For this general log, initiator isn't specific to one command, so we omit it or use a general one.
                 if save_commands(updated_commands_list):
                     log_event("Successfully updated commands file after processing.", "debug")
                 else:
