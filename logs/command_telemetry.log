@@ -1,0 +1,8 @@
+{"timestamp": "2025-06-29T07:07:52.870736Z", "level": "INFO", "name": "katana.telemetry", "message": "This is an informational message."}
+{"timestamp": "2025-06-29T07:07:52.871193Z", "level": "WARNING", "name": "katana.telemetry", "message": "This is a warning message."}
+{"timestamp": "2025-06-29T07:07:52.871281Z", "level": "ERROR", "name": "katana.telemetry", "message": "This is an error message.", "custom_field": "custom_value"}
+{"timestamp": "2025-06-29T07:07:52.871347Z", "level": "ERROR", "name": "katana.telemetry", "message": "An exception occurred:", "exception": "Traceback (most recent call last):\n  File \"/app/katana/logging/telemetry_logger.py\", line 62, in <module>\n    1 / 0\n    ~~^~~\nZeroDivisionError: division by zero"}
+{"timestamp": "2025-06-29T07:08:16.924728+00:00", "level": "INFO", "name": "katana.telemetry", "message": "This is an informational message."}
+{"timestamp": "2025-06-29T07:08:16.924870+00:00", "level": "WARNING", "name": "katana.telemetry", "message": "This is a warning message."}
+{"timestamp": "2025-06-29T07:08:16.924936+00:00", "level": "ERROR", "name": "katana.telemetry", "message": "This is an error message.", "custom_field": "custom_value"}
+{"timestamp": "2025-06-29T07:08:16.924995+00:00", "level": "ERROR", "name": "katana.telemetry", "message": "An exception occurred:", "exception": "Traceback (most recent call last):\n  File \"/app/katana/logging/telemetry_logger.py\", line 62, in <module>\n    1 / 0\n    ~~^~~\nZeroDivisionError: division by zero"}
