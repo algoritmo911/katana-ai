@@ -16,6 +16,11 @@ KATANA_MEMORY_JSON = os.path.join(KATANA_BASE_DIR, "katana_memory.json")
 SERVER_START_TIME = time.time()
 AGENT_VERSION = "0.1.1-ui-backend" # Updated version placeholder
 
+# --- Global State for UI Server ---
+# This dictionary will store command_id: client_sid mappings
+# to route asynchronous agent responses back to the correct UI client.
+tracked_commands = {}
+
 # Helper function to get current process memory/cpu
 def get_process_metrics():
     process = psutil.Process(os.getpid())
@@ -91,16 +96,20 @@ def handle_send_command(data):
         current_commands.append(command_to_add)
         with open(KATANA_COMMANDS_JSON, 'w') as f:
             json.dump(current_commands, f, indent=2)
-        print(f"socket_handlers: Command {command_to_add['command_id']} added to {KATANA_COMMANDS_JSON}")
-        emit('command_response', {
+
+        command_id = command_to_add['command_id']
+        tracked_commands[command_id] = client_sid
+        print(f"socket_handlers: Command {command_id} added to {KATANA_COMMANDS_JSON} and now tracked for SID {client_sid}")
+
+        emit('command_pending', { # Changed event name from 'command_response'
             'success': True,
-            'message': f'Command {command_to_add["command_id"]} sent to Katana.',
-            'command_id': command_to_add['command_id']
+            'message': f'Command {command_id} sent to Katana and is pending execution.',
+            'command_id': command_id
         }, room=client_sid)
     except Exception as e:
         error_message = f"Error writing command to {KATANA_COMMANDS_JSON}: {e}"
         print(f"socket_handlers: {error_message}")
-        emit('command_response', {'success': False, 'message': error_message}, room=client_sid)
+        emit('command_response', {'success': False, 'message': error_message}, room=client_sid) # Keep 'command_response' for immediate errors
 
 def handle_ping_agent(data): # Renamed from placeholder
     client_sid = request.sid

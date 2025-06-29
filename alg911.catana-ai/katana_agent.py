@@ -1,7 +1,7 @@
 import json
 import os
 import datetime
-# import time # Not used
+import time # Now used for the main loop
 import uuid # For generating command IDs if needed
 # import traceback # Not used
 
@@ -212,3 +212,53 @@ if __name__ == '__main__':
     # with open(COMMANDS_FILE, 'w') as f: f.write("corrupted")
     # initialize_katana_files() # Should detect and fix
     # print(load_commands())
+
+    # --- Main Command Processing Loop ---
+    log_event("Starting Katana Agent command processing loop.", "info")
+    try:
+        while True:
+            # time.sleep(5) # Check for commands every 5 seconds
+            commands_list = load_commands()
+            updated_commands_list = []
+            new_command_processed_in_this_cycle = False
+
+            for cmd in commands_list:
+                if not cmd.get("processed", False):
+                    log_event(f"New command found: {cmd.get('command_id')}, Action: {cmd.get('action')}", "info")
+                    try:
+                        result = process_agent_command(cmd)
+                        cmd["processed"] = True
+                        cmd["processed_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                        cmd["status_after_execution"] = result.get("status")
+                        cmd["result"] = result.get("data") if result.get("status") == "success" else result.get("message")
+                        log_event(f"Command {cmd.get('command_id')} processed. Status: {cmd['status_after_execution']}", "info")
+                    except Exception as e:
+                        error_msg = f"Error processing command {cmd.get('command_id')}: {str(e)}"
+                        log_event(error_msg, "error")
+                        cmd["processed"] = True # Mark as processed to avoid reprocessing a failing command
+                        cmd["processed_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                        cmd["status_after_execution"] = "error"
+                        cmd["result"] = error_msg
+                    updated_commands_list.append(cmd)
+                    new_command_processed_in_this_cycle = True
+                else:
+                    updated_commands_list.append(cmd)
+
+            if new_command_processed_in_this_cycle:
+                if save_commands(updated_commands_list):
+                    log_event("Successfully updated commands file after processing.", "debug")
+                else:
+                    log_event("Failed to update commands file after processing.", "error")
+
+            # Add a small delay to prevent high CPU usage from constant file reading
+            # This also allows some time for file writes to complete if multiple commands are processed quickly.
+            # More sophisticated event-driven file watching (e.g., watchdog) could be used here
+            # for better responsiveness, but simple polling is often sufficient.
+            time.sleep(1) # Check every 1 second
+
+    except KeyboardInterrupt:
+        log_event("Katana Agent command processing loop stopped by user.", "info")
+    except Exception as e:
+        log_event(f"Katana Agent command processing loop encountered a critical error: {str(e)}", "critical")
+        # Optionally, re-raise the exception if this loop runs in a context where it should be caught higher up
+        # raise
