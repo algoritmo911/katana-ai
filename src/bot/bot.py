@@ -7,6 +7,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from katana.self_evolve import SelfEvolver
+from katana.decorators import trace_command # Import the decorator
 
 # Configure basic logging
 logging.basicConfig(
@@ -69,6 +70,7 @@ class SimpleBot:
         self.logger.info(f"SelfEvolver instance: {self.self_evolver}")
 
 
+    @trace_command
     def handle_self_evolve(self, update: Update, context: CallbackContext):
         """Handles the /selfevolve command."""
         if not context.args:

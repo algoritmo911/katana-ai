@@ -2,6 +2,7 @@ import os
 import json
 import time
 from datetime import datetime
+from katana.decorators import trace_command # Import the decorator
 
 TRADER_PID_FILE = "/tmp/katana_trader.pid"
 TRADER_STATUS_FILE = "/tmp/katana_trader_status.json"
@@ -57,6 +58,7 @@ def _read_status_file():
         print(f"Error: Could not read status file {TRADER_STATUS_FILE}. {e}")
         return None
 
+@trace_command
 def start_trader(args):
     print("Attempting to start Katana Trader...")
     pid = _read_pid_file()
@@ -86,6 +88,7 @@ def start_trader(args):
     print(f"Katana Trader started successfully (Simulated PID: {trader_pid}).")
     print(f"Exchange: {status_data['exchange']}, Strategy: {status_data['strategy']}")
 
+@trace_command
 def get_trader_status(args):
     print("Getting Katana Trader status...")
     pid = _read_pid_file()
@@ -151,6 +154,7 @@ def get_trader_status(args):
             print(f"  Could not parse stop_time: {e}")
 
 
+@trace_command
 def stop_trader(args):
     print("Attempting to stop Katana Trader...")
     pid = _read_pid_file()

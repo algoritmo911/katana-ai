@@ -6,6 +6,7 @@ import signal
 import json # For status file later
 from datetime import datetime # For status output
 import traceback # For logging tracebacks
+from katana.decorators import trace_command # Import the decorator
 
 # Attempt to import post_task_verifier, handle if it's not found during development phases
 try:
@@ -272,6 +273,7 @@ def sighup_handler(signum, frame):
     print("SIGHUP handling complete (simulated reload).")
 
 
+@trace_command
 def run_daemon(args):
     global health_status_global
     # CLI-facing messages before daemonization
@@ -422,6 +424,7 @@ def run_daemon(args):
     print("Daemon run_daemon function is concluding.")
 
 
+@trace_command
 def get_status(args):
     # Output of this function goes to the CLI user's console.
     print("Getting self-healing daemon status...")

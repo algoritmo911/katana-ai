@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from katana.cli import self_heal
 from katana.cli import trader # Added import for trader module
+from katana.decorators import trace_command # Import the decorator
 
 def main():
     parser = argparse.ArgumentParser(description="Katana CLI tool.")
