@@ -62,6 +62,10 @@ def main():
     trader_stop_parser = trader_subparsers.add_parser("stop", help="Stop the Katana Trader.")
     trader_stop_parser.set_defaults(func=trader.stop_trader)
 
+    # trader reset
+    trader_reset_parser = trader_subparsers.add_parser("reset", help="Reset the Katana Trader to a default state.")
+    trader_reset_parser.set_defaults(func=trader.reset_trader)
+
     args = parser.parse_args()
     args.func(args)
 

@@ -2,6 +2,7 @@ import os
 import json
 import time
 from datetime import datetime
+from katana.decorators.trace_command import trace_command # Import the decorator
 
 TRADER_PID_FILE = "/tmp/katana_trader.pid"
 TRADER_STATUS_FILE = "/tmp/katana_trader_status.json"
@@ -44,6 +45,9 @@ def _update_status_file(status_data):
     except IOError as e:
         print(f"Error writing status to {TRADER_STATUS_FILE}: {e}")
 
+# Note: _read_status_file, _write_pid_file etc. are internal helpers, not commands.
+# No telemetry needed for them unless explicitly desired for deep debugging.
+
 def _read_status_file():
     try:
         with open(TRADER_STATUS_FILE, "r") as f:
@@ -57,6 +61,7 @@ def _read_status_file():
         print(f"Error: Could not read status file {TRADER_STATUS_FILE}. {e}")
         return None
 
+@trace_command
 def start_trader(args):
     print("Attempting to start Katana Trader...")
     pid = _read_pid_file()
@@ -86,6 +91,7 @@ def start_trader(args):
     print(f"Katana Trader started successfully (Simulated PID: {trader_pid}).")
     print(f"Exchange: {status_data['exchange']}, Strategy: {status_data['strategy']}")
 
+@trace_command
 def get_trader_status(args):
     print("Getting Katana Trader status...")
     pid = _read_pid_file()
@@ -151,6 +157,7 @@ def get_trader_status(args):
             print(f"  Could not parse stop_time: {e}")
 
 
+@trace_command
 def stop_trader(args):
     print("Attempting to stop Katana Trader...")
     pid = _read_pid_file()
@@ -185,6 +192,41 @@ def stop_trader(args):
         })
 
     print("Katana Trader stopped successfully (Simulated).")
+
+@trace_command
+def reset_trader(args):
+    """
+    Resets the trader to a default state.
+    For now, this is a placeholder and simulates a reset action.
+    It will stop the trader if running and clear status.
+    """
+    print("Attempting to reset Katana Trader...")
+
+    # First, try to stop the trader if it's running
+    pid = _read_pid_file()
+    status_data = _read_status_file()
+
+    if pid or (status_data and status_data.get("status") == "active"):
+        print("Trader appears to be running or active, stopping it first...")
+        stop_trader(args) # Call existing stop_trader function
+    else:
+        print("Trader is not running. Proceeding with reset.")
+
+    # Clear status file content beyond just "stopped"
+    if os.path.exists(TRADER_STATUS_FILE):
+        print(f"Clearing trader status file: {TRADER_STATUS_FILE}")
+        _update_status_file({
+            "status": "reset",
+            "reset_time": time.time(),
+            "notes": "Trader has been reset."
+        })
+
+    # Ensure PID file is removed if stop_trader didn't catch it (e.g., if only status file existed)
+    if os.path.exists(TRADER_PID_FILE):
+        _remove_pid_file()
+
+    print("Katana Trader reset successfully (Simulated).")
+    return {"status": "reset_complete", "message": "Trader reset to default state."}
 
 if __name__ == '__main__':
     # Basic testing (not part of the CLI integration yet)
