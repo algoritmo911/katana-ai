@@ -94,6 +94,20 @@ async def run_orchestrator_loop(orchestrator: TaskOrchestrator):
 
 # --- Main Application Setup ---
 async def main_async_app():
+    # 0. Run Healthcheck
+    from src.healthcheck.healthcheck import run_healthcheck
+    print("Running initial system healthcheck...")
+    health_status, errors = run_healthcheck()
+    if errors:
+        print("!!! Healthcheck FAILED with errors: !!!")
+        for error in errors:
+            print(f"- {error}")
+        # Decide if you want to exit here or just log
+        # For now, let's print a strong warning and continue
+        print("!!! Proceeding with startup despite healthcheck errors. !!!")
+    else:
+        print("System healthcheck PASSED.")
+
     # 1. Initialize Agent
     julius_agent = JuliusAgent()
 
