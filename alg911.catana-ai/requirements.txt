@@ -5,4 +5,5 @@ psutil>=5.0
 pytest>=6.0
 pytest-flask>=1.0
 python-socketio[client]>=5.0
+PyYAML>=5.0 # Added for katana-005
 # Add other specific versions if known or needed

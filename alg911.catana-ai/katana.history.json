@@ -1,1 +1,66 @@
-[]
+[
+  {
+    "command_id": "hist-test-001",
+    "action": "get_agent_config",
+    "parameters": {},
+    "processed_timestamp_utc": "2025-06-30T12:56:17.348717+00:00",
+    "processing_status": "success"
+  },
+  {
+    "command_id": "hist-test-002",
+    "action": "reload_core_settings",
+    "parameters": {},
+    "processed_timestamp_utc": "2025-06-30T12:56:17.350427+00:00",
+    "processing_status": "success"
+  },
+  {
+    "command_id": "hist-test-003",
+    "action": "get_agent_config",
+    "parameters": {
+      "detail": "full"
+    },
+    "processed_timestamp_utc": "2025-06-30T12:56:17.351883+00:00",
+    "processing_status": "success"
+  },
+  {
+    "command_id": "hist-test-004",
+    "action": "get_agent_config",
+    "parameters": {
+      "detail": "summary"
+    },
+    "processed_timestamp_utc": "2025-06-30T12:56:17.353384+00:00",
+    "processing_status": "success"
+  },
+  {
+    "command_id": "hist-test-001",
+    "action": "get_agent_config",
+    "parameters": {},
+    "processed_timestamp_utc": "2025-06-30T12:57:03.598497+00:00",
+    "processing_status": "success"
+  },
+  {
+    "command_id": "hist-test-002",
+    "action": "reload_core_settings",
+    "parameters": {},
+    "processed_timestamp_utc": "2025-06-30T12:57:03.602508+00:00",
+    "processing_status": "success"
+  },
+  {
+    "command_id": "hist-test-003",
+    "action": "get_agent_config",
+    "parameters": {
+      "detail": "full"
+    },
+    "processed_timestamp_utc": "2025-06-30T12:57:03.604315+00:00",
+    "processing_status": "success"
+  },
+  {
+    "command_id": "hist-test-004",
+    "action": "get_agent_config",
+    "parameters": {
+      "detail": "summary"
+    },
+    "processed_timestamp_utc": "2025-06-30T12:57:03.605699+00:00",
+    "processing_status": "success"
+  }
+]

@@ -629,3 +629,127 @@ drwxr-xr-x 2 jules root 4096 Jun 16 08:30 neuro_refueling
 [2025-06-16T13:39:07.184980+00:00] INFO: [KatanaAgent_MCP_v1] Katana data file initialization/verification complete.
 [2025-06-16T13:39:07.185022+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: File initialization complete.
 [2025-06-16T13:39:07.185186+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Current memory state: {"name": "Katana V2"}
+[2025-06-30T12:56:17.341551+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Starting agent initialization and diagnostics...
+[2025-06-30T12:56:17.341850+00:00] INFO: [KatanaAgent_MCP_v1] Initializing/Verifying Katana data files for MCP_v1...
+[2025-06-30T12:56:17.342014+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.commands.json exists and appears valid.
+[2025-06-30T12:56:17.342117+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.history.json exists and appears valid.
+[2025-06-30T12:56:17.342224+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana_memory.json exists and appears valid.
+[2025-06-30T12:56:17.342323+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/sync_status.json exists and appears valid.
+[2025-06-30T12:56:17.342409+00:00] INFO: [KatanaAgent_MCP_v1] Katana data file initialization/verification complete.
+[2025-06-30T12:56:17.342462+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: File initialization complete.
+[2025-06-30T12:56:17.342514+00:00] INFO: [KatanaAgent_MCP_v1] Running startup diagnostics (katana-005)...
+[2025-06-30T12:56:17.343045+00:00] INFO: [KatanaAgent_MCP_v1] Diagnostic [Python Version]: INFO - Running on Python 3.12.11
+[2025-06-30T12:56:17.343130+00:00] INFO: [KatanaAgent_MCP_v1] Diagnostic [Operating System]: INFO - Linux 6.8.0
+[2025-06-30T12:56:17.343197+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Commands File]: OK - File exists and is accessible: /app/alg911.catana-ai/katana.commands.json
+[2025-06-30T12:56:17.343262+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Memory File]: OK - File exists and is accessible: /app/alg911.catana-ai/katana_memory.json
+[2025-06-30T12:56:17.343327+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [History File]: OK - File exists and is accessible: /app/alg911.catana-ai/katana.history.json
+[2025-06-30T12:56:17.343378+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Events Log File]: OK - File exists and is accessible: /app/alg911.catana-ai/katana_events.log
+[2025-06-30T12:56:17.343435+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Sync Status File]: OK - File exists and is accessible: /app/alg911.catana-ai/sync_status.json
+[2025-06-30T12:56:17.343479+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Agent Memory State]: OK - agent_memory_state is loaded (not empty).
+[2025-06-30T12:56:17.343528+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Diagnostic Log Directory]: OK - Directory for diagnostic log exists: /app/alg911.catana-ai
+[2025-06-30T12:56:17.347329+00:00] INFO: [KatanaAgent_MCP_v1] Startup diagnostics successfully written to /app/alg911.catana-ai/diagnostic_log.yaml
+[2025-06-30T12:56:17.347434+00:00] INFO: [KatanaAgent_MCP_v1] Starting scan for outdated commands (katana-001)...
+[2025-06-30T12:56:17.347551+00:00] INFO: [KatanaAgent_MCP_v1] Scan complete. No outdated commands found.
+[2025-06-30T12:56:17.347654+00:00] INFO: [KatanaAgent_MCP_v1] Starting sync status check (katana-002)...
+[2025-06-30T12:56:17.347757+00:00] INFO: [KatanaAgent_MCP_v1] Auto-sync is disabled. Manual sync checks may be required.
+[2025-06-30T12:56:17.347803+00:00] INFO: [KatanaAgent_MCP_v1] Simulating command processing for history generation (katana-003)...
+[2025-06-30T12:56:17.347849+00:00] INFO: [KatanaAgent_MCP_v1] Agent attempting to process command: hist-test-001, Action: get_agent_config
+[2025-06-30T12:56:17.347893+00:00] INFO: [KatanaAgent_MCP_v1] Processing 'get_agent_config' command internally.
+[2025-06-30T12:56:17.348294+00:00] INFO: [KatanaAgent_MCP_v1] [MemorySave] Successfully saved JSON to /app/alg911.catana-ai/katana_memory.json.
+[2025-06-30T12:56:17.348373+00:00] INFO: [KatanaAgent_MCP_v1] Agent configuration updated in agent_memory_state['katana_config'] and saved.
+[2025-06-30T12:56:17.348419+00:00] INFO: [KatanaAgent_MCP_v1] Agent processing finished for command: hist-test-001. Result status: success
+[2025-06-30T12:56:17.348950+00:00] INFO: [KatanaAgent_MCP_v1] [HistorySave] Successfully saved JSON to /app/alg911.catana-ai/katana.history.json.
+[2025-06-30T12:56:17.349025+00:00] DEBUG: [KatanaAgent_MCP_v1] Command hist-test-001 logged to history.
+[2025-06-30T12:56:17.349223+00:00] INFO: [KatanaAgent_MCP_v1] Agent attempting to process command: hist-test-002, Action: reload_core_settings
+[2025-06-30T12:56:17.349276+00:00] INFO: [KatanaAgent_MCP_v1] Processing 'reload_core_settings' command internally.
+[2025-06-30T12:56:17.349317+00:00] INFO: [KatanaAgent_MCP_v1] Initializing/Verifying Katana data files for MCP_v1...
+[2025-06-30T12:56:17.349422+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.commands.json exists and appears valid.
+[2025-06-30T12:56:17.349511+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.history.json exists and appears valid.
+[2025-06-30T12:56:17.349648+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana_memory.json exists and appears valid.
+[2025-06-30T12:56:17.349753+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/sync_status.json exists and appears valid.
+[2025-06-30T12:56:17.349848+00:00] INFO: [KatanaAgent_MCP_v1] Katana data file initialization/verification complete.
+[2025-06-30T12:56:17.349891+00:00] INFO: [KatanaAgent_MCP_v1] Core settings reload attempted (file initialization re-triggered).
+[2025-06-30T12:56:17.350112+00:00] INFO: [KatanaAgent_MCP_v1] [MemorySave] Successfully saved JSON to /app/alg911.catana-ai/katana_memory.json.
+[2025-06-30T12:56:17.350189+00:00] INFO: [KatanaAgent_MCP_v1] Agent processing finished for command: hist-test-002. Result status: success
+[2025-06-30T12:56:17.350613+00:00] INFO: [KatanaAgent_MCP_v1] [HistorySave] Successfully saved JSON to /app/alg911.catana-ai/katana.history.json.
+[2025-06-30T12:56:17.350679+00:00] DEBUG: [KatanaAgent_MCP_v1] Command hist-test-002 logged to history.
+[2025-06-30T12:56:17.350934+00:00] INFO: [KatanaAgent_MCP_v1] Agent attempting to process command: hist-test-003, Action: get_agent_config
+[2025-06-30T12:56:17.351000+00:00] INFO: [KatanaAgent_MCP_v1] Processing 'get_agent_config' command internally.
+[2025-06-30T12:56:17.351452+00:00] INFO: [KatanaAgent_MCP_v1] [MemorySave] Successfully saved JSON to /app/alg911.catana-ai/katana_memory.json.
+[2025-06-30T12:56:17.351720+00:00] INFO: [KatanaAgent_MCP_v1] Agent configuration updated in agent_memory_state['katana_config'] and saved.
+[2025-06-30T12:56:17.351781+00:00] INFO: [KatanaAgent_MCP_v1] Agent processing finished for command: hist-test-003. Result status: success
+[2025-06-30T12:56:17.352245+00:00] INFO: [KatanaAgent_MCP_v1] [HistorySave] Successfully saved JSON to /app/alg911.catana-ai/katana.history.json.
+[2025-06-30T12:56:17.352319+00:00] DEBUG: [KatanaAgent_MCP_v1] Command hist-test-003 logged to history.
+[2025-06-30T12:56:17.352520+00:00] INFO: [KatanaAgent_MCP_v1] Agent attempting to process command: hist-test-004, Action: get_agent_config
+[2025-06-30T12:56:17.352592+00:00] INFO: [KatanaAgent_MCP_v1] Processing 'get_agent_config' command internally.
+[2025-06-30T12:56:17.352977+00:00] INFO: [KatanaAgent_MCP_v1] [MemorySave] Successfully saved JSON to /app/alg911.catana-ai/katana_memory.json.
+[2025-06-30T12:56:17.353195+00:00] INFO: [KatanaAgent_MCP_v1] Agent configuration updated in agent_memory_state['katana_config'] and saved.
+[2025-06-30T12:56:17.353279+00:00] INFO: [KatanaAgent_MCP_v1] Agent processing finished for command: hist-test-004. Result status: success
+[2025-06-30T12:56:17.353607+00:00] INFO: [KatanaAgent_MCP_v1] [HistorySave] Successfully saved JSON to /app/alg911.catana-ai/katana.history.json.
+[2025-06-30T12:56:17.353674+00:00] DEBUG: [KatanaAgent_MCP_v1] Command hist-test-004 logged to history.
+[2025-06-30T12:56:17.353864+00:00] INFO: [KatanaAgent_MCP_v1] Starting command history analysis for patterns (katana-003)...
+[2025-06-30T12:56:17.354010+00:00] INFO: [KatanaAgent_MCP_v1] Potential repetitive pattern detected: Action 'get_agent_config' executed 3 times recently within the last 24 hours (out of 4 commands checked). Consider creating a template or automation.
+[2025-06-30T12:56:17.354057+00:00] INFO: [KatanaAgent_MCP_v1] Command history analysis complete.
+[2025-06-30T12:56:17.354146+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Current memory state: {"name": "Katana V2", "katana_config": {"agent_version": "1.0.0-agent", "status": "online", "last_config_retrieval_time_utc": "2025-06-30T12:56:17.352648+00:00", "hostname": "devbox", "os_type": "Linux", "max_cpu_usage_limit_pct": 75, "max_memory_usage_limit_mb": 2048, "active_tasks_count": 0, "environment_info": {"KATANA_ENV_setting": "not_set", "API_TOKEN_IS_SET": "False"}, "monitored_files": {"commands_file": "/app/alg911.catana-ai/katana.commands.json", "memory_file": "/app/alg911.catana-ai/katana_memory.json", "events_log_file": "/app/alg911.catana-ai/katana_events.log"}}, "last_settings_reload_status": "success", "last_settings_reload_time_utc": "2025-06-30T12:56:17.349931+00:00"}
+[2025-06-30T12:57:03.589239+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: Starting agent initialization and diagnostics...
+[2025-06-30T12:57:03.589416+00:00] INFO: [KatanaAgent_MCP_v1] Initializing/Verifying Katana data files for MCP_v1...
+[2025-06-30T12:57:03.589570+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.commands.json exists and appears valid.
+[2025-06-30T12:57:03.589711+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.history.json exists and appears valid.
+[2025-06-30T12:57:03.589827+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana_memory.json exists and appears valid.
+[2025-06-30T12:57:03.589932+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/sync_status.json exists and appears valid.
+[2025-06-30T12:57:03.590027+00:00] INFO: [KatanaAgent_MCP_v1] Katana data file initialization/verification complete.
+[2025-06-30T12:57:03.590070+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: File initialization complete.
+[2025-06-30T12:57:03.590109+00:00] INFO: [KatanaAgent_MCP_v1] Running startup diagnostics (katana-005)...
+[2025-06-30T12:57:03.590741+00:00] INFO: [KatanaAgent_MCP_v1] Diagnostic [Python Version]: INFO - Running on Python 3.12.11
+[2025-06-30T12:57:03.590938+00:00] INFO: [KatanaAgent_MCP_v1] Diagnostic [Operating System]: INFO - Linux 6.8.0
+[2025-06-30T12:57:03.591191+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Commands File]: OK - File exists and is accessible: /app/alg911.catana-ai/katana.commands.json
+[2025-06-30T12:57:03.591466+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Memory File]: OK - File exists and is accessible: /app/alg911.catana-ai/katana_memory.json
+[2025-06-30T12:57:03.591545+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [History File]: OK - File exists and is accessible: /app/alg911.catana-ai/katana.history.json
+[2025-06-30T12:57:03.591604+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Events Log File]: OK - File exists and is accessible: /app/alg911.catana-ai/katana_events.log
+[2025-06-30T12:57:03.591655+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Sync Status File]: OK - File exists and is accessible: /app/alg911.catana-ai/sync_status.json
+[2025-06-30T12:57:03.591696+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Agent Memory State]: OK - agent_memory_state is loaded (not empty).
+[2025-06-30T12:57:03.591746+00:00] DEBUG: [KatanaAgent_MCP_v1] Diagnostic [Diagnostic Log Directory]: OK - Directory for diagnostic log exists: /app/alg911.catana-ai
+[2025-06-30T12:57:03.596723+00:00] INFO: [KatanaAgent_MCP_v1] Startup diagnostics successfully written to /app/alg911.catana-ai/diagnostic_log.yaml
+[2025-06-30T12:57:03.596846+00:00] INFO: [KatanaAgent_MCP_v1] Starting scan for outdated commands (katana-001)...
+[2025-06-30T12:57:03.597021+00:00] INFO: [KatanaAgent_MCP_v1] Scan complete. No outdated commands found.
+[2025-06-30T12:57:03.597110+00:00] INFO: [KatanaAgent_MCP_v1] Starting sync status check (katana-002)...
+[2025-06-30T12:57:03.597283+00:00] WARNING: [KatanaAgent_MCP_v1] Synchronization is overdue. Last sync: 2025-06-29T06:00:00Z (over 24 hours ago).
+[2025-06-30T12:57:03.597333+00:00] INFO: [KatanaAgent_MCP_v1] Simulating command processing for history generation (katana-003)...
+[2025-06-30T12:57:03.597440+00:00] INFO: [KatanaAgent_MCP_v1] Agent attempting to process command: hist-test-001, Action: get_agent_config
+[2025-06-30T12:57:03.597571+00:00] INFO: [KatanaAgent_MCP_v1] Processing 'get_agent_config' command internally.
+[2025-06-30T12:57:03.597912+00:00] INFO: [KatanaAgent_MCP_v1] [MemorySave] Successfully saved JSON to /app/alg911.catana-ai/katana_memory.json.
+[2025-06-30T12:57:03.598004+00:00] INFO: [KatanaAgent_MCP_v1] Agent configuration updated in agent_memory_state['katana_config'] and saved.
+[2025-06-30T12:57:03.598051+00:00] INFO: [KatanaAgent_MCP_v1] Agent processing finished for command: hist-test-001. Result status: success
+[2025-06-30T12:57:03.599631+00:00] INFO: [KatanaAgent_MCP_v1] [HistorySave] Successfully saved JSON to /app/alg911.catana-ai/katana.history.json.
+[2025-06-30T12:57:03.599730+00:00] DEBUG: [KatanaAgent_MCP_v1] Command hist-test-001 logged to history.
+[2025-06-30T12:57:03.599788+00:00] INFO: [KatanaAgent_MCP_v1] Agent attempting to process command: hist-test-002, Action: reload_core_settings
+[2025-06-30T12:57:03.599834+00:00] INFO: [KatanaAgent_MCP_v1] Processing 'reload_core_settings' command internally.
+[2025-06-30T12:57:03.599876+00:00] INFO: [KatanaAgent_MCP_v1] Initializing/Verifying Katana data files for MCP_v1...
+[2025-06-30T12:57:03.600921+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.commands.json exists and appears valid.
+[2025-06-30T12:57:03.601067+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana.history.json exists and appears valid.
+[2025-06-30T12:57:03.601177+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/katana_memory.json exists and appears valid.
+[2025-06-30T12:57:03.601309+00:00] DEBUG: [KatanaAgent_MCP_v1] /app/alg911.catana-ai/sync_status.json exists and appears valid.
+[2025-06-30T12:57:03.601624+00:00] INFO: [KatanaAgent_MCP_v1] Katana data file initialization/verification complete.
+[2025-06-30T12:57:03.601707+00:00] INFO: [KatanaAgent_MCP_v1] Core settings reload attempted (file initialization re-triggered).
+[2025-06-30T12:57:03.602079+00:00] INFO: [KatanaAgent_MCP_v1] [MemorySave] Successfully saved JSON to /app/alg911.catana-ai/katana_memory.json.
+[2025-06-30T12:57:03.602309+00:00] INFO: [KatanaAgent_MCP_v1] Agent processing finished for command: hist-test-002. Result status: success
+[2025-06-30T12:57:03.603020+00:00] INFO: [KatanaAgent_MCP_v1] [HistorySave] Successfully saved JSON to /app/alg911.catana-ai/katana.history.json.
+[2025-06-30T12:57:03.603152+00:00] DEBUG: [KatanaAgent_MCP_v1] Command hist-test-002 logged to history.
+[2025-06-30T12:57:03.603297+00:00] INFO: [KatanaAgent_MCP_v1] Agent attempting to process command: hist-test-003, Action: get_agent_config
+[2025-06-30T12:57:03.603449+00:00] INFO: [KatanaAgent_MCP_v1] Processing 'get_agent_config' command internally.
+[2025-06-30T12:57:03.603935+00:00] INFO: [KatanaAgent_MCP_v1] [MemorySave] Successfully saved JSON to /app/alg911.catana-ai/katana_memory.json.
+[2025-06-30T12:57:03.604035+00:00] INFO: [KatanaAgent_MCP_v1] Agent configuration updated in agent_memory_state['katana_config'] and saved.
+[2025-06-30T12:57:03.604125+00:00] INFO: [KatanaAgent_MCP_v1] Agent processing finished for command: hist-test-003. Result status: success
+[2025-06-30T12:57:03.604796+00:00] INFO: [KatanaAgent_MCP_v1] [HistorySave] Successfully saved JSON to /app/alg911.catana-ai/katana.history.json.
+[2025-06-30T12:57:03.604879+00:00] DEBUG: [KatanaAgent_MCP_v1] Command hist-test-003 logged to history.
+[2025-06-30T12:57:03.604958+00:00] INFO: [KatanaAgent_MCP_v1] Agent attempting to process command: hist-test-004, Action: get_agent_config
+[2025-06-30T12:57:03.605050+00:00] INFO: [KatanaAgent_MCP_v1] Processing 'get_agent_config' command internally.
+[2025-06-30T12:57:03.605367+00:00] INFO: [KatanaAgent_MCP_v1] [MemorySave] Successfully saved JSON to /app/alg911.catana-ai/katana_memory.json.
+[2025-06-30T12:57:03.605444+00:00] INFO: [KatanaAgent_MCP_v1] Agent configuration updated in agent_memory_state['katana_config'] and saved.
+[2025-06-30T12:57:03.605519+00:00] INFO: [KatanaAgent_MCP_v1] Agent processing finished for command: hist-test-004. Result status: success
+[2025-06-30T12:57:03.605952+00:00] INFO: [KatanaAgent_MCP_v1] [HistorySave] Successfully saved JSON to /app/alg911.catana-ai/katana.history.json.
+[2025-06-30T12:57:03.606053+00:00] DEBUG: [KatanaAgent_MCP_v1] Command hist-test-004 logged to history.
+[2025-06-30T12:57:03.606123+00:00] INFO: [KatanaAgent_MCP_v1] Starting command history analysis for patterns (katana-003)...
+[2025-06-30T12:57:03.606378+00:00] INFO: [KatanaAgent_MCP_v1] Potential repetitive pattern detected: Action 'get_agent_config' executed 6 times recently within the last 24 hours (out of 8 commands checked). Consider creating a template or automation.
+[2025-06-30T12:57:03.606449+00:00] INFO: [KatanaAgent_MCP_v1] Command history analysis complete.
+[2025-06-30T12:57:03.606526+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Current memory state: {"name": "Katana V2", "katana_config": {"agent_version": "1.0.0-agent", "status": "online", "last_config_retrieval_time_utc": "2025-06-30T12:57:03.605125+00:00", "hostname": "devbox", "os_type": "Linux", "max_cpu_usage_limit_pct": 75, "max_memory_usage_limit_mb": 2048, "active_tasks_count": 0, "environment_info": {"KATANA_ENV_setting": "not_set", "API_TOKEN_IS_SET": "False"}, "monitored_files": {"commands_file": "/app/alg911.catana-ai/katana.commands.json", "memory_file": "/app/alg911.catana-ai/katana_memory.json", "events_log_file": "/app/alg911.catana-ai/katana_events.log"}}, "last_settings_reload_status": "success", "last_settings_reload_time_utc": "2025-06-30T12:57:03.601757+00:00"}

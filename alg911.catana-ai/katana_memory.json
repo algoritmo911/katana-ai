@@ -1,3 +1,24 @@
 {
-  "name": "Katana V2"
+  "name": "Katana V2",
+  "katana_config": {
+    "agent_version": "1.0.0-agent",
+    "status": "online",
+    "last_config_retrieval_time_utc": "2025-06-30T12:57:03.605125+00:00",
+    "hostname": "devbox",
+    "os_type": "Linux",
+    "max_cpu_usage_limit_pct": 75,
+    "max_memory_usage_limit_mb": 2048,
+    "active_tasks_count": 0,
+    "environment_info": {
+      "KATANA_ENV_setting": "not_set",
+      "API_TOKEN_IS_SET": "False"
+    },
+    "monitored_files": {
+      "commands_file": "/app/alg911.catana-ai/katana.commands.json",
+      "memory_file": "/app/alg911.catana-ai/katana_memory.json",
+      "events_log_file": "/app/alg911.catana-ai/katana_events.log"
+    }
+  },
+  "last_settings_reload_status": "success",
+  "last_settings_reload_time_utc": "2025-06-30T12:57:03.601757+00:00"
 }

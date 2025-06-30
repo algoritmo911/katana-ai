@@ -1,0 +1,38 @@
+startup_diagnostics_run_utc: '2025-06-30T12:57:03.591833+00:00'
+checks:
+- timestamp: '2025-06-30T12:57:03.590723+00:00'
+  check_name: Python Version
+  status: INFO
+  message: Running on Python 3.12.11
+- timestamp: '2025-06-30T12:57:03.590927+00:00'
+  check_name: Operating System
+  status: INFO
+  message: Linux 6.8.0
+- timestamp: '2025-06-30T12:57:03.591180+00:00'
+  check_name: Commands File
+  status: OK
+  message: 'File exists and is accessible: /app/alg911.catana-ai/katana.commands.json'
+- timestamp: '2025-06-30T12:57:03.591451+00:00'
+  check_name: Memory File
+  status: OK
+  message: 'File exists and is accessible: /app/alg911.catana-ai/katana_memory.json'
+- timestamp: '2025-06-30T12:57:03.591539+00:00'
+  check_name: History File
+  status: OK
+  message: 'File exists and is accessible: /app/alg911.catana-ai/katana.history.json'
+- timestamp: '2025-06-30T12:57:03.591599+00:00'
+  check_name: Events Log File
+  status: OK
+  message: 'File exists and is accessible: /app/alg911.catana-ai/katana_events.log'
+- timestamp: '2025-06-30T12:57:03.591650+00:00'
+  check_name: Sync Status File
+  status: OK
+  message: 'File exists and is accessible: /app/alg911.catana-ai/sync_status.json'
+- timestamp: '2025-06-30T12:57:03.591691+00:00'
+  check_name: Agent Memory State
+  status: OK
+  message: agent_memory_state is loaded (not empty).
+- timestamp: '2025-06-30T12:57:03.591741+00:00'
+  check_name: Diagnostic Log Directory
+  status: OK
+  message: 'Directory for diagnostic log exists: /app/alg911.catana-ai'

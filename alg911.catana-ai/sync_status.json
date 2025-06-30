@@ -1,1 +1,5 @@
-{"auto_sync_enabled": false, "last_successful_sync_timestamp": null, "auto_sync_interval_hours": 24}
+{
+  "auto_sync_enabled": true,
+  "last_successful_sync_timestamp": "2025-06-29T06:00:00Z",
+  "auto_sync_interval_hours": 24
+}
