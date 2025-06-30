@@ -9,6 +9,7 @@ from nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
 from katana.katana_agent import KatanaAgent # Import KatanaAgent
+from katana.decorators.trace_command import trace_command # Import the decorator
 
 # Load environment variables from .env file
 load_dotenv()
@@ -568,6 +569,7 @@ if __name__ == '__main__':
 # Note: The @bot.message_handler decorators will still be used by telebot for routing.
 # The registration system here is for our internal management (e.g., for /help command).
 
+@trace_command
 async def command_status_impl(message):
     """Implementation for the /status command."""
     start_time = datetime.utcnow()
@@ -609,6 +611,7 @@ async def command_status_impl(message):
         log_command_event(log_entry_end)
 
 
+@trace_command
 async def command_help_impl(message):
     """Implementation for the /help command."""
     start_time = datetime.utcnow()
@@ -643,6 +646,7 @@ async def command_help_impl(message):
         log_command_event(log_entry_end)
 
 
+@trace_command
 async def command_reset_impl(message):
     """Implementation for the /reset command."""
     start_time = datetime.utcnow()
