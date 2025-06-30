@@ -79,12 +79,64 @@ def stop_heartbeat_thread():
 # --- Заглушки и глобальные переменные ---
 # Это будет заменено реальной реализацией или импортом
 def get_katana_response(history: list[dict]) -> str:
-    """Заглушка для функции получения ответа от NLP модели."""
-    logger.info(f"get_katana_response called with history: {history}")
+    """
+    Получает ответ от NLP модели, используя доступные клиенты.
+    Приоритет: OpenAI, затем Anthropic, затем внутренняя заглушка.
+    """
+    logger.info(f"get_katana_response called with history (length: {len(history)})")
     if not history:
         return "Катана к вашим услугам. О чём поразмыслим?"
-    last_message = history[-1]['content']
-    return f"Размышляю над вашим последним сообщением: '{last_message}'... (это заглушка)"
+
+    # Ищем последнее сообщение от пользователя для промпта
+    # TODO: В будущем может потребоваться более сложная логика для формирования промпта из истории
+    last_user_message_content = "..." # Default prompt if no user message found
+    for msg in reversed(history):
+        if msg.get("role") == MESSAGE_ROLE_USER:
+            last_user_message_content = msg.get("content", last_user_message_content)
+            break
+
+    prompt = last_user_message_content
+
+    try:
+        if openai_nlp_client:
+            logger.info(f"Attempting to use OpenAI NLP Client for prompt: '{prompt[:50]}...'")
+            # TODO: currently OpenAIClient.generate_text expects a scenario.
+            # For a real call, this would be removed or adapted.
+            # Using "success" scenario for this integration.
+            response = openai_nlp_client.generate_text(prompt=prompt, scenario="success")
+            logger.info("Received response from OpenAI NLP Client.")
+            return response
+        elif anthropic_nlp_client:
+            logger.info(f"Attempting to use Anthropic NLP Client for prompt: '{prompt[:50]}...'")
+            # TODO: currently AnthropicClient.generate_text expects a scenario.
+            # Using "success" scenario for this integration.
+            response = anthropic_nlp_client.generate_text(prompt=prompt, scenario="success")
+            logger.info("Received response from Anthropic NLP Client.")
+            return response
+        else:
+            logger.warning("No NLP clients initialized. Falling back to mock response.")
+            return f"Размышляю над вашим последним сообщением: '{prompt}'... (это базовая заглушка, NLP клиенты не активны)"
+
+    except (OpenAIClientError, AnthropicClientError) as e: # Catch specific client errors first
+        error_message_for_user = f"Произошла ошибка при обращении к NLP сервису ({type(e).__name__}). Пожалуйста, попробуйте позже."
+        # Log the detailed error for developers
+        logger.error(f"NLP Client Error in get_katana_response: {e.user_message}", exc_info=True)
+        if e.original_error:
+             logger.error(f"Original error detail: {type(e.original_error).__name__} - {str(e.original_error)}")
+        return error_message_for_user
+    except NLPServiceError as e: # Catch base NLPServiceError
+        error_message_for_user = "Произошла ошибка при обращении к NLP сервису. Пожалуйста, попробуйте позже."
+        logger.error(f"NLP Service Error in get_katana_response: {e.user_message}", exc_info=True)
+        if e.original_error:
+             logger.error(f"Original error detail: {type(e.original_error).__name__} - {str(e.original_error)}")
+        return error_message_for_user
+    except Exception as e:
+        # Catch-all for any other unexpected errors during NLP processing
+        error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
+        logger.error(f"[ErrorID: {error_id}] An unexpected error occurred in get_katana_response: {e}", exc_info=True)
+        return (f"Произошла неожиданная внутренняя ошибка при обработке вашего запроса NLP. "
+                f"Команда уведомлена. (Код ошибки: {error_id})")
+
 
 # Типы сообщений в истории
 MESSAGE_ROLE_USER = "user"
@@ -134,13 +186,92 @@ def init_dependencies():
 
 # --- End MemoryManager Initialization ---
 
+# --- NLP Client Initialization ---
+try:
+    from .nlp_clients.openai_client import OpenAIClient, OpenAIClientError
+    from .nlp_clients.anthropic_client import AnthropicClient, AnthropicClientError
+    from .nlp_clients.base_nlp_client import NLPServiceError, NLPAuthenticationError
+    # Assuming src is in PYTHONPATH or handled by sys.path modification earlier for MemoryManager
+    from src.telemetry.command_telemetry import log_command_event as telemetry_log_event, configure_telemetry_logging
+except ImportError:
+    # Allow running even if NLP clients are not found, get_katana_response will use its internal mock.
+    logger.warning("NLP client or telemetry modules not found. Katana will use basic mocks / logging.")
+    OpenAIClient = None
+    AnthropicClient = None
+    NLPServiceError = Exception # Fallback to base Exception
+    NLPAuthenticationError = Exception # Fallback
+    OpenAIClientError = Exception
+    AnthropicClientError = Exception
+
+
+openai_nlp_client: Optional[OpenAIClient] = None
+anthropic_nlp_client: Optional[AnthropicClient] = None
+
+def init_dependencies():
+    """Initializes global dependencies like MemoryManager and NLP clients."""
+    global memory_manager, openai_nlp_client, anthropic_nlp_client
+
+    # Configure Telemetry Logging (should ideally be called once)
+    # We can place it here, assuming init_dependencies() is called once at startup.
+    # The telemetry module itself ensures it's configured only once if called multiple times.
+    try:
+        # Default log file is command_telemetry.log in the current working directory of the script.
+        # Ensure this is the desired location or pass an absolute path.
+        # For now, using default.
+        if configure_telemetry_logging: # Check if import was successful
+            configure_telemetry_logging(enable_console_logging=False) # Avoid duplicate console logs if main logger is also to console
+            logger.info("Command telemetry configured from katana_bot.")
+        else:
+            logger.warning("configure_telemetry_logging not available. Skipping telemetry setup.")
+    except Exception as e:
+        logger.error(f"Error configuring command telemetry: {e}", exc_info=True)
+
+
+    if memory_manager is None:
+        logger.info("Initializing MemoryManager...")
+        memory_manager = MemoryManager(
+            host=redis_host,
+            port=redis_port,
+            db=redis_db,
+            password=redis_password,
+            chat_history_ttl_seconds=chat_ttl
+        )
+        logger.info("MemoryManager initialized.")
+    else:
+        logger.info("MemoryManager already initialized.")
+
+    if OpenAIClient and OPENAI_API_KEY and not openai_nlp_client:
+        logger.info("Initializing OpenAI NLP Client...")
+        try:
+            openai_nlp_client = OpenAIClient(api_key=OPENAI_API_KEY)
+            logger.info("OpenAI NLP Client initialized.")
+        except NLPAuthenticationError as e: # Specifically catch auth errors during init
+            logger.error(f"OpenAI Authentication failed during initialization: {e.user_message}", exc_info=True)
+        except NLPServiceError as e: # Catch other NLP service errors
+            logger.error(f"Failed to initialize OpenAI NLP Client: {e.user_message}", exc_info=True)
+        except Exception as e: # Catch any other unexpected error
+            logger.error(f"An unexpected error occurred during OpenAI Client initialization: {e}", exc_info=True)
+
+
+    if AnthropicClient and ANTHROPIC_API_KEY and not anthropic_nlp_client:
+        logger.info("Initializing Anthropic NLP Client...")
+        try:
+            anthropic_nlp_client = AnthropicClient(api_key=ANTHROPIC_API_KEY)
+            logger.info("Anthropic NLP Client initialized.")
+        except NLPAuthenticationError as e:
+            logger.error(f"Anthropic Authentication failed during initialization: {e.user_message}", exc_info=True)
+        except NLPServiceError as e:
+            logger.error(f"Failed to initialize Anthropic NLP Client: {e.user_message}", exc_info=True)
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during Anthropic Client initialization: {e}", exc_info=True)
+
 
 # --- Конец заглушек ---
 
 # Получаем токен из переменной окружения
 API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN')
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY') # Used in init_dependencies
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') # Used in init_dependencies
 
 if API_TOKEN and ':' in API_TOKEN:
     logger.info("✅ KATANA_TELEGRAM_TOKEN loaded successfully.")
@@ -168,12 +299,37 @@ COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 #     """Логирование события бота."""
 #     logger.info(message)
 
-def handle_log_event(command_data, chat_id_str: str): # chat_id is now string
-    """Обработка команды 'log_event' (заглушка)."""
+def handle_log_event(command_data: dict, chat_id_str: str): # chat_id is now string
+    """
+    Обработка команды 'log_event' путем логирования через систему телеметрии.
+    """
     logger.info(f"handle_log_event called for chat_id {chat_id_str} with data: {command_data}")
+
+    event_id = command_data.get("id", f"log_event_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')}")
+    event_type = command_data.get("args", {}).get("event_name", "generic_log_event") # Extract from args
+    details = command_data.get("args", {}) # Pass all args as details
+    details["chat_id"] = chat_id_str # Add chat_id for context
+    details["original_command_module"] = command_data.get("module")
+
+    if telemetry_log_event: # Check if imported successfully
+        try:
+            telemetry_log_event(
+                event_type=event_type,
+                command_id=event_id,
+                details=details,
+                success=True # log_event commands are typically successful if they reach here
+            )
+            logger.info(f"Logged event '{event_type}' with id '{event_id}' to command telemetry.")
+        except Exception as e:
+            logger.error(f"Failed to log event to command telemetry: {e}", exc_info=True)
+    else:
+        logger.warning("telemetry_log_event function not available. Cannot log to command telemetry.")
+
 
 def handle_mind_clearing(command_data, chat_id_str: str): # chat_id is now string
     """Обработка команды 'mind_clearing' (заглушка)."""
+    # TODO: Future: Log this specific admin action to command_telemetry as well.
+    # For now, it's primarily a MemoryManager action.
     logger.info(f"handle_mind_clearing called for chat_id {chat_id_str} with data: {command_data}")
 
 def handle_message_impl(message):

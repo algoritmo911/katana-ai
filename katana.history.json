@@ -1,0 +1,29 @@
+{
+  "description": "This file is intended to store Katana's interaction history or task processing history in a JSON format. The exact structure will depend on the integration test requirements and how history is captured.",
+  "log_format_ideas": [
+    {
+      "type": "conversation_history",
+      "chat_id": "string_or_int",
+      "entries": [
+        {"role": "user", "content": "User message", "timestamp_utc": "ISO_datetime_string"},
+        {"role": "assistant", "content": "Katana response", "timestamp_utc": "ISO_datetime_string"}
+      ]
+    },
+    {
+      "type": "task_event",
+      "task_id": "string",
+      "timestamp_utc": "ISO_datetime_string",
+      "event": "task_received | task_processing_started | task_step_completed | task_failed | task_succeeded",
+      "details": {
+        "input": "...",
+        "output": "...",
+        "error": "..."
+      }
+    }
+  ],
+  "log_entries": [
+    {
+      "note": "This array will be populated with actual log entries during tests or operation."
+    }
+  ]
+}
