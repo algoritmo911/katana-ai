@@ -47,6 +47,37 @@ class MockTraderCLI:
         time.sleep(0.01)
         return {"instance": self.instance_name, "current_status": self.status}
 
+
+# Additional mock commands for testing various argument types and return values
+class MyCustomObject:
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+
+    def __str__(self):
+        return f"MyCustomObject(name='{self.name}', value={self.value})"
+
+@trace_command
+def mock_command_with_various_args(
+    pos_list: list,
+    pos_dict: dict,
+    pos_custom_obj: MyCustomObject,
+    kw_bool: bool = True,
+    kw_none: None = None
+):
+    """A mock command to test serialization of various argument types."""
+    time.sleep(0.01) # Simulate some work
+    # Ensure custom object is used to prevent optimizing away
+    _ = pos_custom_obj.name
+    return f"Processed various args: list_len={len(pos_list)}, dict_keys={len(pos_dict.keys())}"
+
+@trace_command
+def mock_command_returns_none():
+    """A mock command that returns None."""
+    time.sleep(0.01) # Simulate some work
+    return None
+
+
 class TestCommandTelemetry(unittest.TestCase):
 
     @classmethod
@@ -199,6 +230,57 @@ class TestCommandTelemetry(unittest.TestCase):
         self.assertFalse(logs[1]["success"])
         self.assertEqual(logs[2]["command_name"], "mock_successful_command")
         self.assertEqual(logs[2]["arguments"]["kwargs"], {"keyword_param": "final_one"})
+
+    def test_08_command_with_various_argument_types(self):
+        custom_obj = MyCustomObject("TestObj", 123)
+        list_arg = [1, "two", 3.0, True, None, {"sub_key": "sub_val"}]
+        dict_arg = {"keyA": "valA", "keyB": 2, "keyC": False, "keyD": None, "keyE": [10, 20]}
+
+        expected_result_str = f"Processed various args: list_len={len(list_arg)}, dict_keys={len(dict_arg.keys())}"
+        result = mock_command_with_various_args(
+            list_arg,
+            dict_arg,
+            custom_obj,
+            kw_bool=False,
+            kw_none=None
+        )
+        self.assertEqual(result, expected_result_str)
+
+        logs = self.read_log_entries()
+        self.assertEqual(len(logs), 1)
+        log_entry = logs[0]
+
+        self.assertEqual(log_entry["command_name"], "mock_command_with_various_args")
+
+        logged_args = log_entry["arguments"]["args"]
+        self.assertEqual(len(logged_args), 3)
+        self.assertEqual(logged_args[0], list_arg, "List argument should be logged as is.")
+        self.assertEqual(logged_args[1], dict_arg, "Dictionary argument should be logged as is.")
+        self.assertEqual(logged_args[2], str(custom_obj), "Custom object argument should be logged as its string representation.")
+
+        logged_kwargs = log_entry["arguments"]["kwargs"]
+        self.assertEqual(logged_kwargs, {"kw_bool": False, "kw_none": None}, "Keyword arguments should be logged correctly.")
+
+        self.assertTrue(log_entry["success"])
+        self.assertIn("execution_time_seconds", log_entry)
+        self.assertTrue(log_entry["execution_time_seconds"] > 0)
+        self.assertEqual(log_entry["result_type"], "str", "Result type should be string for this mock command.")
+
+    def test_09_command_returning_none(self):
+        result = mock_command_returns_none()
+        self.assertIsNone(result, "Command should return None.")
+
+        logs = self.read_log_entries()
+        self.assertEqual(len(logs), 1)
+        log_entry = logs[0]
+
+        self.assertEqual(log_entry["command_name"], "mock_command_returns_none")
+        self.assertEqual(log_entry["arguments"]["args"], [], "Args should be empty.")
+        self.assertEqual(log_entry["arguments"]["kwargs"], {}, "Kwargs should be empty.")
+        self.assertTrue(log_entry["success"])
+        self.assertIn("execution_time_seconds", log_entry)
+        self.assertTrue(log_entry["execution_time_seconds"] > 0)
+        self.assertEqual(log_entry["result_type"], "NoneType", "Result type should be NoneType when command returns None.")
 
 
 if __name__ == "__main__":
