@@ -1,5 +1,7 @@
 import functools
 import time
+import getpass
+from datetime import datetime, timezone
 from katana.logging.telemetry_logger import log_command_telemetry
 
 def trace_command(func):
@@ -25,7 +27,9 @@ def trace_command(func):
         if is_method and args:
             actual_args = args[1:] # Get elements from index 1 to end
 
-        start_time = time.perf_counter()
+        start_perf_counter = time.perf_counter()
+        start_timestamp_iso = datetime.now(timezone.utc).isoformat()
+        username = getpass.getuser() # Get username
         success = False
         result = None
         error_obj = None
@@ -39,8 +43,8 @@ def trace_command(func):
             # Re-raise the exception so the command behaves as it normally would
             raise
         finally:
-            end_time = time.perf_counter()
-            execution_time = end_time - start_time
+            end_perf_counter = time.perf_counter()
+            execution_time = end_perf_counter - start_perf_counter
             log_command_telemetry(
                 command_name=command_name,
                 args=actual_args, # Log actual user-provided args
@@ -48,7 +52,9 @@ def trace_command(func):
                 success=success,
                 result=result,
                 error=error_obj,
-                execution_time=execution_time
+                execution_time=execution_time,
+                user=username,
+                start_time_iso=start_timestamp_iso
             )
     return wrapper
 
