@@ -11,3 +11,4 @@ apscheduler
 pre-commit
 ruff
 bandit
+python-dotenv

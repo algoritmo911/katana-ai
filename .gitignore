@@ -47,7 +47,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
-*.log
+# *.log # Keep this commented out or remove if specific log files are listed below
 .pytest_cache/
 .hypothesis/
 
@@ -132,9 +132,8 @@ secrets.toml
 *.pem
 
 # Katana specific logs (if not already covered by *.log)
-logs/app.log
-# logs/trader.log - will be created, but perhaps we want to track example logs? For now, ignore.
-# logs/coinbase.log - will be created, for now, ignore.
+logs/
+*.jsonl
 
 # IDE / Editor specific
 .vscode/
