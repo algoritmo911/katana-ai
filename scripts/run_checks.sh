@@ -1,7 +1,15 @@
 #!/bin/bash
+set -e
 
-# Redirect stderr to a log file
-exec 2> scripts/run_checks_stderr.log
+# Always create the stderr log file and directory
+mkdir -p scripts/
+touch scripts/run_checks_stderr.log
+
+# Test output to log for verification
+echo "Run checks started at $(date)" >> scripts/run_checks_stderr.log
+
+# Redirect all subsequent stderr to the log file (append mode)
+exec 2>> scripts/run_checks_stderr.log
 
 echo "Running linters..."
 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
