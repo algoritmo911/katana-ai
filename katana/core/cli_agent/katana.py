@@ -3,8 +3,11 @@ import os
 import time # Added for potential future use in run loop or by commands
 from pathlib import Path # For robust path handling if needed within class
 from datetime import datetime # For timestamps
-from katana.logging_config import get_logger
+from katana.logger import get_logger # Corrected import
 import logging # For consistency, though setup_logging is not called here
+
+# Import the decorator
+from katana.utils.telemetry import trace_command
 
 logger = get_logger(__name__)
 
@@ -79,6 +82,7 @@ class KatanaCore:
             logger.error(f"Failed to load commands from {self.commands_file_path}: {e}. Using empty command set.", extra={**log_ctx, 'message_id': 'load_commands_exception'})
             self.commands = {}
 
+    @trace_command # Re-applying with the simplified decorator
     def _save_json(self, file_path: Path, data: dict):
         """Helper to save dictionary data to a JSON file."""
         log_ctx = {'user_id': 'system_core', 'chat_id': 'katana_core_save', 'message_id': f'save_json_{file_path.name}'}

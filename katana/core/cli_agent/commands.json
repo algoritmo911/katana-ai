@@ -1,8 +1,1 @@
-{
-  "синхронизировать api ключи": "python ../katana_secrets_harvester/harvester.py",
-  "обновить код": "git pull origin main",
-  "рестарт агента": "python agent.py",
-  "очистить память агента": "rm -f memory.json",
-  "показать текущий каталог": "pwd",
-  "список файлов": "ls -la"
-}
+{}
