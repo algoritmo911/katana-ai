@@ -563,11 +563,14 @@ if __name__ == '__main__':
 
 
 
+from katana.decorators.trace_command import trace_command
+
 # --- Slash Command Handlers ---
 
 # Note: The @bot.message_handler decorators will still be used by telebot for routing.
 # The registration system here is for our internal management (e.g., for /help command).
 
+@trace_command
 async def command_status_impl(message):
     """Implementation for the /status command."""
     start_time = datetime.utcnow()
@@ -609,6 +612,7 @@ async def command_status_impl(message):
         log_command_event(log_entry_end)
 
 
+@trace_command
 async def command_help_impl(message):
     """Implementation for the /help command."""
     start_time = datetime.utcnow()
@@ -643,6 +647,7 @@ async def command_help_impl(message):
         log_command_event(log_entry_end)
 
 
+@trace_command
 async def command_reset_impl(message):
     """Implementation for the /reset command."""
     start_time = datetime.utcnow()
