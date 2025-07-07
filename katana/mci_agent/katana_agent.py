@@ -20,24 +20,31 @@ import shutil
 # Path Constants (Refactor Z)
 BASE_DIR = Path(__file__).resolve().parent
 COMMANDS_DIR = BASE_DIR / "commands"
-LOGS_DIR = BASE_DIR / "logs"
+LOGS_DIR = BASE_DIR / "logs"  # Base directory for logs
 LOG_ARCHIVE_DIR = LOGS_DIR / "archive"
 STATUS_DIR = BASE_DIR / "status"
 MODULES_DIR = BASE_DIR / "modules"
 PROCESSED_COMMANDS_DIR = BASE_DIR / "processed"
 
+# Determine if running in development mode
+IS_DEV_MODE = os.environ.get("ENV_MODE", "").lower() == "dev"
+
+# Log file will be command_telemetry.log as per new requirements
+LOG_FILE_NAME = "command_telemetry.log"
+LOG_FILE = LOGS_DIR / LOG_FILE_NAME # Path object for the log file
+
 COMMAND_FILE = (
     COMMANDS_DIR / "katana.commands.json"
 )  # Not used by MCI agent, but defined for consistency perhaps
-LOG_FILE = LOGS_DIR / "katana_events.log"
 STATUS_FILE = STATUS_DIR / "agent_status.json"
+
 
 # --- Initialize Logger using centralized configuration ---
 # The actual logger object is now configured and retrieved via setup_logger.
 # We still define a global 'logger' variable for the rest of the script to use.
 # The setup_logger call will be made in main() or at script start if preferred.
 # For now, just getting the logger by name. It will be configured in main().
-logger = logging.getLogger("KatanaMCIAgent")
+logger = logging.getLogger("KatanaMCIAgent") # Default logger instance
 
 
 # --- Default Structures for File Recovery ---
@@ -245,10 +252,17 @@ def move_to_processed(original_command_file_path, processed_command_data):
 # --- MCI Main Function ---
 def main(loop=False, delay=5):
     global logger  # Ensure we are modifying the global logger instance
-    logger = setup_logger("KatanaMCIAgent", str(LOG_FILE), level=logging.DEBUG)
+    # Update the setup_logger call to include dev_mode and use the new log file name.
+    # LOG_FILE path object now correctly points to "command_telemetry.log" within LOGS_DIR.
+    logger = setup_logger(
+        logger_name="KatanaMCIAgent",
+        log_file_path_str=str(LOG_FILE),
+        level=logging.DEBUG,
+        dev_mode=IS_DEV_MODE,  # Pass the dev_mode status
+    )
 
-    # LOGS_DIR is handled by setup_logger.
-    # Other directories still need to be created.
+    # LOGS_DIR parent directory for LOG_FILE is handled by setup_logger's Path.mkdir().
+    # Other specific application directories still need to be ensured.
     dirs_to_create = [
         COMMANDS_DIR,
         LOG_ARCHIVE_DIR,

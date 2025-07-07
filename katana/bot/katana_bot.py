@@ -29,16 +29,21 @@ import traceback
 # The actual logger object is now configured and retrieved via setup_logger.
 # We still define a global 'logger' variable for the rest of the script to use.
 # The setup_logger call will be made in main().
-logger = logging.getLogger("KatanaBotAI")
-
+logger = logging.getLogger("KatanaBotAI") # Default logger instance
 
 # --- Configuration & Log File Setup ---
 # Token and keys from environment variables
 TELEGRAM_TOKEN = os.environ.get("KATANA_TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-BOT_LOG_DIR = Path(__file__).resolve().parent / "logs"
-BOT_LOG_FILE = BOT_LOG_DIR / "katana_bot.log"
+# Determine if running in development mode (e.g., via environment variable)
+# This will be passed to setup_logger.
+IS_DEV_MODE = os.environ.get("ENV_MODE", "").lower() == "dev"
+
+# Log file will be command_telemetry.log as per new requirements for the telemetry logger
+LOG_FILE_NAME = "command_telemetry.log"
+BOT_LOG_DIR = Path(__file__).resolve().parent / "logs" # Retain logs subdirectory for organization
+BOT_LOG_FILE = BOT_LOG_DIR / LOG_FILE_NAME # Path object for the log file
 
 # --- Initialize OpenAI Client (v1.x.x) ---
 client: OpenAI = None  # type: ignore
@@ -166,8 +171,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     """Starts the bot."""
     global logger  # Ensure we are modifying the global logger instance
+    # Update the setup_logger call to include dev_mode and use the new log file name.
+    # The BOT_LOG_FILE path object now correctly points to "command_telemetry.log" within the "logs" dir.
     logger = setup_logger(
-        "KatanaBotAI", str(BOT_LOG_FILE), level=logging.DEBUG
+        logger_name="KatanaBotAI",
+        log_file_path_str=str(BOT_LOG_FILE),
+        level=logging.DEBUG,
+        dev_mode=IS_DEV_MODE,  # Pass the dev_mode status
     )
 
     # --- Initial Status Logging (after logger is fully configured) ---
