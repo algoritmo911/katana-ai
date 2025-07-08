@@ -33,10 +33,18 @@ Now, `black` and `flake8` will run automatically on changed files before each co
 
 ### 4. Environment Variables (If Applicable)
 If the project requires specific environment variables for configuration (e.g., API keys, database URLs):
-- Create a `.env` file in the project root.
-- You can use `.env.example` as a template if it exists.
-- **Note:** `.env` files should be added to `.gitignore` to avoid committing secrets.
-  (At the moment, no specific environment variables are defined for this project).
+- Create a `.env` file in the project root by copying the `.env.example` file:
+  ```bash
+  cp .env.example .env
+  ```
+- Edit the `.env` file to include your actual secrets and configuration values.
+- **Note:** `.env` files should be (and typically are by default in Python `.gitignore` templates) added to `.gitignore` to avoid committing secrets.
+
+The following environment variables are used for the Supabase integration (Katana Memory):
+  - `SUPABASE_URL`: The URL of your Supabase project.
+  - `SUPABASE_KEY`: Your Supabase API key (anon key or service role key, depending on your RLS policies).
+
+  Refer to `.env.example` for the exact variable names.
 
 ### 5. API Keys and Secrets Management (`secrets.toml`)
 
