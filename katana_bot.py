@@ -62,8 +62,40 @@ class KatanaBot:
             greeting_message = self.GREETING()
             response_message = f"{self.name}: {greeting_message}"
             logger.info("Executed !greet command.")
+        elif command == "!report":
+            logger.info("Executing !report command.")
+            from katana.reporter import get_latest_report, generate_weekly_report, REPORT_FILE
+            report_content = get_latest_report()
+            if not report_content:
+                logger.info("No existing report found. Attempting to generate a new one for !report command.")
+                try:
+                    # Consider if generating a full weekly report on demand is too slow or resource-intensive.
+                    # For now, let's assume it's acceptable.
+                    generate_weekly_report()
+                    report_content = get_latest_report()
+                    if report_content:
+                        logger.info("Successfully generated and retrieved new report for !report command.")
+                    else:
+                        # This case means generation might have failed or produced no content
+                        logger.error("Failed to generate or retrieve report content after on-demand generation for !report.")
+                        response_message = f"{self.name}: Could not generate or find the weekly report. Please try again later or check server logs."
+                except Exception as e:
+                    logger.error(f"Error generating report on-demand for !report command: {e}", exc_info=True)
+                    response_message = f"{self.name}: An error occurred while trying to generate the report. Please check server logs."
+
+            if report_content: # Check again, in case it was generated successfully
+                # Telegram messages have a length limit (4096 chars).
+                # Reports might be longer. Send in chunks or a summary.
+                # For now, sending the first 3000 characters.
+                max_len = 3000
+                if len(report_content) > max_len:
+                    report_content = report_content[:max_len] + "\n\n[Report truncated due to length]"
+                response_message = f"--- Weekly Knowledge Digest ---\n\n{report_content}"
+            elif not response_message: # If it's still None and no error message was set
+                 response_message = f"{self.name}: The weekly report is not available at the moment. It might be generating or an issue occurred."
+
         else:
-            unknown_cmd_msg = f"Unknown command '{command}'. Try !price BTC-USD or !greet."
+            unknown_cmd_msg = f"Unknown command '{command}'. Try !price BTC-USD, !greet, or !report."
             logger.warning(f"Unknown command received: {command}")
             response_message = f"{self.name}: {unknown_cmd_msg}"
 

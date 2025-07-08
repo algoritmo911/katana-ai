@@ -135,6 +135,12 @@ secrets.toml
 logs/
 *.jsonl
 
+# Katana data files (synced from Supabase, reports, etc.)
+# These are generated files and should not be committed if they can be regenerated.
+# If they contain sensitive information pulled from Supabase, they definitely should be ignored.
+# For now, assuming they are regenerable and might be large.
+data/supabase_sync/
+
 # IDE / Editor specific
 .vscode/
 .idea/

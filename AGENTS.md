@@ -99,14 +99,23 @@ The FastAPI application exposes the following utility endpoints:
 -   `katana_agent.py`: (Assumed existing) Contains the `KatanaAgent` logic.
 -   `logging_config.py`: Configures logging for the application.
 -   `requirements.txt`: Lists Python dependencies.
+-   `katana/supabase_client.py`: Initializes and configures the Supabase client.
+-   `katana/knowledge_base.py`: Handles fetching data from Supabase and storing it locally.
+-   `katana/reporter.py`: Generates weekly reports from the synchronized data.
+-   `scripts/sync_supabase.py`: Script executed by the cron job to sync data and trigger reports.
+-   `scripts/show_report.py`: CLI tool to display the latest report.
+-   `data/supabase_sync/`: Directory where synchronized data and reports are stored (should be in `.gitignore` if it contains sensitive info, though currently stores generated/public data).
 
 ## Important Notes for Agents
 - When modifying code, ensure that `TELEGRAM_BOT_TOKEN` and `WEBHOOK_URL` are correctly handled. For testing, direct modification in `main.py` is acceptable, but for production, these should be managed via environment variables or a secure configuration system.
+- **Supabase Credentials**: For Supabase integration, ensure `SUPABASE_URL` and `SUPABASE_KEY` are available. Locally, these are expected in `secrets.toml`. For GitHub Actions, they are configured as repository secrets.
 - If you encounter issues with Telegram updates not being received, verify:
     1. The FastAPI application is running.
     2. The `WEBHOOK_URL` is correctly set and publicly accessible.
     3. Ngrok (if used) is running and the URL matches the one configured.
     4. There are no errors in the application logs related to webhook setup or processing.
 - The `katana_bot.py`'s `handle_command` method now returns a string response, which `main.py` then sends back to the user via Telegram. Ensure any new commands follow this pattern.
-- Scheduled tasks are asynchronous. Be mindful of shared resources if tasks modify bot state or interact with external services.
+- Scheduled tasks (like the daily Supabase sync in `.github/workflows/main.yml`) are asynchronous. Be mindful of shared resources if tasks modify bot state or interact with external services. The daily sync script itself is synchronous but runs in a separate GitHub Actions job.
+- The weekly report generation can be triggered on-demand via the `!report` Telegram command if a report isn't found. This might take a few seconds.
+- Data persistence for knowledge/reflections is currently via JSON files in `data/supabase_sync/`. Consider the implications if this directory is not persistent across deployments or if multiple instances run concurrently (though the cron job is a single executor).
 ```

@@ -40,16 +40,45 @@ If the project requires specific environment variables for configuration (e.g., 
 
 ### 5. API Keys and Secrets Management (`secrets.toml`)
 
-For integrations with external services that require API keys or other secrets (like Coinbase for authenticated actions in the future), this project uses a `secrets.toml` file.
+For integrations with external services that require API keys or other secrets, this project uses a `secrets.toml` file.
 
--   **Template:** A template file `secrets.toml.example` is provided in the repository. It shows the expected structure for your secrets.
--   **Local Setup:** To use services requiring secrets:
-    1.  Copy `secrets.toml.example` to a new file named `secrets.toml` in the project root.
-    2.  Edit `secrets.toml` and fill in your actual API keys and other secret values.
+-   **Template:** A template file `secrets.toml.example` is provided. It shows the expected structure.
+-   **Local Setup:**
+    1.  Copy `secrets.toml.example` to `secrets.toml` in the project root.
+    2.  Fill in your actual API keys and other values.
+        -   **Coinbase:** `api_key`, `api_secret` (for future authenticated features).
+        -   **Supabase:** `url`, `key` (for knowledge base synchronization).
 -   **Security:**
-    -   The `secrets.toml` file is **explicitly ignored by Git** (via `.gitignore`).
-    -   **DO NOT COMMIT YOUR ACTUAL `secrets.toml` FILE OR YOUR SECRETS TO THE REPOSITORY.**
-    -   Currently, only unauthenticated API endpoints (like Coinbase spot prices) are used, so `secrets.toml` is for future-proofing authenticated requests.
+    -   `secrets.toml` is **ignored by Git** (via `.gitignore`).
+    -   **DO NOT COMMIT YOUR `secrets.toml` FILE OR YOUR SECRETS.**
+
+## Knowledge Base Synchronization (Supabase)
+
+The application can synchronize knowledge and reflection data from Supabase tables.
+
+-   **Configuration:** Supabase URL and Key are configured in `secrets.toml` (see above) or via environment variables `SUPABASE_URL` and `SUPABASE_KEY`.
+-   **Data Storage:** Synchronized data is stored locally in the `data/supabase_sync/` directory as JSON files (`knowledge.json`, `reflections.json`).
+-   **Automatic Sync:** A GitHub Actions workflow (`.github/workflows/main.yml`) runs daily to synchronize this data. It can also be triggered manually or on pushes to main/dev branches.
+    -   The script `scripts/sync_supabase.py` handles the synchronization logic.
+-   **Manual Sync:** You can run the sync script locally:
+    ```bash
+    python scripts/sync_supabase.py
+    ```
+
+## Weekly Reports
+
+The system automatically generates a weekly report on Sundays, summarizing new knowledge and reflections.
+
+-   **Generation:** Triggered by the `scripts/sync_supabase.py` script as part of the daily cron job if it's a Sunday.
+-   **Output:**
+    -   Markdown report: `data/supabase_sync/weekly_report.md`
+    -   Insights digest: `data/supabase_sync/insights_digest.json`
+-   **Accessing the Report:**
+    -   **CLI:** Use the `scripts/show_report.py` script:
+        ```bash
+        python scripts/show_report.py
+        ```
+    -   **Telegram:** Use the `!report` command with the bot.
 
 ## Running Checks and Tests Locally
 
@@ -112,6 +141,8 @@ The `deploy.yml` workflow relies on GitHub Secrets to securely manage sensitive 
 *   `OPENAI_API_KEY`: Your OpenAI API key (if used by the bot).
 *   `RAILWAY_TOKEN`: Your Railway API token (if deploying to Railway).
 *   `SSH_PRIVATE_KEY`: Your SSH private key for deploying to a VPS (if using SCP/SSH). *Ensure you store the private key securely and configure the corresponding public key on your server.*
+*   `SUPABASE_URL`: Your Supabase project URL (used by the daily sync job).
+*   `SUPABASE_KEY`: Your Supabase service key (or anon key if permissions allow) (used by the daily sync job).
 *   *(Add any other secrets your bot or deployment process might need).*
 
 **How to Add New Secrets:**
