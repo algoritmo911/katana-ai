@@ -12,3 +12,4 @@ pre-commit
 ruff
 bandit
 python-dotenv
+supabase
