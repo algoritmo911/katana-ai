@@ -14,7 +14,7 @@ class MemoryManager:
     DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
 
     def __init__(self,
-                 host: str = 'localhost',
+                 host: str = '127.0.0.1', # Changed from 'localhost' to '127.0.0.1'
                  port: int = 6379,
                  db: int = 0,
                  password: Optional[str] = None,

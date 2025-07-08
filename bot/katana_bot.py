@@ -102,6 +102,7 @@ except ImportError:
     project_root = Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(project_root))
     from src.memory.memory_manager import MemoryManager
+    from src.reporter import generate_weekly_report # Добавлено для отчетов
 
 
 redis_host = os.getenv('REDIS_HOST', 'localhost')
@@ -331,6 +332,51 @@ def handle_start(message):
         {"role": MESSAGE_ROLE_ASSISTANT, "content": response_text}
     )
     logger.info(f"Welcome message added to history for chat_id {chat_id_str} via MemoryManager.")
+
+@bot.message_handler(commands=['weekly_report'])
+def handle_weekly_report(message):
+    """Обработчик команды /weekly_report."""
+    chat_id_str = str(message.chat.id)
+    logger.info(f"Received /weekly_report command from chat_id {chat_id_str}")
+
+    try:
+        # Уведомляем пользователя, что отчет генерируется
+        bot.reply_to(message, "⏳ Генерирую ваш еженедельный отчет... Это может занять некоторое время.")
+
+        report_markdown = generate_weekly_report(chat_id_str)
+        # Отправляем отчет с использованием MarkdownV2, если есть спецсимволы, или обычным текстом
+        # telebot может быть капризным с Markdown, поэтому пробуем сначала MarkdownV2
+        try:
+            bot.reply_to(message, report_markdown, parse_mode="MarkdownV2")
+        except Exception as md_e:
+            logger.warning(f"Failed to send report with MarkdownV2 for chat_id {chat_id_str}: {md_e}. Trying plain text.")
+            try:
+                # Попытка отправить с обычным Markdown
+                bot.reply_to(message, report_markdown, parse_mode="Markdown")
+            except Exception as md_e2:
+                logger.warning(f"Failed to send report with Markdown for chat_id {chat_id_str}: {md_e2}. Sending as plain text.")
+                bot.reply_to(message, report_markdown)
+
+        logger.info(f"Successfully sent weekly report to chat_id {chat_id_str}")
+
+        # Логируем факт отправки отчета в историю диалога как сообщение от ассистента
+        # Это полезно, чтобы пользователь видел, что получил отчет, и для контекста будущих взаимодействий.
+        # Однако, сам текст отчета может быть очень длинным, поэтому логируем только факт.
+        assistant_message_report_sent = "Еженедельный отчет был вам отправлен."
+        memory_manager.add_message_to_history(
+            chat_id_str,
+            {"role": MESSAGE_ROLE_ASSISTANT, "content": assistant_message_report_sent}
+        )
+
+    except Exception as e:
+        error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
+        logger.error(f"[ErrorID: {error_id}] Error generating or sending weekly report for chat_id {chat_id_str}: {e}", exc_info=True)
+        user_error_message = (
+            "😕 Не удалось сгенерировать еженедельный отчет. "
+            "Произошла внутренняя ошибка. Мы уже разбираемся. "
+            f"Пожалуйста, попробуйте позже. (Код ошибки: {error_id})"
+        )
+        bot.reply_to(message, user_error_message)
 
 
 @bot.message_handler(func=lambda message: True)

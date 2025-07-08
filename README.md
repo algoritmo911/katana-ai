@@ -67,6 +67,15 @@ You should see log messages in your console indicating that the bot is starting 
 -   Send it a `/start` command or any text message.
 -   Check your console logs. You should see the incoming message logged and the bot's response. The bot should reply to you in Telegram.
 
+## Available Commands
+
+-   `/start`: Initializes the bot and displays a welcome message.
+-   `/weekly_report`: Generates and sends a weekly report of your notes, including key insights, hot topics, and activity statistics from the last 7 days.
+-   **JSON Commands**: The bot can also process commands formatted as JSON strings for more complex interactions or automated tasks. These typically include fields like `type`, `module`, `args`, and `id`.
+    -   `{"type": "log_event", ...}`: (Placeholder) Logs an event.
+    -   `{"type": "mind_clearing", ...}`: Clears the current conversation context for the user.
+    -   Other JSON commands are saved to a file for later processing.
+
 ## Bot Stability Features
 
 The current version of the bot includes several features to improve its stability:
