@@ -92,6 +92,37 @@ If a message sent to the bot is not recognized as a specific NLP command (like "
 
 ## Logging
 
-Log files are stored in the `logs/` directory.
+Log files are stored in the `logs/` directory:
+- `telegram.log`: General bot operational logs.
+- `commands.log`: Logs related to specific command events (older format).
+- `command_telemetry.log`: Detailed telemetry for decorated commands (JSON format).
+
 Command files are stored in the `commands/` directory.
 Temporary voice files are stored in `voice_temp/` during processing.
+
+## Command Telemetry & Self-Analysis
+
+The bot includes a module for Command Telemetry and Self-Analysis. Key functions and CLI commands are decorated with `@trace_command` to automatically log detailed information about their execution.
+
+**Features:**
+
+-   **Automatic Logging**: Each decorated command/handler logs:
+    -   `trace_id`: A unique ID for each command invocation.
+    -   `log_event_timestamp_utc`: ISO timestamp when the log entry was created.
+    -   `command_start_time_utc`: ISO timestamp when the command execution began.
+    -   `user`: Information about the user invoking the command.
+        -   For Telegram commands: `{"id": <user_id>, "username": <username>, "source": "telegram"}`
+        -   For system/CLI commands: `{"username": <system_username>, "source": "system"}`
+    -   `command_name`: The name of the executed command/function (e.g., `ClassName.method_name` or `function_name`).
+    -   `arguments`: Positional (`args`) and keyword (`kwargs`) arguments passed to the command (sensitive data may be present).
+    -   `success`: Boolean indicating if the command executed successfully.
+    -   `execution_time_seconds`: Duration of the command execution.
+    -   `result`: The return value of the command if successful (serialized, sensitive data may be present).
+    -   `error`: Details of any exception raised if the command failed (includes `type`, `message`, and `details`).
+    -   `tags`: Optional custom key-value pairs for analytics (e.g., `{"command_type": "slash"}`).
+-   **Log File**: All telemetry data is logged in JSON format to `logs/command_telemetry.log`, with each entry on a new line.
+-   **Decorator Usage**:
+    -   Basic: `@trace_command`
+    -   With tags: `@trace_command(tags={"category": "financial", "priority": "high"})`
+
+This structured logging is designed for monitoring, debugging, and future analytics or self-analysis capabilities.

@@ -110,7 +110,10 @@ def log_local_bot_event(message):
     print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
     log_to_general_file(f"[BOT_EVENT] {message}")
 
+from katana.decorators.trace_command import trace_command # Ensure decorator is imported
+
 # --- Katana Command Execution ---
+@trace_command(tags={"type": "shell_execution", "source": "nlp_pipeline"})
 async def run_katana_command(command: str) -> str:
     """
     Executes a shell command asynchronously and returns its output.
@@ -154,21 +157,26 @@ async def run_katana_command(command: str) -> str:
         log_local_bot_event(error_message)
         return error_message
 
-async def handle_log_event(command_data, chat_id):
-    """Placeholder for handling 'log_event' commands."""
+# For JSON command handlers, they need the original_message to extract user details.
+# The current signature is (command_data, chat_id). We need to pass original_message.
+@trace_command(tags={"type": "json_command", "handler": "log_event"})
+async def handle_log_event(original_message: telebot.types.Message, command_data: dict):
+    """Placeholder for handling 'log_event' JSON commands."""
+    chat_id = original_message.chat.id
     log_local_bot_event(f"handle_log_event called for chat_id {chat_id} with data: {json.dumps(command_data)}")
     # Actual implementation for log_event will go here
-    # TODO: Add more specific logging based on args if needed
     log_local_bot_event(f"Successfully processed 'log_event' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
-    # await bot.reply_to(message, "✅ 'log_event' received (placeholder).") # TODO: Add reply mechanism
+    return {"status": "log_event_processed", "args_received": command_data.get('args')}
 
-async def handle_mind_clearing(command_data, chat_id):
-    """Placeholder for handling 'mind_clearing' commands."""
+
+@trace_command(tags={"type": "json_command", "handler": "mind_clearing"})
+async def handle_mind_clearing(original_message: telebot.types.Message, command_data: dict):
+    """Placeholder for handling 'mind_clearing' JSON commands."""
+    chat_id = original_message.chat.id
     log_local_bot_event(f"handle_mind_clearing called for chat_id {chat_id} with data: {json.dumps(command_data)}")
     # Actual implementation for mind_clearing will go here
-    # TODO: Add more specific logging based on args if needed
     log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
-    # await bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
+    return {"status": "mind_clearing_processed", "args_received": command_data.get('args')}
 
 # --- Unified Message Processing ---
 async def process_user_message(chat_id: int, text: str, original_message: telebot.types.Message):
@@ -233,11 +241,13 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
         command_type = command_data.get("type")
 
         if command_type == "log_event":
-            await handle_log_event(command_data, chat_id)
+            # Pass original_message for user context to the decorated handler
+            await handle_log_event(original_message, command_data)
             await bot.reply_to(original_message, "✅ 'log_event' processed (placeholder).")
             return
         elif command_type == "mind_clearing":
-            await handle_mind_clearing(command_data, chat_id)
+            # Pass original_message for user context to the decorated handler
+            await handle_mind_clearing(original_message, command_data)
             await bot.reply_to(original_message, "✅ 'mind_clearing' processed (placeholder).")
             return
 
@@ -561,17 +571,13 @@ if __name__ == '__main__':
     asyncio.run(main_runner())
 
 
-
-
-from katana.decorators.trace_command import trace_command
-
 # --- Slash Command Handlers ---
-
 # Note: The @bot.message_handler decorators will still be used by telebot for routing.
 # The registration system here is for our internal management (e.g., for /help command).
+# The @trace_command decorator is already imported earlier for run_katana_command.
 
-@trace_command
-async def command_status_impl(message):
+@trace_command(tags={"command_type": "slash", "name": "status"})
+async def command_status_impl(message): # message is the first arg, user info will be extracted
     """Implementation for the /status command."""
     start_time = datetime.utcnow()
     chat_id = message.chat.id
@@ -612,8 +618,8 @@ async def command_status_impl(message):
         log_command_event(log_entry_end)
 
 
-@trace_command
-async def command_help_impl(message):
+@trace_command(tags={"command_type": "slash", "name": "help"})
+async def command_help_impl(message): # message is the first arg, user info will be extracted
     """Implementation for the /help command."""
     start_time = datetime.utcnow()
     chat_id = message.chat.id
@@ -647,8 +653,8 @@ async def command_help_impl(message):
         log_command_event(log_entry_end)
 
 
-@trace_command
-async def command_reset_impl(message):
+@trace_command(tags={"command_type": "slash", "name": "reset"})
+async def command_reset_impl(message): # message is the first arg, user info will be extracted
     """Implementation for the /reset command."""
     start_time = datetime.utcnow()
     chat_id = message.chat.id
