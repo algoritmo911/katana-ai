@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from katana.cli import self_heal
 from katana.cli import trader # Added import for trader module
 from katana.cli import misc # Added import for misc module
+from katana.cli import proportions_cmd # Added import for proportions module
 
 def main():
     parser = argparse.ArgumentParser(description="Katana CLI tool.")
@@ -79,6 +80,9 @@ def main():
     say_parser = subparsers.add_parser("say", help="Misc commands like say.")
     say_parser.add_argument("--text", type=str, required=True, help="Text to say.")
     say_parser.set_defaults(func=misc.say)
+
+    # Register proportions commands
+    proportions_cmd.register_proportions_commands(subparsers)
 
     args = parser.parse_args()
     args.func(args)
