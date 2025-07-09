@@ -1,0 +1,25 @@
+{
+  "mandatory": [
+    "transformers",
+    "torch",
+    "spacy",
+    "sklearn",
+    "supabase",
+    "redis"
+  ],
+  "models": [
+    "distilbert-base-uncased",
+    "en_core_web_sm"
+  ],
+  "env_variables": [
+    "REDIS_HOST",
+    "REDIS_PORT",
+    "SUPABASE_URL",
+    "SUPABASE_KEY"
+  ],
+  "disk_space_paths": [
+    { "path": "/tmp", "min_gb": 1 },
+    { "path": "~/.cache/", "min_gb": 5 },
+    { "path": ".", "min_gb": 1 }
+  ]
+}

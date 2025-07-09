@@ -1,0 +1,7 @@
+click
+transformers
+torch
+spacy
+scikit-learn
+supabase
+redis
