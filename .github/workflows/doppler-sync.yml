@@ -1,0 +1,69 @@
+name: Doppler Sync and Check
+
+on:
+  workflow_dispatch: # Manual trigger
+  schedule:
+    - cron: '0 0 * * *' # Runs daily at midnight UTC
+
+jobs:
+  doppler-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Doppler CLI
+        uses: dopplerhq/cli-action@v7
+        with:
+          token: ${{ secrets.DOPPLER_TOKEN }} # Requires DOPPLER_TOKEN to be set in GitHub secrets
+
+      - name: Verify Doppler Access and List Secrets (Names Only)
+        run: |
+          echo "Attempting to access a known secret (e.g., TELEGRAM_BOT_TOKEN) silently..."
+          if doppler secrets get TELEGRAM_BOT_TOKEN --silent; then
+            echo "Successfully accessed TELEGRAM_BOT_TOKEN."
+          else
+            echo "Failed to access TELEGRAM_BOT_TOKEN. Check Doppler setup and token."
+            exit 1
+          fi
+
+          echo ""
+          echo "Listing available secret names (values are redacted by Doppler CLI by default):"
+          doppler secrets --project katana-ai --config dev # Replace with your project and config if different
+          # As an alternative, to just get names in a more scriptable way:
+          # doppler secrets --json --project katana-ai --config dev | jq -r 'keys_unsorted[]'
+          # The above jq command would require jq to be installed:
+          # sudo apt-get update && sudo apt-get install -y jq # Example for ubuntu-latest
+
+      - name: Basic Application Health Check (Optional)
+        if: false # Disabled by default, can be enabled if a simple check is useful
+        env:
+          # Inject necessary secrets for a minimal health check if applicable
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN_DOPPLER_PLACEHOLDER }} # This shows intent
+        run: |
+          # This is a placeholder for a very basic check if your app
+          # has a command to verify config without fully running.
+          # For example, if main.py could be run with a --check-config flag:
+          # python main.py --check-config
+          echo "Placeholder for a basic application config check with Doppler secrets."
+          # doppler run -- python main.py --check-config # Example
+          echo "NOTE: TELEGRAM_BOT_TOKEN_DOPPLER_PLACEHOLDER is illustrative."
+          echo "Actual secrets are injected by 'doppler run --' or via Doppler CLI setup."
+
+permissions:
+  contents: read # Needed for actions/checkout
+  # secrets: read # Not directly needed by this workflow if DOPPLER_TOKEN provides all access
+                 # but good to be mindful of if accessing GitHub secrets directly.
+
+# Note:
+# For the 'doppler secrets' command to list secrets, ensure the DOPPLER_TOKEN used
+# has the necessary permissions for the specified project and config.
+# The scheduled run helps to periodically verify that the Doppler integration is healthy.
+# Consider adding more specific checks based on your application's needs.
+# The jq command is commented out but provides a way to get just secret names if needed.
+# If you use it, ensure jq is installed in a prior step.
+# The project and config names in `doppler secrets --project katana-ai --config dev`
+# should match your actual Doppler project and config names.
+# For the optional application health check, you'd need to define what that check entails.
+# The env var TELEGRAM_BOT_TOKEN_DOPPLER_PLACEHOLDER is just to show that secrets would be used;
+# in a real `doppler run`, they are automatically available.

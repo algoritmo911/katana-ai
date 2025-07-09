@@ -19,38 +19,35 @@ jobs:
         with:
           python-version: '3.10' # Using a more specific version
 
+      - name: Setup Doppler CLI
+        uses: dopplerhq/cli-action@v7
+        with:
+          token: ${{ secrets.DOPPLER_TOKEN }}
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run tests
-        run: pytest
+        run: doppler run -- pytest
 
-      - name: Generate .env file (simulation)
-        if: success()
-        run: |
-          echo "Simulating .env file generation..."
-          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env.generated
-          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env.generated
-          echo "RAILWAY_TOKEN=${{ secrets.RAILWAY_TOKEN }}" >> .env.generated # Or SSH_PRIVATE_KEY
-          echo ".env.generated content:"
-          cat .env.generated
-          # In a real scenario, this .env file would be used by the deployment step
-          # and should not be committed or stored as an artifact unless secure.
+      # The .env file generation step is removed as Doppler now handles secret injection.
 
       - name: Deploy to Cloud (placeholder)
-        if: success() # Only run if tests and .env generation are successful
+        if: success() # Only run if tests are successful
         run: |
-          echo "Deployment step placeholder. Bot would be deployed here."
-          echo "Deployment target would be determined by config or variable."
-          # Example: if [ "${{ secrets.DEPLOY_TARGET }}" == "RAILWAY" ]; then
-          #   echo "Deploying to Railway..."
-          #   # Railway deployment commands
-          # elif [ "${{ secrets.DEPLOY_TARGET }}" == "VPS" ]; then
-          #   echo "Deploying to VPS..."
-          #   # SCP and SSH commands
-          # fi
+          doppler run -- bash -c '
+            echo "Deployment step placeholder. Bot would be deployed here."
+            echo "Deployment target would be determined by config or variable (e.g., $DEPLOY_TARGET)."
+            # Example: if [ "$DEPLOY_TARGET" == "RAILWAY" ]; then
+            #   echo "Deploying to Railway..."
+            #   # Railway deployment commands using secrets like $RAILWAY_TOKEN
+            # elif [ "$DEPLOY_TARGET" == "VPS" ]; then
+            #   echo "Deploying to VPS..."
+            #   # SCP and SSH commands using secrets like $SSH_PRIVATE_KEY
+            # fi
+          '
 
       - name: Send Telegram Notification (placeholder)
         if: always() # Send notification regardless of job status

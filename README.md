@@ -31,29 +31,59 @@ pre-commit install
 ```
 Now, `black` and `flake8` will run automatically on changed files before each commit.
 
-### 4. Environment Variables (If Applicable)
-If the project requires specific environment variables for configuration (e.g., API keys, database URLs):
-- Create a `.env` file in the project root.
-- You can use `.env.example` as a template if it exists.
-- **Note:** `.env` files should be added to `.gitignore` to avoid committing secrets.
-  (At the moment, no specific environment variables are defined for this project).
+### 4. Secrets and Environment Management with Doppler
 
-### 5. API Keys and Secrets Management (`secrets.toml`)
+This project uses [Doppler](https://doppler.com/) to manage API keys, environment variables, and other secrets. Doppler provides a central place to store secrets securely and inject them into the application environment at runtime.
 
-For integrations with external services that require API keys or other secrets (like Coinbase for authenticated actions in the future), this project uses a `secrets.toml` file.
+**Local Development Setup with Doppler:**
 
--   **Template:** A template file `secrets.toml.example` is provided in the repository. It shows the expected structure for your secrets.
--   **Local Setup:** To use services requiring secrets:
-    1.  Copy `secrets.toml.example` to a new file named `secrets.toml` in the project root.
-    2.  Edit `secrets.toml` and fill in your actual API keys and other secret values.
--   **Security:**
-    -   The `secrets.toml` file is **explicitly ignored by Git** (via `.gitignore`).
-    -   **DO NOT COMMIT YOUR ACTUAL `secrets.toml` FILE OR YOUR SECRETS TO THE REPOSITORY.**
-    -   Currently, only unauthenticated API endpoints (like Coinbase spot prices) are used, so `secrets.toml` is for future-proofing authenticated requests.
+1.  **Install Doppler CLI:**
+    Follow the instructions on the [Doppler CLI installation guide](https://docs.doppler.com/docs/cli).
+
+2.  **Login to Doppler:**
+    ```bash
+    doppler login
+    ```
+    This will open a browser window to authenticate your CLI with your Doppler account.
+
+3.  **Set up the Project:**
+    Navigate to the project's root directory in your terminal and run:
+    ```bash
+    doppler setup
+    ```
+    Follow the prompts to select the appropriate Doppler project (e.g., `katana-ai`) and configuration (e.g., `dev`). This will create a `.doppler` directory (which should be added to `.gitignore` if not already) linking your local project to the Doppler project.
+
+4.  **Accessing Secrets:**
+    Once set up, Doppler will automatically inject the secrets from your selected project and config when you run commands prefixed with `doppler run --`.
+
+    Refer to the `.env.example` file for a list of environment variables the application expects (e.g., `TELEGRAM_BOT_TOKEN`, `WEBHOOK_URL`). These should be configured in your Doppler project. The `secrets.toml.example` file also shows examples of other secrets you might manage.
+
+**Running the Application Locally with Doppler:**
+
+To run the FastAPI application with secrets injected by Doppler:
+```bash
+doppler run -- uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+The `doppler run --` command ensures that `main.py` (and any other part of the application) can access the necessary environment variables like `TELEGRAM_BOT_TOKEN` and `WEBHOOK_URL` from Doppler.
+
+If you are using `ngrok` for a public webhook URL during development:
+1. Start ngrok: `ngrok http 8000`
+2. Copy the public HTTPS URL provided by ngrok.
+3. Update the `WEBHOOK_URL` secret in your Doppler `dev` config with this ngrok URL.
+4. Restart the application using the `doppler run -- uvicorn ...` command above.
 
 ## Running Checks and Tests Locally
 
-To ensure your code is clean, formatted, and all tests pass before pushing changes, use the `run_checks.sh` script:
+To ensure your code is clean, formatted, and all tests pass before pushing changes, use the `run_checks.sh` script. If tests require environment variables/secrets, they will be available if the test execution within the script (or the script itself) is eventually run via `doppler run --` (this is handled in CI).
+For local execution, if your tests need secrets:
+```bash
+doppler run -- ./run_checks.sh
+```
+Otherwise, if tests don't yet need secrets:
+```bash
+./run_checks.sh
+```
+This script will:
 
 ```bash
 ./run_checks.sh
@@ -66,61 +96,50 @@ This script will:
 ## Continuous Integration (CI) Pipeline
 
 The project uses GitHub Actions for CI. The workflow is defined in `.github/workflows/main.yml`.
-When you push changes to `main` or create a pull request targeting `main`, the CI pipeline automatically:
+When you push changes to `main`, `setup/dev-infrastructure`, or create a pull request targeting `main`, the CI pipeline automatically:
 1. Sets up a clean Python environment.
-2. Installs all dependencies from `requirements.txt`.
-3. Runs the `./run_checks.sh` script, which includes:
-    - Linting with `flake8`.
-    - Formatting checks with `black`.
-    - Unit tests with `pytest` and coverage reporting.
+2. **Sets up Doppler CLI:** Initializes Doppler using a `DOPPLER_TOKEN` GitHub secret.
+3. Installs all dependencies from `requirements.lock`.
+4. Runs pre-commit checks.
+5. **Runs script checks with Doppler:** Executes `./scripts/run_checks.sh` (which includes `pytest`) using `doppler run --`. This ensures that any tests requiring secrets have them available from Doppler.
 
-If any of these steps fail, a CI build will be marked as failed, helping to catch issues early.
+If any of these steps fail, the CI build will be marked as failed.
 
-## CI/CD Pipeline with Deployment
+## CI/CD Pipeline with Deployment and Doppler
 
-This project uses GitHub Actions for Continuous Integration (CI) and Continuous Deployment (CD). The primary workflow for this is defined in `.github/workflows/deploy.yml`.
+This project uses GitHub Actions for Continuous Integration (CI) and Continuous Deployment (CD), with Doppler managing secrets. The primary workflow for this is defined in `.github/workflows/deploy.yml`.
 
 ### Workflow Overview (`deploy.yml`)
 
 This workflow automates testing and deployment of the Telegram bot.
 
 **Triggers:**
-*   Push to `main` branch.
-*   Push to `dev` branch.
-*   Manual trigger via `workflow_dispatch` from the GitHub Actions UI.
+*   Push to `main` or `dev` branches.
+*   Manual trigger via `workflow_dispatch`.
 
 **Key Steps:**
-1.  **Checkout Code:** Fetches the latest version of your repository.
-2.  **Set up Python:** Configures the specified Python version (e.g., 3.10).
-3.  **Install Dependencies:** Installs all required packages from `requirements.txt`.
-4.  **Run Tests:** Executes the test suite using `pytest`. All tests must pass for the workflow to proceed to deployment.
-5.  **Generate `.env` File (Simulated in CI):**
-    *   During the CI/CD run, a `.env` file is generated using secrets stored in GitHub. This step ensures that sensitive information like API tokens are not hardcoded in the repository but are available to the application at runtime.
-    *   The actual deployment environment (e.g., Railway, Render, VPS) will need these environment variables set up.
-6.  **Deploy to Cloud (Placeholder):**
-    *   If tests pass, this step handles the deployment. The actual deployment commands will depend on the chosen hosting platform (e.g., Railway, Render, or a custom script for a VPS).
-    *   This step is currently a placeholder and needs to be configured with actual deployment logic.
-7.  **Send Telegram Notification (Placeholder):**
-    *   An optional step to send a notification (e.g., via a Telegram message) about the status (success or failure) of the deployment.
+1.  **Checkout Code.**
+2.  **Set up Python.**
+3.  **Set up Doppler CLI:** Initializes Doppler using the `DOPPLER_TOKEN` GitHub secret. This token allows the workflow to fetch the necessary secrets for the selected Doppler project and configuration.
+4.  **Install Dependencies.**
+5.  **Run Tests with Doppler:** Executes `pytest` using `doppler run -- pytest`, ensuring tests have access to secrets.
+6.  **Deploy to Cloud with Doppler (Placeholder):**
+    *   If tests pass, this step handles deployment.
+    *   The deployment commands are run using `doppler run -- ...`, so deployment scripts can access necessary API keys and tokens (e.g., `RAILWAY_TOKEN`, `SSH_PRIVATE_KEY`) directly from Doppler as environment variables.
+    *   The manual step of generating a `.env` file from GitHub secrets has been removed, as Doppler handles this securely.
+7.  **Send Telegram Notification (Placeholder).**
 
-### GitHub Secrets for CI/CD
+### Doppler and GitHub Secrets for CI/CD
 
-The `deploy.yml` workflow relies on GitHub Secrets to securely manage sensitive information like API keys and deployment tokens. These secrets are encrypted and can only be used by GitHub Actions.
+-   **`DOPPLER_TOKEN`**: This is the primary GitHub Secret you need to configure in your repository settings (`Settings > Secrets and variables > Actions`). This token is a Doppler Service Token with appropriate access to your Doppler project (e.g., `katana-ai`) and its configurations (e.g., `prd` for production, `dev` for development/staging).
+-   All other secrets (like `TELEGRAM_BOT_TOKEN`, `OPENAI_API_KEY`, `RAILWAY_TOKEN`, etc.) should be managed within your Doppler project. The CI/CD pipeline will fetch them via the `DOPPLER_TOKEN`.
+-   The `.github/workflows/doppler-sync.yml` workflow can be used to periodically check the connection to Doppler and list available secret names (not values) for verification.
 
-**Required Secrets (add these in your GitHub repository settings under `Settings > Secrets and variables > Actions`):**
-*   `TELEGRAM_BOT_TOKEN`: Your Telegram bot's API token.
-*   `OPENAI_API_KEY`: Your OpenAI API key (if used by the bot).
-*   `RAILWAY_TOKEN`: Your Railway API token (if deploying to Railway).
-*   `SSH_PRIVATE_KEY`: Your SSH private key for deploying to a VPS (if using SCP/SSH). *Ensure you store the private key securely and configure the corresponding public key on your server.*
-*   *(Add any other secrets your bot or deployment process might need).*
-
-**How to Add New Secrets:**
-1.  Go to your GitHub repository.
-2.  Click on "Settings".
-3.  In the left sidebar, navigate to "Secrets and variables" > "Actions".
-4.  Click the "New repository secret" button.
-5.  Enter the name of the secret (e.g., `TELEGRAM_BOT_TOKEN`) and its value.
-6.  Click "Add secret".
+**Migrating from individual GitHub Secrets to Doppler:**
+If you previously had individual secrets like `TELEGRAM_BOT_TOKEN` defined in GitHub Secrets, you should:
+1. Add these secrets to your Doppler project.
+2. Remove the old individual GitHub Secrets (except for `DOPPLER_TOKEN`).
+3. Ensure your `DOPPLER_TOKEN` has permissions to read these secrets.
 
 ### Local Testing of the Pipeline
 

@@ -25,39 +25,38 @@ The `requirements.txt` file has been updated to include:
 - `python-telegram-bot`
 - `apscheduler`
 
-### 2. Environment Variables / Configuration
+### 2. Environment Variables / Configuration with Doppler
 
-The application requires two critical pieces of information to be configured in `main.py` (or ideally, via environment variables in a production setup):
+The application requires critical information to be provided as environment variables. These are managed using **Doppler**.
 
 -   **`TELEGRAM_BOT_TOKEN`**: Your Telegram Bot Token.
-    *   In `main.py`, find the line: `TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"`
-    *   Replace `"YOUR_TELEGRAM_BOT_TOKEN"` with your actual bot token.
 -   **`WEBHOOK_URL`**: The publicly accessible URL for your webhook.
-    *   In `main.py`, find the line: `WEBHOOK_URL = "https://your-actual-domain-or-ngrok-url.com/webhook"`
-    *   Replace `"https://your-actual-domain-or-ngrok-url.com/webhook"` with your actual public URL that Telegram will send updates to. This URL must point to the `/webhook` endpoint of your running FastAPI application.
+-   *(Other secrets as defined in `secrets.toml.example` or your Doppler project configuration, e.g., `COINBASE_API_KEY`, `COINBASE_API_SECRET`)*
+
+These variables are no longer set directly in `main.py`. Instead, they are injected into the application's environment by Doppler.
 
 **For local development:**
-You can use a tool like `ngrok` to expose your local FastAPI server to the internet.
-1.  Start your FastAPI application (see step 3). It will typically run on `http://127.0.0.1:8000`.
-2.  Run ngrok: `ngrok http 8000`
-3.  Ngrok will provide you with a public HTTPS URL (e.g., `https://<random_string>.ngrok.io`). Use this as your `WEBHOOK_URL` in `main.py` (e.g., `WEBHOOK_URL = "https://<random_string>.ngrok.io/webhook"`).
+1.  Install the Doppler CLI (see `README.md` for instructions).
+2.  Log in to Doppler: `doppler login`
+3.  Set up your project: `doppler setup` (follow prompts to select the project and config).
+4.  If using `ngrok` to expose your local FastAPI server:
+    *   Start your FastAPI application (prefixed with Doppler, see step 3). It will typically run on `http://127.0.0.1:8000`.
+    *   Run ngrok: `ngrok http 8000`
+    *   Ngrok will provide a public HTTPS URL (e.g., `https://<random_string>.ngrok.io`).
+    *   **Important**: Update the `WEBHOOK_URL` secret in your Doppler project configuration with this ngrok URL. Doppler will then inject the correct URL when you run the app. Restart the FastAPI application after updating the secret in Doppler.
 
-**Important**: Every time you restart ngrok, you will get a new URL. You must update `WEBHOOK_URL` in `main.py` and restart the FastAPI application for the webhook to be set correctly with Telegram.
+### 3. Running the Application with Doppler
 
-### 3. Running the Application
-
-To run the FastAPI application locally:
+To run the FastAPI application locally with secrets injected by Doppler:
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+doppler run -- uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
--   `main:app`: Tells uvicorn to find the `app` object (FastAPI instance) in the `main.py` file.
--   `--reload`: Enables auto-reloading when code changes (useful for development).
--   `--host 0.0.0.0`: Makes the server accessible from other devices on your network.
--   `--port 8000`: Specifies the port to run on.
+-   `doppler run --`: This command fetches the secrets from your Doppler project and injects them as environment variables before running the subsequent command (`uvicorn ...`).
+-   `main:app`, `--reload`, `--host`, `--port`: Standard uvicorn arguments.
 
-Once the application is running, it will attempt to set the Telegram webhook to the `WEBHOOK_URL` you configured. Check the application logs for confirmation or errors.
+Once the application is running (with secrets from Doppler), it will attempt to set the Telegram webhook using the `WEBHOOK_URL` provided by Doppler. Check the application logs for confirmation or errors.
 
 ### 4. Interacting with the Bot
 
@@ -101,11 +100,11 @@ The FastAPI application exposes the following utility endpoints:
 -   `requirements.txt`: Lists Python dependencies.
 
 ## Important Notes for Agents
-- When modifying code, ensure that `TELEGRAM_BOT_TOKEN` and `WEBHOOK_URL` are correctly handled. For testing, direct modification in `main.py` is acceptable, but for production, these should be managed via environment variables or a secure configuration system.
+- When modifying code, ensure that `TELEGRAM_BOT_TOKEN` and `WEBHOOK_URL` (and any other necessary secrets) are defined in your Doppler project. The application now relies solely on environment variables provided by Doppler for these configurations.
 - If you encounter issues with Telegram updates not being received, verify:
-    1. The FastAPI application is running.
-    2. The `WEBHOOK_URL` is correctly set and publicly accessible.
-    3. Ngrok (if used) is running and the URL matches the one configured.
+    1. The FastAPI application is running (using `doppler run -- ...`).
+    2. The `WEBHOOK_URL` in your Doppler configuration is correct and publicly accessible.
+    3. Ngrok (if used for local development) is running and its URL is correctly updated in Doppler.
     4. There are no errors in the application logs related to webhook setup or processing.
 - The `katana_bot.py`'s `handle_command` method now returns a string response, which `main.py` then sends back to the user via Telegram. Ensure any new commands follow this pattern.
 - Scheduled tasks are asynchronous. Be mindful of shared resources if tasks modify bot state or interact with external services.

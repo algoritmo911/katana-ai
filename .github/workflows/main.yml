@@ -18,6 +18,11 @@ jobs:
       with:
         python-version: '3.10' # Specified Python version
 
+    - name: Setup Doppler CLI
+      uses: dopplerhq/cli-action@v7
+      with:
+        token: ${{ secrets.DOPPLER_TOKEN }}
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -30,7 +35,7 @@ jobs:
     - name: Run script checks (includes pytest with coverage)
       run: |
         chmod +x ./scripts/run_checks.sh
-        ./scripts/run_checks.sh
+        doppler run -- ./scripts/run_checks.sh
 
     - name: Upload stderr log on failure
       if: failure()

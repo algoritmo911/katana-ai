@@ -1,5 +1,6 @@
 import logging
 import time
+import os # Added for environment variables
 from datetime import timedelta
 from fastapi import FastAPI, Request, HTTPException
 from telegram import Update as TelegramUpdate
@@ -23,9 +24,9 @@ START_TIME = time.time()
 katana_bot_instance = KatanaBot("WebhookKatanaBot")
 
 # --- Telegram Bot Setup ---
-# It's better to get this from environment variables or a config file
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN" # User must replace this
-WEBHOOK_URL = "https://your-actual-domain-or-ngrok-url.com/webhook" # User must replace this
+# Load from environment variables provided by Doppler
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
 telegram_app = None # Will be initialized on startup
 scheduler = None    # Will be initialized on startup
@@ -45,14 +46,14 @@ async def startup_event():
     global telegram_app, scheduler
 
     # 1. Initialize Telegram Application
-    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
-        logger.warning("TELEGRAM_BOT_TOKEN is not set. Webhook registration and Telegram functionality will be disabled.")
+    if not TELEGRAM_BOT_TOKEN:
+        logger.warning("TELEGRAM_BOT_TOKEN environment variable is not set. Webhook registration and Telegram functionality will be disabled.")
         telegram_app = None
     else:
         telegram_app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         # Set webhook
-        if not WEBHOOK_URL or WEBHOOK_URL == "https://your-actual-domain-or-ngrok-url.com/webhook":
-            logger.warning(f"WEBHOOK_URL is not properly set. Telegram webhook will not be registered.")
+        if not WEBHOOK_URL:
+            logger.warning(f"WEBHOOK_URL environment variable is not properly set. Telegram webhook will not be registered.")
         else:
             try:
                 await telegram_app.bot.set_webhook(
@@ -191,8 +192,8 @@ async def get_status():
         "version": app.version,
         "telegram_integration": {
             "bot_status": "active_and_webhook_set" if telegram_app and telegram_app.bot.token else "inactive_or_webhook_failed",
-            "token_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN != "YOUR_TELEGRAM_BOT_TOKEN"),
-            "webhook_url_configured": bool(WEBHOOK_URL and WEBHOOK_URL != "https://your-actual-domain-or-ngrok-url.com/webhook"),
+            "token_configured": bool(TELEGRAM_BOT_TOKEN),
+            "webhook_url_configured": bool(WEBHOOK_URL),
             "webhook_url_used": WEBHOOK_URL if telegram_app else "N/A"
         },
         "scheduler": {
