@@ -11,7 +11,7 @@ from pathlib import Path # For path operations within the script
 # --- Configuration & Constants ---
 DEFAULT_SECRETS_FILENAME = "secrets_temp.json"
 
-from katana.logging_config import get_logger, setup_logging
+from katana.logger import get_logger, setup_logging
 import logging
 
 logger = get_logger(__name__)

@@ -5,6 +5,7 @@ from openai import OpenAI, APIError, AuthenticationError, RateLimitError # For o
 import traceback # For more detailed error logging
 import logging # Import logging for setup_logging level
 from katana.logger import setup_logging, get_logger
+from katana.utils.telemetry import trace_command # Import the decorator
 
 # --- Initialize Logging ---
 setup_logging(log_level=logging.INFO) # Or logging.DEBUG, etc.
@@ -30,66 +31,102 @@ else:
     )
 
 # --- Bot Command Handlers ---
+# The @trace_command decorator expects user_id and context_id to be passed as kwargs
+# to the decorated function. So we define helper functions that will be decorated.
+
+async def _start_command_logic(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, context_id: str):
+    """Core logic for the /start command."""
+    message_id_str = str(update.message.message_id) if update.message else 'UnknownMessage_start'
+    log_context_start = {'user_id': user_id, 'chat_id': context_id, 'message_id': message_id_str}
+    logger.info(f"Executing /start command logic for user {user_id}", extra=log_context_start)
+
+    reply_text = "⚔️ Katana (AI Chat Mode) is online. Send me a message and I'll try to respond using OpenAI."
+    await update.message.reply_text(reply_text)
+    return reply_text # Return the reply for tracing
+
+async def _handle_message_logic(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, context_id: str):
+    """Core logic for handling text messages."""
+    if not update.message or not update.message.text:
+        return "No message text found."
+
+    user_text = update.message.text
+    message_id_str = str(update.message.message_id) if update.message else 'UnknownMessage_handle'
+    log_context_msg = {'user_id': user_id, 'chat_id': context_id, 'message_id': message_id_str}
+
+    logger.info(f"Executing message handling logic for user {user_id}: {user_text[:100]}", extra=log_context_msg)
+
+    if not client:
+        logger.error("OpenAI client not initialized. Cannot process message.", extra=log_context_msg)
+        reply_text = "I apologize, but my connection to the AI core (OpenAI) is not configured. Please contact the administrator."
+        await update.message.reply_text(reply_text)
+        return reply_text
+
+    try:
+        logger.info(f"Sending to OpenAI (GPT-4 model, user: {user_id}): {user_text[:50]}...", extra=log_context_msg)
+        completion = client.chat.completions.create(
+            model="gpt-4", # Consider making model configurable
+            messages=[{"role": "user", "content": user_text}]
+        )
+        ai_reply = completion.choices[0].message.content.strip()
+        logger.info(f"OpenAI reply for user {user_id}: {ai_reply[:50]}...", extra=log_context_msg)
+        await update.message.reply_text(ai_reply)
+        return ai_reply # Return AI reply for tracing
+
+    except AuthenticationError as e:
+        logger.error(f"OpenAI Authentication Error: {e}. Check your API key.", extra=log_context_msg)
+        reply_text = "Error: OpenAI authentication failed. Please check the API key configuration with the administrator."
+        await update.message.reply_text(reply_text)
+        raise # Re-raise to be caught by decorator's exception handling
+    except RateLimitError as e:
+        logger.error(f"OpenAI Rate Limit Error: {e}.", extra=log_context_msg)
+        reply_text = "Error: OpenAI rate limit exceeded. Please try again later."
+        await update.message.reply_text(reply_text)
+        raise
+    except APIError as e:
+        logger.error(f"OpenAI API Error: {e}", extra=log_context_msg)
+        reply_text = f"An error occurred with the OpenAI API: {str(e)}"
+        await update.message.reply_text(reply_text)
+        raise
+    except Exception as e:
+        logger.critical(f"An unexpected error occurred in _handle_message_logic: {e}", extra=log_context_msg)
+        logger.critical(traceback.format_exc(), extra=log_context_msg)
+        reply_text = "Sorry, an unexpected error occurred while processing your message."
+        await update.message.reply_text(reply_text)
+        raise
+
+
+# Decorated versions of the handler logic
+@trace_command
+async def traced_start_command_logic(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, context_id: str):
+    return await _start_command_logic(update, context, user_id=user_id, context_id=context_id)
+
+@trace_command
+async def traced_handle_message_logic(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, context_id: str):
+    # The first two arguments (update, context) will go into *args for the decorator,
+    # user_id and context_id will go into **kwargs for the decorator.
+    return await _handle_message_logic(update, context, user_id=user_id, context_id=context_id)
+
+
+# Actual handlers called by telegram.ext framework
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends a welcome message when the /start command is issued."""
     user_id_str = str(update.effective_user.id) if update.effective_user else 'UnknownUser'
     chat_id_str = str(update.effective_chat.id) if update.effective_chat else 'UnknownChat'
-    message_id_str = str(update.message.message_id) if update.message else 'UnknownMessage'
-
-    logger.info(
-        f"Received /start command from user {user_id_str}",
-        extra={'user_id': user_id_str, 'chat_id': chat_id_str, 'message_id': message_id_str}
-    )
-    await update.message.reply_text("⚔️ Katana (AI Chat Mode) is online. Send me a message and I'll try to respond using OpenAI.")
+    # Call the traced logic, passing user_id and context_id as kwargs
+    await traced_start_command_logic(update, context, user_id=user_id_str, context_id=chat_id_str)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles non-command text messages by sending them to OpenAI GPT."""
-    if not update.message or not update.message.text:
-        return
-
-    user_text = update.message.text
     user_id_str = str(update.effective_user.id) if update.effective_user else 'UnknownUser'
     chat_id_str = str(update.effective_chat.id) if update.effective_chat else 'UnknownChat'
-    message_id_str = str(update.message.message_id) if update.message else 'UnknownMessage'
+    # Call the traced logic, passing user_id and context_id as kwargs
+    await traced_handle_message_logic(update, context, user_id=user_id_str, context_id=chat_id_str)
 
-    log_context = {'user_id': user_id_str, 'chat_id': chat_id_str, 'message_id': message_id_str}
-
-    logger.info(f"Received message from user {user_id_str}: {user_text[:100]}", extra=log_context)
-    # TODO: Add log_event for NLP interpretation here (e.g., intent, entities) if applicable before sending to OpenAI
-
-    if not client: # Check if OpenAI client is initialized
-        logger.error("OpenAI client not initialized. Cannot process message.", extra=log_context)
-        await update.message.reply_text("I apologize, but my connection to the AI core (OpenAI) is not configured. Please contact the administrator.")
-        return
-
-    try:
-        logger.info(f"Sending to OpenAI (GPT-4 model, user: {user_id_str}): {user_text[:50]}...", extra=log_context)
-        completion = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": user_text}]
-        )
-        ai_reply = completion.choices[0].message.content.strip()
-        logger.info(f"OpenAI reply for user {user_id_str}: {ai_reply[:50]}...", extra=log_context)
-        await update.message.reply_text(ai_reply)
-
-    except AuthenticationError as e:
-        logger.error(f"OpenAI Authentication Error: {e}. Check your API key.", extra=log_context)
-        await update.message.reply_text("Error: OpenAI authentication failed. Please check the API key configuration with the administrator.")
-    except RateLimitError as e:
-        logger.error(f"OpenAI Rate Limit Error: {e}.", extra=log_context)
-        await update.message.reply_text("Error: OpenAI rate limit exceeded. Please try again later.")
-    except APIError as e: # More general API errors from OpenAI v1.x
-        logger.error(f"OpenAI API Error: {e}", extra=log_context)
-        await update.message.reply_text(f"An error occurred with the OpenAI API: {str(e)}")
-    except Exception as e:
-        logger.critical(f"An unexpected error occurred in handle_message: {e}", extra=log_context)
-        logger.critical(traceback.format_exc(), extra=log_context) # format_exc() provides the message
-        await update.message.reply_text("Sorry, an unexpected error occurred while processing your message.")
 
 # --- Main Bot Setup ---
 def main():
     """Starts the bot."""
-    system_context = {'user_id': 'system', 'chat_id': 'system'} # General system context
+    system_context = {'user_id': 'system', 'chat_id': 'system'}
 
     if not TELEGRAM_TOKEN:
         logger.critical(
@@ -97,12 +134,11 @@ def main():
             extra={**system_context, 'message_id': 'init_main_token_fail'}
         )
         return
-    if not OPENAI_API_KEY: # Already checked, but good for main entry point
-        logger.critical(
-            "OpenAI API Key not set. Message handling will fail.",
-            extra={**system_context, 'message_id': 'init_main_openai_fail'}
+    if not OPENAI_API_KEY:
+        logger.warning( # Changed to warning as bot can start but features will be limited
+            "OPENAI_API_KEY not set. OpenAI features will be disabled.",
+            extra={**system_context, 'message_id': 'init_main_openai_warn'}
         )
-        # Allow bot to start for /start command, but message handling will fail gracefully.
 
     logger.info(
         f"Initializing Katana Telegram Bot (AI Chat Mode) with token ending: ...{TELEGRAM_TOKEN[-4:] if len(TELEGRAM_TOKEN) > 4 else 'TOKEN_TOO_SHORT'}",
@@ -111,16 +147,14 @@ def main():
 
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    # TODO: Add log_event for voice stream processing if voice messages are handled
-    # TODO: Add log_event for mode changes if the bot supports different modes (e.g., chat vs. command)
+    application.add_handler(CommandHandler("start", start)) # Uses the wrapper 'start'
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)) # Uses the wrapper 'handle_message'
 
     logger.info(
         "Katana Telegram Bot (AI Chat Mode) is running. Press Ctrl-C to stop.",
         extra={**system_context, 'message_id': 'init_main_running'}
     )
-    logger.info("Bot started.", extra={**system_context, 'message_id': 'bot_startup_event'}) # Explicit bot start log
+    logger.info("Bot started.", extra={**system_context, 'message_id': 'bot_startup_event'})
 
     try:
         application.run_polling()
@@ -132,11 +166,11 @@ def main():
         logger.critical(
             traceback.format_exc(),
             extra={**system_context, 'message_id': 'main_poll_traceback'}
-        ) # format_exc() provides the message
+        )
     finally:
         logger.info(
             "Katana Telegram Bot (AI Chat Mode) stopping...",
-            extra={**system_context, 'message_id': 'bot_stopping_event'} # Explicit bot stop log
+            extra={**system_context, 'message_id': 'bot_stopping_event'}
         )
         logger.info(
             "Katana Telegram Bot (AI Chat Mode) stopped.",

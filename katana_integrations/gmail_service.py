@@ -26,7 +26,7 @@ except ImportError:
     logging.getLogger(__name__).critical("[GmailService:CRITICAL_DEPENDENCY_ERROR] Google API client libraries not found. " + \
           "Please run: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib")
 
-from katana.logging_config import get_logger, setup_logging # setup_logging for __main__
+from katana.logger import get_logger, setup_logging # setup_logging for __main__
 import logging # For logger levels if needed
 
 logger = get_logger(__name__)

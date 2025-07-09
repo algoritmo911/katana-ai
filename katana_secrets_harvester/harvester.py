@@ -10,7 +10,7 @@ import re
 DEFAULT_SECRETS_FILENAME = "secrets_temp.json"
 DEFAULT_API_LABEL = "api" # Case-sensitive as per gkeepapi docs for findLabel
 
-from katana.logging_config import get_logger, setup_logging
+from katana.logger import get_logger, setup_logging
 import logging
 
 logger = get_logger(__name__)

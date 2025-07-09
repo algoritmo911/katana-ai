@@ -14,7 +14,7 @@ except ImportError:
     import logging # Temporary import for early log
     logging.getLogger(__name__).critical("[GitHubService:CRITICAL_DEPENDENCY_ERROR] PyGithub library not found. Please run: pip install PyGithub")
 
-from katana.logging_config import get_logger, setup_logging # setup_logging for __main__
+from katana.logger import get_logger, setup_logging # setup_logging for __main__
 import logging # For logger levels if needed
 
 logger = get_logger(__name__)
