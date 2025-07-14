@@ -10,6 +10,7 @@ import threading  # For running self-healing in a separate thread
 import shared_config  # Import the shared configuration
 from katana.modules.command_handler import handle
 from katana.modules.status_logger import log_status
+from katana.modules.sync_agent import periodic_sync
 
 # Attempt to import the self-healing orchestrator
 try:
@@ -338,10 +339,11 @@ def agent_main_loop(loop_interval_seconds=10):
         while True:
             try:
                 process_pending_commands()
+                periodic_sync(agent_memory_state)
                 # TODO: Add other periodic tasks here (e.g., sync, memory cleanup)
                 time.sleep(loop_interval_seconds)
             except Exception as e:
-                status_logger.log_status(f"[ERROR] {e}")
+                log_status(f"[ERROR] {e}")
     except KeyboardInterrupt:
         log_event(
             "Katana Agent shutting down due to user interrupt.",
