@@ -1,4 +1,4 @@
-import telebot
+from bot.bot_instance import bot
 import json
 import os
 import logging
@@ -95,6 +95,7 @@ MESSAGE_ROLE_ASSISTANT = "assistant"
 # Assuming `src` is in PYTHONPATH for cleaner imports
 try:
     from src.memory.memory_manager import MemoryManager
+    from src.memory.memory import Memory
 except ImportError:
     # Fallback for local execution if PYTHONPATH isn't set, e.g. when running katana_bot.py directly for testing
     # This assumes katana_bot.py is in bot/ and src/ is a sibling directory
@@ -102,6 +103,7 @@ except ImportError:
     project_root = Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(project_root))
     from src.memory.memory_manager import MemoryManager
+    from src.memory.memory import Memory
 
 
 redis_host = os.getenv('REDIS_HOST', 'localhost')
@@ -113,10 +115,11 @@ chat_ttl = int(chat_ttl_str) if chat_ttl_str else None
 
 # memory_manager will be initialized by init_dependencies()
 memory_manager: Optional[MemoryManager] = None
+memory: Optional[Memory] = None
 
 def init_dependencies():
     """Initializes global dependencies like MemoryManager."""
-    global memory_manager
+    global memory_manager, memory
     if memory_manager is None:
         logger.info("Initializing MemoryManager...")
         # These variables are already defined at module level
@@ -131,6 +134,13 @@ def init_dependencies():
         logger.info("MemoryManager initialized.")
     else:
         logger.info("MemoryManager already initialized.")
+
+    if memory is None:
+        logger.info("Initializing Memory...")
+        memory = Memory()
+        logger.info("Memory initialized.")
+    else:
+        logger.info("Memory already initialized.")
 
 # --- End MemoryManager Initialization ---
 
@@ -158,7 +168,6 @@ if OPENAI_API_KEY:
 else:
     logger.warning("⚠️ OPENAI_API_KEY not found. Some features might be unavailable.")
 
-bot = telebot.TeleBot(API_TOKEN)
 
 # Папка для сохранения команд
 COMMAND_FILE_DIR = Path('commands')
@@ -333,7 +342,21 @@ def handle_start(message):
     logger.info(f"Welcome message added to history for chat_id {chat_id_str} via MemoryManager.")
 
 
-@bot.message_handler(func=lambda message: True)
+@bot.message_handler(commands=['dream'])
+def handle_dream(message):
+    """Saves a dream to memory."""
+    chat_id_str = str(message.chat.id)
+    dream_text = message.text.replace("/dream", "").strip()
+    if not dream_text:
+        bot.reply_to(message, "Пожалуйста, напишите текст сна после команды /dream.")
+        return
+    memory.add_dream(dream_text)
+    response_text = "✨ Сон записан."
+    bot.reply_to(message, response_text)
+    logger.info(f"Dream saved for chat_id {chat_id_str}: {dream_text}")
+
+
+@bot.message_handler(func=lambda message: True, content_types=['text'])
 def handle_message(message):
     """Главный обработчик входящих сообщений."""
     logger.info(f"Received message from chat_id {message.chat.id} (user: {message.from_user.username}): {message.text}")

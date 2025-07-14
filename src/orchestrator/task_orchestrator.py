@@ -2,6 +2,8 @@ import time
 import json
 import os
 from typing import List, Any, NamedTuple, Dict
+from src.memory.memory import Memory
+from src.agents.sync_agent import SyncAgent
 
 # Forward declaration for JuliusAgent
 class JuliusAgent:
@@ -14,8 +16,10 @@ class TaskResult(NamedTuple):
     task_content: str
 
 class TaskOrchestrator:
-    def __init__(self, agent: JuliusAgent, batch_size: int = 3, max_batch: int = 10, metrics_log_file: str = "orchestrator_log.json"):
+    def __init__(self, agent: JuliusAgent, memory: Memory, sync_agent: SyncAgent, batch_size: int = 3, max_batch: int = 10, metrics_log_file: str = "orchestrator_log.json"):
         self.agent = agent
+        self.memory = memory
+        self.sync_agent = sync_agent
         self.batch_size = batch_size
         self.min_batch_size = 1
         self.max_batch = max_batch
@@ -43,7 +47,9 @@ class TaskOrchestrator:
 
     def add_tasks(self, tasks: List[str]) -> None:
         """Добавить список задач в очередь."""
-        self.task_queue.extend(tasks)
+        for task in tasks:
+            self.task_queue.append(task)
+            self.memory.add_task(task)
 
     def _log_metric_to_file(self, metric_entry: Dict[str, Any]):
         """Appends a single metric entry to the JSON log file."""
@@ -113,6 +119,9 @@ class TaskOrchestrator:
             self.batch_size = max(self.min_batch_size, self.batch_size - 1)
 
         print(f"Round completed. New Batch_size: {self.batch_size}. Processed: {len(batch_tasks)}. Success: {successful_tasks_count}. Failed: {failed_tasks_count}. Time: {elapsed_time:.2f}s. Success Rate: {success_rate:.0%}")
+
+        # Sync memories
+        self.sync_agent.sync_memories(self.memory.memory_dir)
 
     def get_status(self) -> Dict[str, Any]:
         """Возвращает текущий статус и историю последних 10 раундов из памяти."""
