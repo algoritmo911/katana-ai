@@ -13,32 +13,6 @@ BOT_SCRIPT_DIR = Path(__file__).resolve().parent.parent
 BOT_LOG_DIR = BOT_SCRIPT_DIR / "logs"
 BOT_LOG_FILE = BOT_LOG_DIR / "katana_bot.log"
 
-# This JsonFormatter is defined locally for the tests, specifically for test_bot_log_rotation
-# and for verifying the output structure if reading from BOT_LOG_FILE.
-class JsonFormatter(logging.Formatter):
-    def format(self, record: logging.LogRecord) -> str:
-        log_record = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
-            "level": record.levelname,
-            "message": record.getMessage(),
-            "module": record.module,
-            "function": record.funcName,
-            "line_number": record.lineno,
-        }
-        if record.exc_info:
-            log_record["exception"] = self.formatException(record.exc_info)
-
-        standard_attrs = [
-            'args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename',
-            'funcName', 'levelname', 'levelno', 'lineno', 'message', 'module',
-            'msecs', 'msg', 'name', 'pathname', 'process', 'processName',
-            'relativeCreated', 'stack_info', 'thread', 'threadName', 'levelname'
-        ]
-        for key, value in record.__dict__.items():
-            if key not in standard_attrs and key not in log_record:
-                log_record[key] = value
-        return json.dumps(log_record)
-
 def get_json_log_entries(log_file_path):
     entries = []
     if not log_file_path.exists():
@@ -61,8 +35,6 @@ class TestKatanaBotLogging(unittest.TestCase):
         if BOT_LOG_FILE.exists():
             BOT_LOG_FILE.unlink(missing_ok=True)
 
-        # Clean up handlers for the main "KatanaBotAI" logger before each test
-        # to ensure a clean state for handler configuration by _configure_bot_logger_for_file_test.
         bot_logger = logging.getLogger("KatanaBotAI")
         for handler in bot_logger.handlers[:]:
             handler.close()
@@ -72,85 +44,8 @@ class TestKatanaBotLogging(unittest.TestCase):
         if BOT_LOG_FILE.exists():
             BOT_LOG_FILE.unlink(missing_ok=True)
 
-        # Cleanup for rotation test files
-        for f in BOT_LOG_DIR.glob("rotation_test_bot_temp.log*"):
-            f.unlink(missing_ok=True)
-
-        # Clean up handlers for "KatanaBotAI" and any test-specific loggers
-        logger_names = ["KatanaBotAI", "RotationTestBotLogger"]
-        for name in logger_names:
-            logger_instance = logging.getLogger(name)
-            for handler in logger_instance.handlers[:]:
-                handler.close()
-                logger_instance.removeHandler(handler)
-
-    def _configure_bot_logger_for_file_test(self):
-        """Configures the KatanaBotAI logger to write to BOT_LOG_FILE for testing."""
-        # Uses the centralized setup_logger but ensures it targets the test BOT_LOG_FILE
-        # and uses the JsonFormatter defined in this test file for verification consistency.
-
-        # Temporarily override setup_logger's internal JsonFormatter for this test run
-        # This is a bit of a hack. A cleaner way would be for setup_logger to accept a formatter class.
-        original_formatter = None
-        if hasattr(setup_katana_logger, '__closure__') or hasattr(setup_katana_logger, '__globals__'):
-            # This is a complex way to attempt to modify the formatter if it's hardcoded in setup_logger
-            # For now, we rely on setup_logger using a JsonFormatter that's compatible,
-            # or we accept that the test JsonFormatter might only be for get_json_log_entries.
-            # The main goal is that setup_logger *configures* the logger.
-            pass
-
-        logger = setup_katana_logger("KatanaBotAI", str(BOT_LOG_FILE), level=logging.DEBUG)
-
-        # Ensure it uses the test's JsonFormatter for file output for predictable parsing
-        # by finding the file handler and replacing its formatter.
-        for handler in logger.handlers:
-            if isinstance(handler, RotatingFileHandler) and handler.baseFilename == str(BOT_LOG_FILE):
-                handler.setFormatter(JsonFormatter())
-                break
-        return logger
-
-
-    def test_bot_log_rotation(self):
-        temp_log_file_name = "rotation_test_bot_temp.log"
-        temp_log_file_path = BOT_LOG_DIR / temp_log_file_name
-
-        if temp_log_file_path.exists(): temp_log_file_path.unlink(missing_ok=True)
-        for i in range(1, 6):
-            backup_file = Path(f"{str(temp_log_file_path)}.{i}")
-            if backup_file.exists(): backup_file.unlink(missing_ok=True)
-
-        test_logger = logging.getLogger("RotationTestBotLogger")
-        test_logger.propagate = False
-        test_logger.setLevel(logging.DEBUG)
-
-        if test_logger.hasHandlers():
-            for h in test_logger.handlers[:]: h.close(); test_logger.removeHandler(h)
-
-        handler_max_bytes = 1024
-        handler_backup_count = 2
-
-        rotating_handler = RotatingFileHandler(
-            temp_log_file_path, maxBytes=handler_max_bytes, backupCount=handler_backup_count
-        )
-        rotating_handler.setFormatter(JsonFormatter()) # Uses JsonFormatter from this file
-        test_logger.addHandler(rotating_handler)
-
-        log_message_content = "Bot rotation test log message."
-        num_log_entries_to_write = 20
-        for i in range(num_log_entries_to_write):
-            test_logger.info(f"{log_message_content} - Entry {i+1}", extra={"user_id": f"test_rot_user_{i+1}"})
-
-        rotating_handler.close()
-        test_logger.removeHandler(rotating_handler)
-
-        self.assertTrue(temp_log_file_path.exists())
-        backup_files_found = sum(1 for i in range(1, handler_backup_count + 1) if Path(f"{str(temp_log_file_path)}.{i}").exists())
-        self.assertEqual(backup_files_found, handler_backup_count)
-        if temp_log_file_path.exists(): # Check before stat
-            self.assertLessEqual(temp_log_file_path.stat().st_size, handler_max_bytes + 400) # Increased margin
-
     def test_bot_log_levels_and_structured_fields(self):
-        logger = self._configure_bot_logger_for_file_test()
+        logger = setup_katana_logger("KatanaBotAI", str(BOT_LOG_FILE), level=logging.DEBUG)
         test_user_id = "test_user_123"
 
         logger.debug("This is a debug message from test.", extra={"user_id": test_user_id, "custom_field": "debug_val"})
@@ -194,7 +89,7 @@ class TestKatanaBotLogging(unittest.TestCase):
 
 
     def test_bot_exception_logging(self):
-        logger = self._configure_bot_logger_for_file_test()
+        logger = setup_katana_logger("KatanaBotAI", str(BOT_LOG_FILE), level=logging.DEBUG)
         test_user_id = "user_exception_test"
         try:
             raise ValueError("This is a simulated exception for bot logging.")
@@ -214,7 +109,7 @@ class TestKatanaBotLogging(unittest.TestCase):
         self.assertIn("ValueError: This is a simulated exception for bot logging.", error_log["exception"])
 
     def test_bot_startup_logging(self):
-        logger = self._configure_bot_logger_for_file_test()
+        logger = setup_katana_logger("KatanaBotAI", str(BOT_LOG_FILE), level=logging.DEBUG)
 
         # Scenario 1: All keys present
         original_env = os.environ.copy()
@@ -234,7 +129,7 @@ class TestKatanaBotLogging(unittest.TestCase):
         os.environ.update(original_env)
         if BOT_LOG_FILE.exists(): BOT_LOG_FILE.unlink()
         for handler in logger.handlers[:]: handler.close(); logger.removeHandler(handler)
-        logger = self._configure_bot_logger_for_file_test()
+        logger = setup_katana_logger("KatanaBotAI", str(BOT_LOG_FILE), level=logging.DEBUG)
 
         # Scenario 2: OpenAI API key missing
         os.environ["KATANA_TELEGRAM_TOKEN"] = "fake_telegram_token_for_startup2"

@@ -1,13 +1,9 @@
 import os
 import logging
-
-# Removed: from logging.handlers import RotatingFileHandler
-# Removed: import json
-# Removed: from datetime import datetime, timezone
 from pathlib import Path
 from katana.utils.logging_config import (
     setup_logger,
-)  # Import the new setup function
+)
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,

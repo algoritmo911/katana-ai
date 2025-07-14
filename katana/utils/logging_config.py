@@ -6,12 +6,6 @@ from datetime import datetime, timezone
 import sys
 import os # Added for environment variable access
 
-try:
-    import colorlog # Added for colored logging
-except ImportError:
-    colorlog = None
-
-
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         log_record = {
@@ -59,37 +53,6 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_record)
 
 
-class ColoredFormatter(logging.Formatter):
-    """
-    A logging formatter that uses colorlog if available, otherwise falls back to a standard formatter.
-    """
-    def __init__(self, fmt: str, datefmt: str = None, style: str = '%', use_colors: bool = True):
-        super().__init__() # Basic initialization
-        if colorlog and use_colors:
-            self.formatter = colorlog.ColoredFormatter(
-                fmt='%(log_color)s' + fmt,
-                datefmt=datefmt,
-                reset=True,
-                log_colors={
-                    'DEBUG': 'cyan',
-                    'INFO': 'green',
-                    'WARNING': 'yellow',
-                    'ERROR': 'red',
-                    'CRITICAL': 'red,bg_white',
-                },
-                secondary_log_colors={},
-                style=style
-            )
-        else:
-            self.formatter = logging.Formatter(fmt, datefmt=datefmt, style=style)
-
-    def format(self, record: logging.LogRecord) -> str:
-        # Temporarily store original message if it's already formatted (e.g. by JsonFormatter for file)
-        # This is a bit of a workaround if a record is processed by multiple formatters.
-        # Usually, a handler has one formatter.
-        return self.formatter.format(record)
-
-
 def setup_logger(
     logger_name: str,
     log_file_path_str: str, # This will be "command_telemetry.log" as per requirements
@@ -125,7 +88,7 @@ def setup_logger(
     file_handler.setLevel(level)
     logger.addHandler(file_handler)
 
-    # Console Handler (Colored or Standard based on dev_mode and colorlog availability)
+    # Console Handler (Standard based on dev_mode)
     # As per requirement: "вывод в консоль в dev" (console output in dev)
     is_dev_env = os.environ.get("ENV_MODE", "").lower() == "dev" or dev_mode
 
@@ -136,18 +99,8 @@ def setup_logger(
             "%(message)s (%(module)s.%(funcName)s:%(lineno)d)"
         )
 
-        # Use ColoredFormatter if colorlog is available, otherwise standard
-        if colorlog:
-            console_formatter = ColoredFormatter(
-                fmt=console_format_string,
-                datefmt="%Y-%m-%d %H:%M:%S",
-                use_colors=True
-            )
-        else: # Fallback if colorlog is not installed
-            console_formatter = logging.Formatter(console_format_string, datefmt="%Y-%m-%d %H:%M:%S")
-            if not colorlog: # Add a message if colorlog is missing but was expected
-                 logger.info("colorlog module not found, console output will not be colored.")
-
+        # Standard formatter
+        console_formatter = logging.Formatter(console_format_string, datefmt="%Y-%m-%d %H:%M:%S")
 
         console_handler.setFormatter(console_formatter)
         console_handler.setLevel(level)
