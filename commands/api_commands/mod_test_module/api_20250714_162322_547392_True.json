@@ -1,0 +1,8 @@
+{
+  "type": "test_command",
+  "module": "test_module",
+  "args": {
+    "param1": "value1"
+  },
+  "id": true
+}

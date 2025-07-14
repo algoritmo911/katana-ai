@@ -104,8 +104,10 @@ def api_command():
         if not request.is_json:
             log_local_bot_event("Request to /api/command is not JSON", level="WARN", module="api_command")
             return jsonify({"success": False, "error": "Invalid request: Content-Type must be application/json"}), 415 # Unsupported Media Type
-
-        command_data = request.get_json()
+        command_data = request.get_json(silent=True)
+        if command_data is None:
+            log_local_bot_event("Malformed JSON received", level="WARN", module="api_command")
+            return jsonify({"success": False, "error": "Malformed JSON"}), 400
         log_local_bot_event(f"Received command via /api/command: {command_data}", module="api_command")
 
         # Validate required fields (similar to Telegram handler)
@@ -125,7 +127,7 @@ def api_command():
         for field, expected_type in required_fields.items():
             # Special handling for 'id' which can be str or int
             if field == "id":
-                if not isinstance(command_data[field], expected_type): # expected_type is (str, int)
+                if not isinstance(command_data[field], expected_type) or isinstance(command_data[field], bool): # expected_type is (str, int)
                     error_msg = f"Field '{field}' must be type str or int. Got {type(command_data[field]).__name__}."
                     log_local_bot_event(error_msg, level="WARN", module="api_command")
                     return jsonify({"success": False, "error": error_msg}), 400
