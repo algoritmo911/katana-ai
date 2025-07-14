@@ -2,14 +2,9 @@
 
 ## Purpose
 
-`katana-ai` is a Python application that demonstrates how to manage secrets and environment variables using a `.env` file.
+`katana-ai` is a Python application that demonstrates how to manage secrets and environment variables using a `.env` file. This project provides a basic framework for building a Python application with a focus on configuration management and testing.
 
-## Requirements
-
-- Python 3.6+
-- `python-dotenv`
-
-## How to run
+## Installation
 
 1. **Clone the repository:**
    ```bash
@@ -17,20 +12,29 @@
    cd katana-ai
    ```
 
-2. **Install dependencies:**
+2. **Create a virtual environment:**
    ```bash
-   pip install python-dotenv
+   python -m venv venv
+   source venv/bin/activate
    ```
 
-3. **Create a `.env` file:**
-   - Rename the `.env.example` to `.env`.
-   - Add your environment variables to the `.env` file. For example:
-     ```
-     SECRET_KEY=your_secret_key
-     ```
-
-4. **Run the application:**
+3. **Install dependencies:**
    ```bash
-   python main.py
+   pip install -r requirements.txt
    ```
-   *(Note: `main.py` does not exist yet, but will be created in a future update)*
+
+## Running Tests
+
+To run the tests, use the following command:
+
+```bash
+pytest
+```
+
+## Using .env
+
+The `.env` file is used to store environment variables. You can copy the `.env.example` file to `.env` and modify it to your needs. The following variables are available:
+
+- `SECRET_KEY`: A secret key for your application.
+- `KATANA_ENV`: The environment for the application (e.g., `development`, `production`).
+- `LOG_LEVEL`: The logging level for the application (e.g., `INFO`, `DEBUG`).
