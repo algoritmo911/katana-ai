@@ -18,7 +18,7 @@ const fetchLogsFromApi = async (filters: any) => {
     ]
   };
   // Simulate error:
-  // return { success: false, message: "Error fetching logs (simulated)" };
+  return { success: false, message: "Error fetching logs (simulated)" };
 };
 
 const LogViewer: React.FC = () => {
@@ -33,7 +33,7 @@ const LogViewer: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
     const filters = { level: filterLevel, module: filterModule, date: filterDate };
-    const response = await fetchLogsFromApi(filters);
+    const response: { success: boolean; data?: any[]; message?: string } = await fetchLogsFromApi(filters);
     if (response.success) {
       setLogs(response.data || []);
     } else {

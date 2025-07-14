@@ -16,7 +16,7 @@ const fetchStatusFromApi = async () => {
     }
   };
   // Simulate error:
-  // return { success: false, message: "Error fetching status (simulated)" };
+  return { success: false, message: "Error fetching status (simulated)" };
 };
 
 const KatanaStatus: React.FC = () => {
@@ -27,7 +27,7 @@ const KatanaStatus: React.FC = () => {
   const loadStatus = async () => {
     setIsLoading(true);
     setErrorMessage(null);
-    const response = await fetchStatusFromApi();
+    const response: { success: boolean; data?: any; message?: string } = await fetchStatusFromApi();
     if (response.success) {
       setStatusData(response.data);
     } else {
