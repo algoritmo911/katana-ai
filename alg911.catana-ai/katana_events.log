@@ -629,3 +629,25 @@ drwxr-xr-x 2 jules root 4096 Jun 16 08:30 neuro_refueling
 [2025-06-16T13:39:07.184980+00:00] INFO: [KatanaAgent_MCP_v1] Katana data file initialization/verification complete.
 [2025-06-16T13:39:07.185022+00:00] INFO: [KatanaAgent_MCP_v1] katana_agent.py self-test: File initialization complete.
 [2025-06-16T13:39:07.185186+00:00] DEBUG: [KatanaAgent_MCP_v1] katana_agent.py self-test: Current memory state: {"name": "Katana V2"}
+[2025-07-14T15:49:00.255615+00:00] INFO: [[KatanaAgent_MCP_v1]] katana_agent.py starting...
+[2025-07-14T15:49:00.255729+00:00] INFO: [[KatanaAgent_MCP_v1]] Initializing/Verifying Katana data files for MCP_v1...
+[2025-07-14T15:49:00.255927+00:00] DEBUG: [[KatanaAgent_MCP_v1]] /app/alg911.catana-ai/katana.commands.json exists and appears valid.
+[2025-07-14T15:49:00.256037+00:00] DEBUG: [[KatanaAgent_MCP_v1]] /app/alg911.catana-ai/katana.history.json exists and appears valid.
+[2025-07-14T15:49:00.256131+00:00] DEBUG: [[KatanaAgent_MCP_v1]] /app/alg911.catana-ai/katana_memory.json exists and appears valid.
+[2025-07-14T15:49:00.256245+00:00] DEBUG: [[KatanaAgent_MCP_v1]] /app/alg911.catana-ai/sync_status.json exists and appears valid.
+[2025-07-14T15:49:00.256332+00:00] INFO: [[KatanaAgent_MCP_v1]] Katana data file initialization/verification complete.
+[2025-07-14T15:49:00.256375+00:00] INFO: [[KatanaAgent_MCP_v1]] katana_agent.py: File initialization complete.
+[2025-07-14T15:49:00.256477+00:00] DEBUG: [[KatanaAgent_MCP_v1]] katana_agent.py: Current memory state: {"name": "Katana V2"}
+[2025-07-14T15:49:00.256521+00:00] INFO: [[KatanaAgent_MCP_v1]] Attempting to start Self-Healing Orchestrator...
+[2025-07-14T15:49:00.321609+00:00] INFO: [[KatanaAgent_MCP_v1]] Self-Healing Orchestrator started in a separate thread.
+[2025-07-14T15:49:00.322032+00:00] INFO: [[KatanaAgent_MCP_v1]] Katana Agent started. Will check for commands every 5 seconds.
+[2025-07-14T15:49:00.323033+00:00] DEBUG: [[KatanaAgent_MCP_v1]] Checking for pending commands...
+[2025-07-14T15:49:00.325295+00:00] INFO: [[KatanaAgent_MCP_v1]] Processing new command ID: cmd-123, Type: test_command
+[2025-07-14T15:49:00.325383+00:00] INFO: [[CommandHandler]] Handling command: {'command_id': 'cmd-123', 'command_details': {'command_type': 'test_command'}, 'status': 'processed_by_agent', 'timestamp_processed_agent': '2025-07-14T15:49:00.325362+00:00'}
+[2025-07-14T15:49:00.325430+00:00] INFO: [[StatusLogger]] Status: Processed command cmd-123
+[2025-07-14T15:49:00.325650+00:00] INFO: [[KatanaAgent_MCP_v1]] [CommandsSave] Successfully saved JSON to /app/alg911.catana-ai/katana.commands.json.
+[2025-07-14T15:49:00.325891+00:00] INFO: [[KatanaAgent_MCP_v1]] Updated command statuses in /app/alg911.catana-ai/katana.commands.json.
+[2025-07-14T15:49:00.326114+00:00] INFO: [[KatanaAgent_MCP_v1]] [HistorySave] Successfully saved JSON to /app/alg911.catana-ai/katana.history.json.
+[2025-07-14T15:49:00.326315+00:00] INFO: [[KatanaAgent_MCP_v1]] Saved 1 items to history file.
+[2025-07-14T15:49:05.326618+00:00] DEBUG: [[KatanaAgent_MCP_v1]] Checking for pending commands...
+[2025-07-14T15:49:05.327018+00:00] DEBUG: [[KatanaAgent_MCP_v1]] No new commands to process.

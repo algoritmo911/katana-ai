@@ -88,3 +88,40 @@
 2025-06-27 14:12:28,785 - SelfHealingModule - INFO - recovery - Successfully loaded and instantiated recovery plugin: ServiceRestartRecovery
 2025-06-27 14:12:28,785 - SelfHealingModule - INFO - recovery - Loaded 1 unique recovery plugin types.
 2025-06-27 14:12:28,785 - SelfHealingModule - INFO - orchestrator - Self-Healing Orchestrator initialized.
+2025-07-14 15:49:00,256 - SelfHealingModule - INFO - orchestrator - Initializing Self-Healing Orchestrator...
+2025-07-14 15:49:00,256 - SelfHealingModule - INFO - monitor - Loading monitoring plugins...
+2025-07-14 15:49:00,316 - SelfHealingModule - ERROR - monitor - Failed to import module self_healing.plugins.basic_plugins for plugin HttpAvailabilityMonitor.
+2025-07-14 15:49:00,317 - SelfHealingModule - ERROR - monitor - Failed to import module self_healing.plugins.basic_plugins for plugin ProcessRunningMonitor.
+2025-07-14 15:49:00,317 - SelfHealingModule - ERROR - monitor - Failed to import module self_healing.plugins.basic_plugins for plugin LogFileMonitor.
+2025-07-14 15:49:00,318 - SelfHealingModule - INFO - monitor - Loaded 0 unique monitoring plugin types.
+2025-07-14 15:49:00,318 - SelfHealingModule - INFO - diagnostics - Loading diagnostic plugins...
+2025-07-14 15:49:00,318 - SelfHealingModule - ERROR - diagnostics - Failed to import module self_healing.plugins.basic_plugins for diagnostic plugin HttpStatusIssueDiagnoser.
+2025-07-14 15:49:00,319 - SelfHealingModule - ERROR - diagnostics - Failed to import module self_healing.plugins.basic_plugins for diagnostic plugin ProcessNotRunningDiagnoser.
+2025-07-14 15:49:00,319 - SelfHealingModule - ERROR - diagnostics - Failed to import module self_healing.plugins.basic_plugins for diagnostic plugin LogPatternDiagnoser.
+2025-07-14 15:49:00,320 - SelfHealingModule - INFO - diagnostics - Loaded 0 unique diagnostic plugin types.
+2025-07-14 15:49:00,320 - SelfHealingModule - INFO - recovery - Loading recovery plugins...
+2025-07-14 15:49:00,320 - SelfHealingModule - ERROR - recovery - Failed to import module self_healing.plugins.basic_plugins for recovery plugin ServiceRestartRecovery.
+2025-07-14 15:49:00,320 - SelfHealingModule - INFO - recovery - Loaded 0 unique recovery plugin types.
+2025-07-14 15:49:00,321 - SelfHealingModule - INFO - orchestrator - Self-Healing Orchestrator initialized.
+2025-07-14 15:49:00,321 - SelfHealingModule - INFO - orchestrator - Self-Healing Orchestrator starting main loop. Cycle interval: 60s
+2025-07-14 15:49:00,321 - SelfHealingModule - INFO - orchestrator - Starting new self-healing cycle...
+2025-07-14 15:49:00,322 - SelfHealingModule - INFO - orchestrator - Phase 1: Monitoring
+2025-07-14 15:49:00,322 - SelfHealingModule - INFO - monitor - Starting all monitoring checks...
+2025-07-14 15:49:00,322 - SelfHealingModule - ERROR - monitor - Monitoring plugin 'HttpAvailabilityMonitor' for target 'katana_api' not found or loaded. Skipping check.
+2025-07-14 15:49:00,322 - SelfHealingModule - ERROR - monitor - Monitoring plugin 'ProcessRunningMonitor' for target 'katana_main_process' not found or loaded. Skipping check.
+2025-07-14 15:49:00,322 - SelfHealingModule - ERROR - monitor - Monitoring plugin 'LogFileMonitor' for target 'katana_events_log' not found or loaded. Skipping check.
+2025-07-14 15:49:00,323 - SelfHealingModule - INFO - monitor - Finished all monitoring checks. Collected data for 3 targets.
+2025-07-14 15:49:00,323 - SelfHealingModule - INFO - orchestrator - Phase 2: Diagnosis
+2025-07-14 15:49:00,323 - SelfHealingModule - INFO - diagnostics - Starting diagnostics process...
+2025-07-14 15:49:00,323 - SelfHealingModule - DEBUG - diagnostics - Running diagnostics for target 'katana_api' which has 1 data points.
+2025-07-14 15:49:00,323 - SelfHealingModule - ERROR - diagnostics - Diagnostic plugin 'HttpStatusIssueDiagnoser' for target 'katana_api' not found or loaded. Skipping diagnosis with this plugin.
+2025-07-14 15:49:00,323 - SelfHealingModule - DEBUG - diagnostics - Running diagnostics for target 'katana_main_process' which has 1 data points.
+2025-07-14 15:49:00,324 - SelfHealingModule - ERROR - diagnostics - Diagnostic plugin 'ProcessNotRunningDiagnoser' for target 'katana_main_process' not found or loaded. Skipping diagnosis with this plugin.
+2025-07-14 15:49:00,324 - SelfHealingModule - DEBUG - diagnostics - Running diagnostics for target 'katana_events_log' which has 1 data points.
+2025-07-14 15:49:00,324 - SelfHealingModule - ERROR - diagnostics - Diagnostic plugin 'LogPatternDiagnoser' for target 'katana_events_log' not found or loaded. Skipping diagnosis with this plugin.
+2025-07-14 15:49:00,324 - SelfHealingModule - INFO - diagnostics - Finished diagnostics. Found a total of 0 issues across all targets.
+2025-07-14 15:49:00,324 - SelfHealingModule - INFO - orchestrator - Diagnosis phase found no new issues.
+2025-07-14 15:49:00,324 - SelfHealingModule - DEBUG - orchestrator - Running cleanup for resolved issues...
+2025-07-14 15:49:00,324 - SelfHealingModule - DEBUG - orchestrator - No issues found to be resolved or stale in this cleanup pass.
+2025-07-14 15:49:00,324 - SelfHealingModule - INFO - orchestrator - Self-healing cycle complete. No active issues to address.
+2025-07-14 15:49:00,325 - SelfHealingModule - INFO - orchestrator - Next self-healing cycle in 60 seconds.

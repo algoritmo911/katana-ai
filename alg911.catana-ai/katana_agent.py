@@ -7,6 +7,9 @@ import threading # For running self-healing in a separate thread
 # import traceback # Not used
 
 import shared_config # Import the shared configuration
+import command_handler
+import status_logger
+
 # Attempt to import the self-healing orchestrator
 try:
     from self_healing.orchestrator import SelfHealingOrchestrator
@@ -174,6 +177,8 @@ def process_pending_commands():
             # TODO: Implement actual command execution logic here based on command_details
             # e.g., if command.get('command_details', {}).get('source') == 'trader_api':
             #           handle_trader_command(command)
+            command_handler.handle_command(command)
+            status_logger.log_status(f"Processed command {command_id}")
 
     if new_commands_found:
         # If commands were processed, we might want to update the commands.json file

@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "command_id": "cmd-123",
+    "command_details": {
+      "command_type": "test_command"
+    },
+    "status": "processed_by_agent",
+    "timestamp_processed_agent": "2025-07-14T15:49:00.325362+00:00"
+  }
+]
