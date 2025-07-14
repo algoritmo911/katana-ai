@@ -1,3 +1,5 @@
 python-dotenv
 pytest
 flake8
+pre-commit
+black

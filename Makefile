@@ -7,5 +7,8 @@ test:
 lint:
 	flake8 .
 
+format:
+	black .
+
 run:
 	python katana/agent/main.py
