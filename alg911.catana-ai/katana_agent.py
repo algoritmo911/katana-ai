@@ -8,7 +8,8 @@ import threading  # For running self-healing in a separate thread
 # import traceback # Not used
 
 import shared_config  # Import the shared configuration
-from katana.modules import command_handler, status_logger
+from katana.modules.command_handler import handle
+from katana.modules.status_logger import log_status
 
 # Attempt to import the self-healing orchestrator
 try:
@@ -287,10 +288,8 @@ def process_pending_commands():
             # TODO: Implement actual command execution logic here based on command_details
             # e.g., if command.get('command_details', {}).get('source') == 'trader_api':
             #           handle_trader_command(command)
-            result = command_handler.handle(
-                command.get("command_details", {}).get("command_type")
-            )
-            status_logger.log_status(result)
+            result = handle(command.get("command_details", {}).get("command_type"))
+            log_status(result)
 
     if new_commands_found:
         # If commands were processed, we might want to update the commands.json file
