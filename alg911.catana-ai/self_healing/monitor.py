@@ -5,6 +5,7 @@ from . import self_healing_config as config
 from .self_healing_logger import logger
 from .plugin_interface import MonitoringPlugin
 
+
 class ServiceMonitor:
     """
     Manages and executes monitoring plugins to gather health data about various system components.
@@ -14,23 +15,31 @@ class ServiceMonitor:
         self.monitoring_plugins: Dict[str, MonitoringPlugin] = {}
         self._load_plugins_from_config()
 
-    def _load_plugin_class(self, module_name: str, class_name: str) -> Type[MonitoringPlugin] | None:
+    def _load_plugin_class(
+        self, module_name: str, class_name: str
+    ) -> Type[MonitoringPlugin] | None:
         """Dynamically loads a plugin class from a given module."""
         try:
             module = importlib.import_module(module_name)
             plugin_class = getattr(module, class_name)
             if not issubclass(plugin_class, MonitoringPlugin):
-                logger.error(f"Plugin class {class_name} from {module_name} does not inherit from MonitoringPlugin.")
+                logger.error(
+                    f"Plugin class {class_name} from {module_name} does not inherit from MonitoringPlugin."
+                )
                 return None
             return plugin_class
         except ImportError:
-            logger.error(f"Failed to import module {module_name} for plugin {class_name}.")
+            logger.error(
+                f"Failed to import module {module_name} for plugin {class_name}."
+            )
             return None
         except AttributeError:
             logger.error(f"Class {class_name} not found in module {module_name}.")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error loading plugin {module_name}.{class_name}: {e}")
+            logger.error(
+                f"Unexpected error loading plugin {module_name}.{class_name}: {e}"
+            )
             return None
 
     def _load_plugins_from_config(self):
@@ -43,40 +52,51 @@ class ServiceMonitor:
         # Simplified plugin loading: assumes plugins are in '.plugins.basic_plugins'
         # and the class name matches the 'plugin' field in config.
         # Example: plugin: "HttpAvailabilityMonitor" -> class HttpAvailabilityMonitor in basic_plugins.py
-        plugin_module_name_base = ".plugins.basic_plugins" # Relative to current package 'self_healing'
+        plugin_module_name_base = (
+            ".plugins.basic_plugins"  # Relative to current package 'self_healing'
+        )
 
         unique_plugin_types_to_load: Dict[str, Dict[str, Any]] = {}
 
         for target_id, target_config in config.MONITORED_TARGETS.items():
             if not target_config.get("enabled", False):
-                logger.debug(f"Target '{target_id}' is disabled. Skipping plugin loading for it.")
+                logger.debug(
+                    f"Target '{target_id}' is disabled. Skipping plugin loading for it."
+                )
                 continue
 
             plugin_class_name = target_config.get("plugin")
             if not plugin_class_name:
-                logger.warning(f"No 'plugin' specified for target '{target_id}'. Skipping.")
+                logger.warning(
+                    f"No 'plugin' specified for target '{target_id}'. Skipping."
+                )
                 continue
 
             # Store the first configuration encountered for a given plugin type.
             # This means all instances of "HttpAvailabilityMonitor" will use the same plugin class.
             if plugin_class_name not in unique_plugin_types_to_load:
-                 unique_plugin_types_to_load[plugin_class_name] = {
-                    "module_name": plugin_module_name_base, # Modify if plugins are in different modules
-                    "class_name": plugin_class_name
+                unique_plugin_types_to_load[plugin_class_name] = {
+                    "module_name": plugin_module_name_base,  # Modify if plugins are in different modules
+                    "class_name": plugin_class_name,
                 }
 
         for plugin_name, plugin_info in unique_plugin_types_to_load.items():
-            module_full_name = f"{__package__}{plugin_info['module_name']}" # e.g., self_healing.plugins.basic_plugins
-            plugin_class = self._load_plugin_class(module_full_name, plugin_info['class_name'])
+            module_full_name = f"{__package__}{plugin_info['module_name']}"  # e.g., self_healing.plugins.basic_plugins
+            plugin_class = self._load_plugin_class(
+                module_full_name, plugin_info["class_name"]
+            )
             if plugin_class:
                 try:
                     self.monitoring_plugins[plugin_name] = plugin_class()
-                    logger.info(f"Successfully loaded and instantiated monitoring plugin: {plugin_name}")
+                    logger.info(
+                        f"Successfully loaded and instantiated monitoring plugin: {plugin_name}"
+                    )
                 except Exception as e:
                     logger.error(f"Failed to instantiate plugin {plugin_name}: {e}")
 
-        logger.info(f"Loaded {len(self.monitoring_plugins)} unique monitoring plugin types.")
-
+        logger.info(
+            f"Loaded {len(self.monitoring_plugins)} unique monitoring plugin types."
+        )
 
     def run_all_checks(self) -> Dict[str, List[Dict[str, Any]]]:
         """
@@ -91,50 +111,72 @@ class ServiceMonitor:
 
         for target_id, target_config in config.MONITORED_TARGETS.items():
             if not target_config.get("enabled", False):
-                logger.debug(f"Monitoring for target '{target_id}' is disabled. Skipping.")
+                logger.debug(
+                    f"Monitoring for target '{target_id}' is disabled. Skipping."
+                )
                 continue
 
             plugin_name = target_config.get("plugin")
             if not plugin_name:
-                logger.warning(f"No plugin specified for enabled target '{target_id}'. Cannot monitor.")
+                logger.warning(
+                    f"No plugin specified for enabled target '{target_id}'. Cannot monitor."
+                )
                 continue
 
             plugin_instance = self.monitoring_plugins.get(plugin_name)
             if not plugin_instance:
-                logger.error(f"Monitoring plugin '{plugin_name}' for target '{target_id}' not found or loaded. Skipping check.")
-                all_health_data.setdefault(target_id, []).append({
-                    "status": "error",
-                    "error_message": f"Plugin {plugin_name} not loaded",
-                    "target_id": target_id,
-                    "monitor_name": plugin_name
-                })
+                logger.error(
+                    f"Monitoring plugin '{plugin_name}' for target '{target_id}' not found or loaded. Skipping check."
+                )
+                all_health_data.setdefault(target_id, []).append(
+                    {
+                        "status": "error",
+                        "error_message": f"Plugin {plugin_name} not loaded",
+                        "target_id": target_id,
+                        "monitor_name": plugin_name,
+                    }
+                )
                 continue
 
             monitor_specific_config = target_config.get("config", {})
-            logger.debug(f"Running check for '{target_id}' using plugin '{plugin_instance.get_name()}' with config: {monitor_specific_config}")
+            logger.debug(
+                f"Running check for '{target_id}' using plugin '{plugin_instance.get_name()}' with config: {monitor_specific_config}"
+            )
 
             try:
                 health_data = plugin_instance.check_health(monitor_specific_config)
                 # Add context to the health data
                 health_data["target_id"] = target_id
                 health_data["monitor_name"] = plugin_instance.get_name()
-                health_data["timestamp"] = logger.handlers[0].formatter.formatTime(logger.makeRecord("",0,"","",0,"",(),None,None)) # Get timestamp
+                health_data["timestamp"] = logger.handlers[0].formatter.formatTime(
+                    logger.makeRecord("", 0, "", "", 0, "", (), None, None)
+                )  # Get timestamp
 
                 all_health_data.setdefault(target_id, []).append(health_data)
                 logger.debug(f"Health data for '{target_id}': {health_data}")
             except Exception as e:
-                logger.error(f"Error during health check for '{target_id}' with plugin '{plugin_instance.get_name()}': {e}", exc_info=True)
-                all_health_data.setdefault(target_id, []).append({
-                    "status": "error",
-                    "error_message": str(e),
-                    "details": "Exception occurred during check_health call.",
-                    "target_id": target_id,
-                    "monitor_name": plugin_instance.get_name(),
-                    "timestamp": logger.handlers[0].formatter.formatTime(logger.makeRecord("",0,"","",0,"",(),None,None))
-                })
+                logger.error(
+                    f"Error during health check for '{target_id}' with plugin '{plugin_instance.get_name()}': {e}",
+                    exc_info=True,
+                )
+                all_health_data.setdefault(target_id, []).append(
+                    {
+                        "status": "error",
+                        "error_message": str(e),
+                        "details": "Exception occurred during check_health call.",
+                        "target_id": target_id,
+                        "monitor_name": plugin_instance.get_name(),
+                        "timestamp": logger.handlers[0].formatter.formatTime(
+                            logger.makeRecord("", 0, "", "", 0, "", (), None, None)
+                        ),
+                    }
+                )
 
-        logger.info(f"Finished all monitoring checks. Collected data for {len(all_health_data)} targets.")
+        logger.info(
+            f"Finished all monitoring checks. Collected data for {len(all_health_data)} targets."
+        )
         return all_health_data
+
 
 if __name__ == "__main__":
     # This requires basic_plugins.py to have some dummy plugins for testing
@@ -186,10 +228,16 @@ if __name__ == "__main__":
     monitor = ServiceMonitor()
 
     if not monitor.monitoring_plugins:
-        logger.warning("No monitoring plugins were loaded. Ensure 'basic_plugins.py' is populated and correctly referenced in 'self_healing_config.py'.")
-        logger.warning("Example dummy plugins are commented out in the __main__ section of monitor.py.")
+        logger.warning(
+            "No monitoring plugins were loaded. Ensure 'basic_plugins.py' is populated and correctly referenced in 'self_healing_config.py'."
+        )
+        logger.warning(
+            "Example dummy plugins are commented out in the __main__ section of monitor.py."
+        )
     else:
-        logger.info(f"Available monitoring plugins: {list(monitor.monitoring_plugins.keys())}")
+        logger.info(
+            f"Available monitoring plugins: {list(monitor.monitoring_plugins.keys())}"
+        )
 
         all_data = monitor.run_all_checks()
         logger.info("\n--- Results of all checks ---")
@@ -199,4 +247,6 @@ if __name__ == "__main__":
                 logger.info(f"  Data: {data_point}")
         logger.info("--- End of results ---")
 
-    print(f"Monitor testing complete. Check logs at: {config.LOG_FILE_PATH if hasattr(config, 'LOG_FILE_PATH') else 'self_healing.log'}")
+    print(
+        f"Monitor testing complete. Check logs at: {config.LOG_FILE_PATH if hasattr(config, 'LOG_FILE_PATH') else 'self_healing.log'}"
+    )

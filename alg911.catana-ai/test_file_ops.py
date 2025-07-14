@@ -1,6 +1,6 @@
 import json
 import os
-import datetime # Not strictly needed for these basic funcs, but good practice
+import datetime  # Not strictly needed for these basic funcs, but good practice
 
 # Define file paths consistently (relative to this script if run directly from alg911.catana-ai, or adjust as needed)
 # For now, assume script is in alg911.catana-ai or paths are relative to a known root if agent calls them.
@@ -8,7 +8,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 COMMANDS_FILE = os.path.join(SCRIPT_DIR, "katana.commands.json")
 HISTORY_FILE = os.path.join(SCRIPT_DIR, "katana.history.json")
 MEMORY_FILE = os.path.join(SCRIPT_DIR, "katana_memory.json")
-EVENTS_LOG_FILE = os.path.join(SCRIPT_DIR, "katana_events.log") # For general logging
+EVENTS_LOG_FILE = os.path.join(SCRIPT_DIR, "katana_events.log")  # For general logging
+
 
 def log_test_event(message, level="info"):
     # Simple logger for testing this script, can be expanded or use agent's logger later
@@ -18,10 +19,13 @@ def log_test_event(message, level="info"):
     with open(EVENTS_LOG_FILE, "a") as f:
         f.write(f"[{timestamp}] {level.upper()}: [TestFileOps] {message}\n")
 
+
 def load_json_file(file_path, default_value_if_missing_or_error=None):
     log_test_event(f"Attempting to load JSON from: {file_path}", "debug")
     if not os.path.exists(file_path):
-        log_test_event(f"File not found: {file_path}. Returning default value.", "warning")
+        log_test_event(
+            f"File not found: {file_path}. Returning default value.", "warning"
+        )
         return default_value_if_missing_or_error
     try:
         with open(file_path, "r") as f:
@@ -29,26 +33,35 @@ def load_json_file(file_path, default_value_if_missing_or_error=None):
         log_test_event(f"Successfully loaded JSON from: {file_path}", "debug")
         return data
     except json.JSONDecodeError:
-        log_test_event(f"Error decoding JSON from {file_path}. Returning default value.", "error")
+        log_test_event(
+            f"Error decoding JSON from {file_path}. Returning default value.", "error"
+        )
         return default_value_if_missing_or_error
     except Exception as e:
-        log_test_event(f"Unexpected error loading {file_path}: {e}. Returning default value.", "error")
+        log_test_event(
+            f"Unexpected error loading {file_path}: {e}. Returning default value.",
+            "error",
+        )
         return default_value_if_missing_or_error
+
 
 def save_json_file(file_path, data):
     log_test_event(f"Attempting to save JSON to: {file_path}", "debug")
     try:
         # Ensure directory exists if file_path includes subdirectories
         dir_name = os.path.dirname(file_path)
-        if dir_name: # Only create if path actually has a directory part
+        if dir_name:  # Only create if path actually has a directory part
             os.makedirs(dir_name, exist_ok=True)
         with open(file_path, "w") as f:
-            json.dump(data, f, indent=2) # Using indent=2 for consistency with previous agent saves
+            json.dump(
+                data, f, indent=2
+            )  # Using indent=2 for consistency with previous agent saves
         log_test_event(f"Successfully saved JSON to: {file_path}", "info")
         return True
     except Exception as e:
         log_test_event(f"Error saving JSON to {file_path}: {e}", "error")
         return False
+
 
 def initialize_katana_files():
     log_test_event("Initializing Katana data files...", "info")
@@ -56,7 +69,9 @@ def initialize_katana_files():
     # Commands file: should be a list
     if not os.path.exists(COMMANDS_FILE):
         if save_json_file(COMMANDS_FILE, []):
-            log_test_event(f"{COMMANDS_FILE} initialized successfully as empty list.", "info")
+            log_test_event(
+                f"{COMMANDS_FILE} initialized successfully as empty list.", "info"
+            )
             initialized_any = True
         else:
             log_test_event(f"Failed to initialize {COMMANDS_FILE}.", "error")
@@ -66,7 +81,9 @@ def initialize_katana_files():
     # History file: should be a list
     if not os.path.exists(HISTORY_FILE):
         if save_json_file(HISTORY_FILE, []):
-            log_test_event(f"{HISTORY_FILE} initialized successfully as empty list.", "info")
+            log_test_event(
+                f"{HISTORY_FILE} initialized successfully as empty list.", "info"
+            )
             initialized_any = True
         else:
             log_test_event(f"Failed to initialize {HISTORY_FILE}.", "error")
@@ -76,7 +93,9 @@ def initialize_katana_files():
     # Memory file: should be an object (dictionary)
     if not os.path.exists(MEMORY_FILE):
         if save_json_file(MEMORY_FILE, {}):
-            log_test_event(f"{MEMORY_FILE} initialized successfully as empty object.", "info")
+            log_test_event(
+                f"{MEMORY_FILE} initialized successfully as empty object.", "info"
+            )
             initialized_any = True
         else:
             log_test_event(f"Failed to initialize {MEMORY_FILE}.", "error")
@@ -86,8 +105,11 @@ def initialize_katana_files():
     if initialized_any:
         log_test_event("Katana data file initialization process complete.", "info")
     else:
-        log_test_event("All Katana data files already existed. No new initializations.", "info")
+        log_test_event(
+            "All Katana data files already existed. No new initializations.", "info"
+        )
     return True
+
 
 if __name__ == "__main__":
     log_test_event("--- Running Tests for File Operations ---", "info")
@@ -135,10 +157,12 @@ if __name__ == "__main__":
     corrupted_file_path = os.path.join(SCRIPT_DIR, "corrupted.json")
     with open(corrupted_file_path, "w") as f:
         f.write("this is not json")
-    loaded_corrupted = load_json_file(corrupted_file_path, []) # Expecting list default for this test
+    loaded_corrupted = load_json_file(
+        corrupted_file_path, []
+    )  # Expecting list default for this test
     print(f"Loaded corrupted: {loaded_corrupted}")
     assert loaded_corrupted == [], "Load corrupted JSON test FAILED!"
-    os.remove(corrupted_file_path) # Clean up
+    os.remove(corrupted_file_path)  # Clean up
     print("Load corrupted JSON test PASSED.")
 
     log_test_event("--- File Operations Tests Complete ---", "info")

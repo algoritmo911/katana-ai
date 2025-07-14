@@ -3,7 +3,8 @@ from unittest.mock import patch, MagicMock
 
 import sys
 import os
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -16,7 +17,13 @@ logger.setLevel("CRITICAL")
 
 
 class MockRecoveryPlugin(RecoveryPlugin):
-    def __init__(self, name="MockRecoverer", can_recover_response=True, recovery_status="success", action_taken="Mock action"):
+    def __init__(
+        self,
+        name="MockRecoverer",
+        can_recover_response=True,
+        recovery_status="success",
+        action_taken="Mock action",
+    ):
         self._name = name
         self.can_recover_response = can_recover_response
         self.recovery_status = recovery_status
@@ -35,7 +42,11 @@ class MockRecoveryPlugin(RecoveryPlugin):
     def attempt_recovery(self, issue: dict, config: dict) -> dict:
         self.attempt_recovery_called_with_issue = issue
         self.attempt_recovery_called_with_config = config
-        return {"status": self.recovery_status, "action_taken": self.action_taken, "recovered_by_mock": True}
+        return {
+            "status": self.recovery_status,
+            "action_taken": self.action_taken,
+            "recovered_by_mock": True,
+        }
 
 
 class TestRecoveryManager(unittest.TestCase):
@@ -47,7 +58,7 @@ class TestRecoveryManager(unittest.TestCase):
     def tearDown(self):
         SUT_config.MONITORED_TARGETS = self.original_monitored_targets
 
-    @patch.object(RecoveryManager, '_load_plugin_class')
+    @patch.object(RecoveryManager, "_load_plugin_class")
     def test_load_plugins_from_config_success(self, mock_load_plugin_class_method):
         final_mock_instance = MockRecoveryPlugin(name="TestServiceRestarter")
 
@@ -58,50 +69,71 @@ class TestRecoveryManager(unittest.TestCase):
             if class_name == "TestServiceRestarter":
                 return MockClassToReturn
             return None
+
         mock_load_plugin_class_method.side_effect = side_effect_load_plugin_class
 
         SUT_config.MONITORED_TARGETS = {
             "test_service_for_recovery": {
-                "enabled": True, "plugin": "AnyMonitor", "config": {},
+                "enabled": True,
+                "plugin": "AnyMonitor",
+                "config": {},
                 "diagnostic_plugins": [],
                 "recovery_plugins": [
-                    {"plugin": "TestServiceRestarter", "config": {"command": "restart.sh"}}
-                ]
+                    {
+                        "plugin": "TestServiceRestarter",
+                        "config": {"command": "restart.sh"},
+                    }
+                ],
             }
         }
 
         manager = RecoveryManager()
 
         self.assertIn("TestServiceRestarter", manager.recovery_plugins)
-        self.assertIsInstance(manager.recovery_plugins["TestServiceRestarter"], MockRecoveryPlugin)
+        self.assertIsInstance(
+            manager.recovery_plugins["TestServiceRestarter"], MockRecoveryPlugin
+        )
         expected_module_name = "self_healing.plugins.basic_plugins"
-        mock_load_plugin_class_method.assert_any_call(expected_module_name, "TestServiceRestarter")
+        mock_load_plugin_class_method.assert_any_call(
+            expected_module_name, "TestServiceRestarter"
+        )
         MockClassToReturn.assert_called_once()
 
     def test_attempt_all_recoveries_no_issues(self):
         manager = RecoveryManager()
-        manager.recovery_plugins = {} # Ensure no plugins interfere
+        manager.recovery_plugins = {}  # Ensure no plugins interfere
         SUT_config.MONITORED_TARGETS = {}
 
-        results = manager.attempt_all_recoveries([]) # Empty list of issues
+        results = manager.attempt_all_recoveries([])  # Empty list of issues
         self.assertEqual(results, [])
 
     def test_attempt_all_recoveries_with_mock_plugin_success(self):
         manager = RecoveryManager()
-        manager.recovery_plugins = {} # Clear auto-loaded
+        manager.recovery_plugins = {}  # Clear auto-loaded
 
-        mock_plugin = MockRecoveryPlugin(name="MyMockRecoverer", can_recover_response=True, recovery_status="success")
+        mock_plugin = MockRecoveryPlugin(
+            name="MyMockRecoverer", can_recover_response=True, recovery_status="success"
+        )
         manager.recovery_plugins["MyMockRecoverer"] = mock_plugin
 
         target_id = "server_gamma"
-        diagnosed_issue = {"target_id": target_id, "issue_type": "SERVICE_DOWN", "severity": "critical"}
+        diagnosed_issue = {
+            "target_id": target_id,
+            "issue_type": "SERVICE_DOWN",
+            "severity": "critical",
+        }
 
-        recovery_plugin_config_entry = {"plugin": "MyMockRecoverer", "config": {"script_path": "/opt/recover.sh"}}
+        recovery_plugin_config_entry = {
+            "plugin": "MyMockRecoverer",
+            "config": {"script_path": "/opt/recover.sh"},
+        }
         SUT_config.MONITORED_TARGETS = {
             target_id: {
-                "enabled": True, "plugin": "AnyMonitor", "config": {},
+                "enabled": True,
+                "plugin": "AnyMonitor",
+                "config": {},
                 "diagnostic_plugins": [],
-                "recovery_plugins": [recovery_plugin_config_entry]
+                "recovery_plugins": [recovery_plugin_config_entry],
             }
         }
 
@@ -112,52 +144,77 @@ class TestRecoveryManager(unittest.TestCase):
 
         self.assertEqual(result["status"], "success")
         self.assertTrue(result["recovered_by_mock"])
-        self.assertEqual(result["target_id"], target_id) # Enriched by manager
-        self.assertEqual(result["recovered_by"], "MyMockRecoverer") # Enriched
-        self.assertIn("timestamp", result) # Enriched
+        self.assertEqual(result["target_id"], target_id)  # Enriched by manager
+        self.assertEqual(result["recovered_by"], "MyMockRecoverer")  # Enriched
+        self.assertIn("timestamp", result)  # Enriched
 
         self.assertEqual(mock_plugin.can_recover_called_with_issue, diagnosed_issue)
-        self.assertEqual(mock_plugin.attempt_recovery_called_with_issue, diagnosed_issue)
-        self.assertEqual(mock_plugin.attempt_recovery_called_with_config, recovery_plugin_config_entry["config"])
+        self.assertEqual(
+            mock_plugin.attempt_recovery_called_with_issue, diagnosed_issue
+        )
+        self.assertEqual(
+            mock_plugin.attempt_recovery_called_with_config,
+            recovery_plugin_config_entry["config"],
+        )
 
     def test_attempt_all_recoveries_plugin_cannot_recover(self):
         manager = RecoveryManager()
         manager.recovery_plugins = {}
 
-        mock_plugin = MockRecoveryPlugin(name="SelectiveRecoverer", can_recover_response=False) # Plugin says it cannot recover
+        mock_plugin = MockRecoveryPlugin(
+            name="SelectiveRecoverer", can_recover_response=False
+        )  # Plugin says it cannot recover
         manager.recovery_plugins["SelectiveRecoverer"] = mock_plugin
 
         target_id = "service_delta"
-        diagnosed_issue = {"target_id": target_id, "issue_type": "RARE_ISSUE", "severity": "warning"}
+        diagnosed_issue = {
+            "target_id": target_id,
+            "issue_type": "RARE_ISSUE",
+            "severity": "warning",
+        }
 
         SUT_config.MONITORED_TARGETS = {
             target_id: {
-                "enabled": True, "plugin": "AnyMonitor", "config": {},
+                "enabled": True,
+                "plugin": "AnyMonitor",
+                "config": {},
                 "diagnostic_plugins": [],
-                "recovery_plugins": [{"plugin": "SelectiveRecoverer", "config": {}}]
+                "recovery_plugins": [{"plugin": "SelectiveRecoverer", "config": {}}],
             }
         }
 
         recovery_results = manager.attempt_all_recoveries([diagnosed_issue])
-        self.assertEqual(len(recovery_results), 0) # No recovery attempt should be made or logged as a result by this plugin
+        self.assertEqual(
+            len(recovery_results), 0
+        )  # No recovery attempt should be made or logged as a result by this plugin
         self.assertEqual(mock_plugin.can_recover_called_with_issue, diagnosed_issue)
-        self.assertIsNone(mock_plugin.attempt_recovery_called_with_issue) # attempt_recovery should not be called
+        self.assertIsNone(
+            mock_plugin.attempt_recovery_called_with_issue
+        )  # attempt_recovery should not be called
 
     def test_attempt_all_recoveries_plugin_fails_recovery(self):
         manager = RecoveryManager()
         manager.recovery_plugins = {}
 
-        mock_plugin = MockRecoveryPlugin(name="FaultyRecoverer", can_recover_response=True, recovery_status="failed")
+        mock_plugin = MockRecoveryPlugin(
+            name="FaultyRecoverer", can_recover_response=True, recovery_status="failed"
+        )
         manager.recovery_plugins["FaultyRecoverer"] = mock_plugin
 
         target_id = "unlucky_service"
-        diagnosed_issue = {"target_id": target_id, "issue_type": "DB_CONNECTION_LOST", "severity": "critical"}
+        diagnosed_issue = {
+            "target_id": target_id,
+            "issue_type": "DB_CONNECTION_LOST",
+            "severity": "critical",
+        }
 
         SUT_config.MONITORED_TARGETS = {
             target_id: {
-                "enabled": True, "plugin": "AnyMonitor", "config": {},
+                "enabled": True,
+                "plugin": "AnyMonitor",
+                "config": {},
                 "diagnostic_plugins": [],
-                "recovery_plugins": [{"plugin": "FaultyRecoverer", "config": {}}]
+                "recovery_plugins": [{"plugin": "FaultyRecoverer", "config": {}}],
             }
         }
 
@@ -171,17 +228,25 @@ class TestRecoveryManager(unittest.TestCase):
         manager.recovery_plugins = {}
 
         mock_plugin_instance = MockRecoveryPlugin(name="ExplodingRecoverer")
-        mock_plugin_instance.attempt_recovery = MagicMock(side_effect=Exception("Recovery Exploded"))
+        mock_plugin_instance.attempt_recovery = MagicMock(
+            side_effect=Exception("Recovery Exploded")
+        )
         manager.recovery_plugins["ExplodingRecoverer"] = mock_plugin_instance
 
         target_id = "fragile_service"
-        diagnosed_issue = {"target_id": target_id, "issue_type": "KERNEL_PANIC_SIM", "severity": "critical"}
+        diagnosed_issue = {
+            "target_id": target_id,
+            "issue_type": "KERNEL_PANIC_SIM",
+            "severity": "critical",
+        }
 
         SUT_config.MONITORED_TARGETS = {
             target_id: {
-                "enabled": True, "plugin": "AnyMonitor", "config": {},
+                "enabled": True,
+                "plugin": "AnyMonitor",
+                "config": {},
                 "diagnostic_plugins": [],
-                "recovery_plugins": [{"plugin": "ExplodingRecoverer", "config": {}}]
+                "recovery_plugins": [{"plugin": "ExplodingRecoverer", "config": {}}],
             }
         }
 
@@ -194,17 +259,23 @@ class TestRecoveryManager(unittest.TestCase):
 
     def test_attempt_all_recoveries_no_recovery_plugin_for_target(self):
         manager = RecoveryManager()
-        manager.recovery_plugins = {} # No plugins loaded
+        manager.recovery_plugins = {}  # No plugins loaded
 
         target_id = "unmanaged_target"
-        diagnosed_issue = {"target_id": target_id, "issue_type": "SOME_PROBLEM", "severity": "critical"}
+        diagnosed_issue = {
+            "target_id": target_id,
+            "issue_type": "SOME_PROBLEM",
+            "severity": "critical",
+        }
 
         # Target is configured, but has no recovery_plugins list or it's empty
         SUT_config.MONITORED_TARGETS = {
             target_id: {
-                "enabled": True, "plugin": "AnyMonitor", "config": {},
+                "enabled": True,
+                "plugin": "AnyMonitor",
+                "config": {},
                 "diagnostic_plugins": [],
-                "recovery_plugins": [] # Empty list
+                "recovery_plugins": [],  # Empty list
             }
         }
         recovery_results = manager.attempt_all_recoveries([diagnosed_issue])
@@ -213,7 +284,9 @@ class TestRecoveryManager(unittest.TestCase):
         # Test with recovery_plugins key missing entirely
         SUT_config.MONITORED_TARGETS = {
             target_id: {
-                "enabled": True, "plugin": "AnyMonitor", "config": {},
+                "enabled": True,
+                "plugin": "AnyMonitor",
+                "config": {},
                 "diagnostic_plugins": [],
                 # "recovery_plugins" key missing
             }
@@ -222,5 +295,5 @@ class TestRecoveryManager(unittest.TestCase):
         self.assertEqual(recovery_results, [])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main(verbosity=2)
