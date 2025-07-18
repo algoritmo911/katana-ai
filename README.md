@@ -112,3 +112,23 @@ As of the latest updates, there are significant environmental blockers that prev
     ```
 
 ---
+
+## Daily Self-Diagnosis
+
+This project includes a self-diagnosis script that runs daily at 3 AM UTC. The script checks the following:
+
+- The presence of the `.env` file.
+- The absence of `__pycache__` directories and `.pyc` files.
+- The availability of Redis and Telegram.
+- The freshness of the dependencies.
+- The validity of the project structure.
+- The existence of the `logs` directory.
+- The passing of the tests.
+
+The results of the self-diagnosis are logged in `logs/selfcheck.log`. If any critical errors are found, the script will exit with a non-zero exit code, which will cause the CI to fail.
+
+You can also run the self-diagnosis script manually by running the following command:
+
+```bash
+python -m katana.self_check
+```

@@ -1,2 +1,5 @@
 python-json-logger
 coloredlogs
+redis
+python-telegram-bot
+python-dotenv
