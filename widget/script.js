@@ -16,11 +16,18 @@ closeButton.addEventListener('click', hideWidget);
 // Show the widget after a delay
 setTimeout(showWidget, 2000);
 
-sendCommandButton.addEventListener('click', () => {
+sendCommandButton.addEventListener('click', async () => {
     const command = commandInput.value;
     if (command) {
-        // Later, we'll send the command to the backend here.
-        console.log(`Sending command: ${command}`);
+        const response = await fetch("http://localhost:5000/command", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ command })
+        });
+        const data = await response.json();
+        console.log(data);
         commandInput.value = '';
     }
 });
