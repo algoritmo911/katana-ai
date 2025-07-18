@@ -2,6 +2,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class SelfEvolver:
     def generate_patch(self, task_description: str) -> str:
         """
@@ -48,7 +49,8 @@ print("Applying generated patch for: {task_description}")
             logger.error("Failed to apply patch.")
         return applied_successfully
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Example usage (for testing purposes)
     logging.basicConfig(level=logging.INFO)
     evolver = SelfEvolver()

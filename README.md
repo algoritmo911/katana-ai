@@ -7,6 +7,12 @@ A Telegram bot that can understand text and voice commands.
 -   Processes text commands (JSON and natural language).
 -   Processes voice commands by transcribing them to text using OpenAI Whisper.
 -   **NEW**: Real-time, streamed responses from GPT for general queries and non-command text.
+-   **NEW**: Passive listening mode, toggled by `/katana listen` and `/katana stop`.
+-   **NEW**: Command processing via JSON objects with `command_type` support:
+    -   `info`: Display an informational message.
+    -   `exec`: Execute a shell command.
+    -   `repeat`: Repeat the last action (placeholder).
+    -   `stop`: Stop the current action (placeholder).
 -   Basic NLP for mapping natural language to shell commands.
 -   Saves structured commands to the filesystem.
 

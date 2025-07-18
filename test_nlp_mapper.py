@@ -6,78 +6,256 @@ from unittest.mock import patch
 # Tests for the 'interpret' function (which is dynamically chosen by get_interpreter)
 # These will test basic_interpret by default, unless USE_LLM_NLP is set in the environment.
 
+import json
+
+
 def test_interpret_disk():
-    assert interpret("проверь диск") == "df -h"
-    assert interpret("сколько места на диске") == "df -h"
-    assert interpret("покажи место") == "df -h"
+    assert json.loads(interpret("проверь диск")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "df -h"},
+        "id": "nlp-disk",
+    }
+    assert json.loads(interpret("сколько места на диске")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "df -h"},
+        "id": "nlp-disk",
+    }
+    assert json.loads(interpret("покажи место")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "df -h"},
+        "id": "nlp-disk",
+    }
+
 
 def test_interpret_uptime():
-    assert interpret("как долго работает система") == "uptime"
-    assert interpret("аптайм сервера") == "uptime"
-    assert interpret("работает?") == "uptime"
+    assert json.loads(interpret("как долго работает система")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "uptime"},
+        "id": "nlp-uptime",
+    }
+    assert json.loads(interpret("аптайм сервера")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "uptime"},
+        "id": "nlp-uptime",
+    }
+    assert json.loads(interpret("работает?")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "uptime"},
+        "id": "nlp-uptime",
+    }
+
 
 def test_interpret_cpu():
-    assert interpret("какая загрузка") == "top -n1 | head -5"
-    assert interpret("загрузка cpu") == "top -n1 | head -5"
-    assert interpret("покажи загрузку процессора") == "top -n1 | head -5"
+    assert json.loads(interpret("какая загрузка")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "top -n1 | head -5"},
+        "id": "nlp-cpu",
+    }
+    assert json.loads(interpret("загрузка cpu")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "top -n1 | head -5"},
+        "id": "nlp-cpu",
+    }
+    assert json.loads(interpret("покажи загрузку процессора")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "top -n1 | head -5"},
+        "id": "nlp-cpu",
+    }
+
 
 def test_interpret_ls():
-    assert interpret("покажи файлы") == "ls -al"
-    assert interpret("содержимое папки") == "ls -al"
-    assert interpret("список файлов и папок") == "ls -al"
+    assert json.loads(interpret("покажи файлы")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "ls -al"},
+        "id": "nlp-ls",
+    }
+    assert json.loads(interpret("содержимое папки")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "ls -al"},
+        "id": "nlp-ls",
+    }
+    assert json.loads(interpret("список файлов и папок")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "ls -al"},
+        "id": "nlp-ls",
+    }
+
 
 def test_interpret_none():
     assert interpret("неизвестная команда") is None
     assert interpret("что ты умеешь?") is None
-    assert interpret("") is None # Empty string
-    assert interpret("   ") is None # String with only spaces
+    assert interpret("") is None  # Empty string
+    assert interpret("   ") is None  # String with only spaces
+
 
 def test_interpret_case_insensitivity():
     # This relies on the currently selected interpreter (basic_interpret by default)
     # to handle case insensitivity.
-    assert interpret("Проверь Диск") == "df -h"
-    assert interpret("КАКАЯ ЗАГРУЗКА") == "top -n1 | head -5"
-    assert interpret("ПоКаЖи ФаЙлЫ") == "ls -al"
+    assert json.loads(interpret("Проверь Диск")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "df -h"},
+        "id": "nlp-disk",
+    }
+    assert json.loads(interpret("КАКАЯ ЗАГРУЗКА")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "top -n1 | head -5"},
+        "id": "nlp-cpu",
+    }
+    assert json.loads(interpret("ПоКаЖи ФаЙлЫ")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "ls -al"},
+        "id": "nlp-ls",
+    }
+
 
 def test_interpret_partial_keywords():
     # Relies on the currently selected interpreter.
-    assert interpret("эй, проверь диск пожалуйста") == "df -h"
-    assert interpret("срочно, покажи мне загрузку cpu!") == "top -n1 | head -5"
-    assert interpret("какой аптайм у этого сервера?") == "uptime"
-    assert interpret("мне нужны все файлы в текущей папке") == "ls -al"
+    assert json.loads(interpret("эй, проверь диск пожалуйста")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "df -h"},
+        "id": "nlp-disk",
+    }
+    assert json.loads(interpret("срочно, покажи мне загрузку cpu!")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "top -n1 | head -5"},
+        "id": "nlp-cpu",
+    }
+    assert json.loads(interpret("какой аптайм у этого сервера?")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "uptime"},
+        "id": "nlp-uptime",
+    }
+    assert json.loads(interpret("мне нужны все файлы в текущей папке")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "ls -al"},
+        "id": "nlp-ls",
+    }
+
 
 def test_interpret_memory():
-    assert interpret("сколько памяти используется") == "free -h"
-    assert interpret("покажи ram") == "free -h"
-    assert interpret("использование оперативки") == "free -h"
+    assert json.loads(interpret("сколько памяти используется")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "free -h"},
+        "id": "nlp-ram",
+    }
+    assert json.loads(interpret("покажи ram")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "free -h"},
+        "id": "nlp-ram",
+    }
+    assert json.loads(interpret("использование оперативки")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "free -h"},
+        "id": "nlp-ram",
+    }
+
 
 def test_interpret_system_info():
-    assert interpret("дай инфо о системе") == "uname -a"
-    assert interpret("какое ядро?") == "uname -a"
-    assert interpret("версия ос какая") == "uname -a"
-    assert interpret("система инфо покажи") == "uname -a"
+    assert json.loads(interpret("дай инфо о системе")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "uname -a"},
+        "id": "nlp-sysinfo",
+    }
+    assert json.loads(interpret("какое ядро?")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "uname -a"},
+        "id": "nlp-sysinfo",
+    }
+    assert json.loads(interpret("версия ос какая")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "uname -a"},
+        "id": "nlp-sysinfo",
+    }
+    assert json.loads(interpret("система инфо покажи")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "uname -a"},
+        "id": "nlp-sysinfo",
+    }
+
 
 def test_interpret_network_connections():
-    assert interpret("активные сетевые подключения") == "ss -tulnp"
-    assert interpret("открытые порты") == "ss -tulnp"
-    assert interpret("покажи соединения") == "ss -tulnp"
+    assert json.loads(interpret("активные сетевые подключения")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "ss -tulnp"},
+        "id": "nlp-net",
+    }
+    assert json.loads(interpret("открытые порты")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "ss -tulnp"},
+        "id": "nlp-net",
+    }
+    assert json.loads(interpret("покажи соединения")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "ss -tulnp"},
+        "id": "nlp-net",
+    }
+
 
 def test_interpret_ping_google():
-    assert interpret("пинг google сейчас") == "ping -c 3 google.com"
-    assert interpret("проверь связь с google") == "ping -c 3 google.com"
+    assert json.loads(interpret("пинг google сейчас")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "ping -c 3 google.com"},
+        "id": "nlp-ping",
+    }
+    assert json.loads(interpret("проверь связь с google")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "ping -c 3 google.com"},
+        "id": "nlp-ping",
+    }
 
 
 # --- Tests for specific interpreter functions and the selection logic ---
 
+
 def test_basic_interpreter_direct():
     """Test basic_interpret directly."""
-    assert basic_interpret("проверь диск") == "df -h"
+    assert json.loads(basic_interpret("проверь диск")) == {
+        "type": "exec",
+        "module": "system",
+        "args": {"command": "df -h"},
+        "id": "nlp-disk",
+    }
     assert basic_interpret("неизвестная команда") is None
+
 
 def test_llm_interpreter_direct():
     """Test llm_interpret directly (placeholder behavior)."""
     assert llm_interpret("some input") is None
-    assert llm_interpret("example llm command for uptime") == "uptime" # Test the dummy command
+    assert (
+        llm_interpret("example llm command for uptime") == "uptime"
+    )  # Test the dummy command
+
 
 @patch.dict(os.environ, {"USE_LLM_NLP": "false"})
 def test_get_interpreter_selects_basic_when_env_false(monkeypatch):
@@ -92,7 +270,7 @@ def test_get_interpreter_selects_basic_when_env_false(monkeypatch):
     assert interpreter_func == basic_interpret
     # Test that the module's default `interpret` is basic_interpret if USE_LLM_NLP was false during initial import
     # This assumes tests are run in an environment where USE_LLM_NLP is not 'true' by default
-    if os.environ.get('USE_LLM_NLP','false').lower() != 'true':
+    if os.environ.get("USE_LLM_NLP", "false").lower() != "true":
         assert interpret == basic_interpret
 
 
@@ -104,16 +282,20 @@ def test_get_interpreter_selects_llm_when_env_true(monkeypatch):
     interpreter_func = get_interpreter()
     assert interpreter_func == llm_interpret
 
+
 # Test that the module's `interpret` is set according to USE_LLM_NLP at import time
 # This test is sensitive to the environment when tests are run.
 def test_module_interpret_respects_initial_env():
-    env_val = os.environ.get('USE_LLM_NLP', 'false').lower()
-    if env_val == 'true':
+    env_val = os.environ.get("USE_LLM_NLP", "false").lower()
+    if env_val == "true":
         assert interpret == llm_interpret
-        print ("Module `interpret` is `llm_interpret` because USE_LLM_NLP is true.")
+        print("Module `interpret` is `llm_interpret` because USE_LLM_NLP is true.")
     else:
         assert interpret == basic_interpret
-        print ("Module `interpret` is `basic_interpret` because USE_LLM_NLP is false or unset.")
+        print(
+            "Module `interpret` is `basic_interpret` because USE_LLM_NLP is false or unset."
+        )
+
 
 # It might be useful to test combinations if logic becomes more complex,
 # but for the current simple keyword checking, it's not strictly necessary.

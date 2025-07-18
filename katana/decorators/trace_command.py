@@ -4,10 +4,12 @@ import getpass
 from datetime import datetime, timezone
 from katana.logging.telemetry_logger import log_command_telemetry
 
+
 def trace_command(func):
     """
     A decorator to log command execution telemetry.
     """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         command_name = func.__name__
@@ -16,20 +18,20 @@ def trace_command(func):
         # This is a simple approach; more sophisticated methods might be needed
         # if commands are deeply nested or part of complex class hierarchies.
         is_method = False
-        if hasattr(func, '__qualname__') and '.' in func.__qualname__:
+        if hasattr(func, "__qualname__") and "." in func.__qualname__:
             # Example: <class_name>.<method_name>
             command_name = func.__qualname__
-            is_method = True # Likely a method if __qualname__ has a dot
+            is_method = True  # Likely a method if __qualname__ has a dot
 
         # If it's identified as a method and args exist, assume args[0] is 'self'
         # and exclude it from logged arguments.
         actual_args = args
         if is_method and args:
-            actual_args = args[1:] # Get elements from index 1 to end
+            actual_args = args[1:]  # Get elements from index 1 to end
 
         start_perf_counter = time.perf_counter()
         start_timestamp_iso = datetime.now(timezone.utc).isoformat()
-        username = getpass.getuser() # Get username
+        username = getpass.getuser()  # Get username
         success = False
         result = None
         error_obj = None
@@ -47,18 +49,20 @@ def trace_command(func):
             execution_time = end_perf_counter - start_perf_counter
             log_command_telemetry(
                 command_name=command_name,
-                args=actual_args, # Log actual user-provided args
+                args=actual_args,  # Log actual user-provided args
                 kwargs=kwargs,
                 success=success,
                 result=result,
                 error=error_obj,
                 execution_time=execution_time,
                 user=username,
-                start_time_iso=start_timestamp_iso
+                start_time_iso=start_timestamp_iso,
             )
+
     return wrapper
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Example Usage (for testing the decorator directly)
     # This requires the logger to be working.
 
@@ -83,7 +87,9 @@ if __name__ == '__main__':
 
         @trace_command
         def instance_method_command(self, value, option=None):
-            print(f"Executing instance_method_command on {self.name} with {value}, {option}")
+            print(
+                f"Executing instance_method_command on {self.name} with {value}, {option}"
+            )
             if option == "fail":
                 raise RuntimeError("Simulated failure in instance method")
             return f"Instance {self.name} processed {value}"

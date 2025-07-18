@@ -1,5 +1,6 @@
 from katana.decorators.trace_command import trace_command
 
+
 @trace_command
 def say(args):
     """
