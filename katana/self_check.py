@@ -79,5 +79,7 @@ def run_all():
         sys.exit(1)
 
 if __name__ == '__main__':
+    import coloredlogs
+    coloredlogs.install(level='INFO', logger=log, fmt='%(asctime)s %(levelname)s %(message)s')
     logging.basicConfig(level=logging.INFO, filename='logs/selfcheck.log')
     run_all()
