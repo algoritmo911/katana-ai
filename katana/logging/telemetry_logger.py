@@ -1,8 +1,24 @@
 import json
 import os
-from datetime import datetime, timezone  # Added timezone
+from datetime import datetime, timezone
+from supabase import create_client, Client
 
+# Supabase configuration
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_TABLE = "command_logs"
+
+# Local log file path
 LOG_FILE_PATH = "logs/command_telemetry.log"
+
+# Initialize Supabase client
+supabase: Client = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print(f"Error initializing Supabase client: {e}")
+        supabase = None
 
 
 def ensure_log_directory_exists():
@@ -10,6 +26,46 @@ def ensure_log_directory_exists():
     log_dir = os.path.dirname(LOG_FILE_PATH)
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+
+
+def make_serializable(data):
+    """Helper to make arguments JSON serializable."""
+    if isinstance(data, (list, tuple)):
+        return [make_serializable(item) for item in data]
+    elif isinstance(data, dict):
+        return {k: make_serializable(v) for k, v in data.items()}
+    elif isinstance(data, (int, float, str, bool)) or data is None:
+        return data
+    else:
+        try:
+            json.dumps(data)
+            return data
+        except (TypeError, OverflowError):
+            return str(data)
+
+
+def write_to_supabase(log_entry: dict):
+    """Writes a log entry to Supabase."""
+    if not supabase:
+        return
+
+    try:
+        response = supabase.table(SUPABASE_TABLE).insert(log_entry).execute()
+        # In v2, a failed insert returns a response with an empty `data` list and an `error` object
+        if not response.data and hasattr(response, "error") and response.error:
+            print(f"Error writing to Supabase: {response.error}")
+    except Exception as e:
+        print(f"Failed to write to Supabase: {e}")
+
+
+def write_to_local_log(log_entry: dict):
+    """Writes a log entry to a local file."""
+    try:
+        with open(LOG_FILE_PATH, "a") as f:
+            f.write(json.dumps(log_entry) + "\n")
+    except Exception as e:
+        print(f"Error writing to telemetry log: {e}")
+        print(f"Original log entry: {log_entry}")
 
 
 def log_command_telemetry(
@@ -24,50 +80,17 @@ def log_command_telemetry(
     start_time_iso: str = None,
 ):
     """
-    Logs telemetry data for a command execution.
-
-    Args:
-        command_name (str): The name of the command.
-        args (tuple): Positional arguments passed to the command.
-        kwargs (dict): Keyword arguments passed to the command.
-        success (bool): Whether the command executed successfully.
-        result (any, optional): The result of the command execution if successful. Defaults to None.
-        error (Exception, optional): The exception raised if the command failed. Defaults to None.
-        execution_time (float, optional): The time taken for the command to execute in seconds. Defaults to None.
-        user (str, optional): The username of the user executing the command. Defaults to "unknown".
-        start_time_iso (str, optional): The ISO format UTC timestamp of when the command started. Defaults to None.
+    Logs telemetry data for a command execution to local file and Supabase.
     """
     ensure_log_directory_exists()
 
-    # Helper to make arguments JSON serializable
-    def make_serializable(data):
-        if isinstance(data, (list, tuple)):
-            return [make_serializable(item) for item in data]
-        elif isinstance(data, dict):
-            return {k: make_serializable(v) for k, v in data.items()}
-        elif isinstance(data, (int, float, str, bool)) or data is None:
-            return data
-        else:
-            try:
-                # Try to json encode it directly, if it fails, convert to string
-                json.dumps(data)
-                return data
-            except (TypeError, OverflowError):
-                return str(data)
-
     log_entry = {
-        "log_event_timestamp_utc": datetime.now(
-            timezone.utc
-        ).isoformat(),  # Time the log entry is created
-        "command_start_time_utc": (
-            start_time_iso if start_time_iso else "N/A"
-        ),  # Actual command start time
+        "log_event_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "command_start_time_utc": start_time_iso if start_time_iso else "N/A",
         "user": user,
         "command_name": command_name,
         "arguments": {
-            "args": make_serializable(
-                list(args)
-            ),  # Convert tuple to list for JSON, then make serializable
+            "args": make_serializable(list(args)),
             "kwargs": make_serializable(kwargs),
         },
         "success": success,
@@ -75,21 +98,17 @@ def log_command_telemetry(
     }
 
     if success:
-        # Avoid logging potentially large or sensitive results by default.
-        # Consider adding a configuration for verbosity later if needed.
         log_entry["result_type"] = type(result).__name__
     else:
         log_entry["error"] = (
             {"type": type(error).__name__, "message": str(error)} if error else None
         )
 
-    try:
-        with open(LOG_FILE_PATH, "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
-    except Exception as e:
-        # Fallback logging in case of issues with writing to the telemetry log
-        print(f"Error writing to telemetry log: {e}")
-        print(f"Original log entry: {log_entry}")
+    # Write to local log file
+    write_to_local_log(log_entry)
+
+    # Write to Supabase
+    write_to_supabase(log_entry)
 
 
 if __name__ == "__main__":
