@@ -335,34 +335,4 @@ The `ci.yml` file includes commented-out placeholders for a build job as an exam
 ---
 
 Happy botting with Katana! ⚔️
-
-## Прогнозирование
-
-Модуль прогнозирования предназначен для анализа временных рядов и предсказания будущих событий. Он использует модель ARIMA для построения прогнозов и может быть расширен для использования других моделей, таких как LSTM.
-
-### Использование
-
-Для использования модуля прогнозирования необходимо импортировать класс `Predictor` из `src.katana_core.predictor`.
-
-```python
-from src.katana_core.predictor import Predictor
-from datetime import datetime
-
-# Создание экземпляра класса
-predictor = Predictor()
-
-# Данные для анализа
-data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-timestamps = [datetime(2023, 1, 1), datetime(2023, 1, 2), datetime(2023, 1, 3), datetime(2023, 1, 4), datetime(2023, 1, 5), datetime(2023, 1, 6), datetime(2023, 1, 7), datetime(2023, 1, 8), datetime(2023, 1, 9), datetime(2023, 1, 10)]
-
-# Передача данных в модуль
-predictor.ingest(data, timestamps)
-
-# Получение прогноза на 10 шагов вперед
-forecast = predictor.predict(steps=10)
-
-# Обнаружение аномалий
-if predictor.detect_anomalies(threshold=2.0):
-    predictor.alert_user()
-```
 ```
