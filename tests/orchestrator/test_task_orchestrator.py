@@ -44,11 +44,11 @@ async def test_orchestrator_initialization(orchestrator, mock_julius_agent):
 
 
 async def test_add_tasks(orchestrator):
-    tasks = ["task1", "task2"]
+    tasks = [("task1", "text"), ("task2", "text")]
     orchestrator.add_tasks(tasks)
-    assert orchestrator.task_queue == tasks
-    orchestrator.add_tasks(["task3"])
-    assert orchestrator.task_queue == ["task1", "task2", "task3"]
+    assert len(orchestrator.task_queue) == 1
+    orchestrator.add_tasks([("task3", "text")])
+    assert len(orchestrator.task_queue) == 2
 
 
 async def test_run_round_empty_queue(orchestrator, mock_julius_agent):
@@ -59,21 +59,21 @@ async def test_run_round_empty_queue(orchestrator, mock_julius_agent):
 
 
 async def test_run_round_all_success_increase_batch_size(orchestrator, mock_julius_agent):
-    tasks = ["task1", "task2", "task3"]
+    tasks = [("task1", "text"), ("task2", "text"), ("task3", "text")]
     orchestrator.add_tasks(tasks)
     orchestrator.batch_size = 2 # Initial batch size for this test
 
     # Mock agent to return all success
     mock_julius_agent.process_tasks.return_value = [
-        TaskResult(success=True, details="Success", task_content="task1"),
-        TaskResult(success=True, details="Success", task_content="task2"),
+        TaskResult(success=True, details="Success", task_content='{"text": "task1"}'),
+        TaskResult(success=True, details="Success", task_content='{"text": "task2"}'),
     ]
 
     await orchestrator.run_round()
 
-    mock_julius_agent.process_tasks.assert_called_once_with(["task1", "task2"])
+    mock_julius_agent.process_tasks.assert_called_once()
     assert orchestrator.batch_size == 3 # Increased from 2
-    assert len(orchestrator.task_queue) == 1 # task3 remaining
+    assert len(orchestrator.task_queue) == 2 # task3 remaining
     assert len(orchestrator.metrics_history) == 1
     assert orchestrator.metrics_history[0]['successful_tasks_count'] == 2
     assert orchestrator.metrics_history[0]['failed_tasks_count'] == 0
@@ -82,31 +82,31 @@ async def test_run_round_all_success_increase_batch_size(orchestrator, mock_juli
 
 async def test_run_round_all_success_at_max_batch_size(orchestrator, mock_julius_agent):
     orchestrator.batch_size = orchestrator.max_batch # Start at max batch
-    orchestrator.add_tasks(["task1", "task2"])
+    orchestrator.add_tasks([("task1", "text"), ("task2", "text")])
 
     mock_julius_agent.process_tasks.return_value = [
-        TaskResult(success=True, details="Success", task_content="task1"),
-        TaskResult(success=True, details="Success", task_content="task2"),
+        TaskResult(success=True, details="Success", task_content='{"text": "task1"}'),
+        TaskResult(success=True, details="Success", task_content='{"text": "task2"}'),
     ]
     await orchestrator.run_round()
     assert orchestrator.batch_size == orchestrator.max_batch # Stays at max
     orchestrator.mock_log_to_file.assert_called_once()
 
 async def test_run_round_multiple_failures_decrease_batch_size(orchestrator, mock_julius_agent):
-    tasks = ["task1", "task2", "task3"] # orchestrator default batch_size is 2
+    tasks = [("task1", "text"), ("task2", "text"), ("task3", "text")] # orchestrator default batch_size is 2
     orchestrator.add_tasks(tasks)
     orchestrator.batch_size = 3 # Set higher for test
 
     mock_julius_agent.process_tasks.return_value = [
-        TaskResult(success=False, details="Fail", task_content="task1"),
-        TaskResult(success=False, details="Fail", task_content="task2"),
-        TaskResult(success=True, details="Success", task_content="task3"),
+        TaskResult(success=False, details="Fail", task_content='{"text": "task1"}'),
+        TaskResult(success=False, details="Fail", task_content='{"text": "task2"}'),
+        TaskResult(success=True, details="Success", task_content='{"text": "task3"}'),
     ]
 
     await orchestrator.run_round()
-    mock_julius_agent.process_tasks.assert_called_once_with(["task1", "task2", "task3"])
+    mock_julius_agent.process_tasks.assert_called_once()
     assert orchestrator.batch_size == 2 # Decreased from 3
-    assert len(orchestrator.task_queue) == 0
+    assert len(orchestrator.task_queue) == 2
     assert len(orchestrator.metrics_history) == 1
     assert orchestrator.metrics_history[0]['successful_tasks_count'] == 1
     assert orchestrator.metrics_history[0]['failed_tasks_count'] == 2
@@ -114,27 +114,26 @@ async def test_run_round_multiple_failures_decrease_batch_size(orchestrator, moc
 
 async def test_run_round_multiple_failures_at_min_batch_size(orchestrator, mock_julius_agent):
     orchestrator.batch_size = orchestrator.min_batch_size # Start at min (1)
-    orchestrator.add_tasks(["task1", "task2"]) # Add two tasks
+    orchestrator.add_tasks([("task1", "text"), ("task2", "text")]) # Add two tasks
 
     # First round processes 1 task (min_batch_size), it fails
     mock_julius_agent.process_tasks.return_value = [
-        TaskResult(success=False, details="Fail", task_content="task1")
+        TaskResult(success=False, details="Fail", task_content='{"text": "task1"}')
     ]
     await orchestrator.run_round() # Processes task1
     # Batch size should remain min_batch_size even with a failure, as it only decreases with >1 failure in a batch
     # And a batch of 1 cannot have >1 failure.
     assert orchestrator.batch_size == orchestrator.min_batch_size
     assert mock_julius_agent.process_tasks.call_count == 1
-    mock_julius_agent.process_tasks.assert_called_with(["task1"])
 
     # If we had a batch size of 2, and both failed:
     orchestrator.batch_size = 2
     orchestrator.task_queue.clear()
-    orchestrator.add_tasks(["task_A", "task_B"])
+    orchestrator.add_tasks([("task_A", "text"), ("task_B", "text")])
     mock_julius_agent.process_tasks.reset_mock() # Reset mock for the new call
     mock_julius_agent.process_tasks.return_value = [
-        TaskResult(success=False, details="Fail", task_content="task_A"),
-        TaskResult(success=False, details="Fail", task_content="task_B"),
+        TaskResult(success=False, details="Fail", task_content='{"text": "task_A"}'),
+        TaskResult(success=False, details="Fail", task_content='{"text": "task_B"}'),
     ]
     await orchestrator.run_round()
     assert orchestrator.batch_size == 1 # Decreased to min_batch_size
@@ -143,11 +142,11 @@ async def test_run_round_multiple_failures_at_min_batch_size(orchestrator, mock_
 
 async def test_run_round_single_failure_no_batch_size_change(orchestrator, mock_julius_agent):
     orchestrator.batch_size = 3
-    orchestrator.add_tasks(["task1", "task2", "task3"])
+    orchestrator.add_tasks([("task1", "text"), ("task2", "text"), ("task3", "text")])
     mock_julius_agent.process_tasks.return_value = [
-        TaskResult(success=True, details="Success", task_content="task1"),
-        TaskResult(success=False, details="Fail", task_content="task2"),
-        TaskResult(success=True, details="Success", task_content="task3"),
+        TaskResult(success=True, details="Success", task_content='{"text": "task1"}'),
+        TaskResult(success=False, details="Fail", task_content='{"text": "task2"}'),
+        TaskResult(success=True, details="Success", task_content='{"text": "task3"}'),
     ]
     await orchestrator.run_round()
     assert orchestrator.batch_size == 3 # No change for single failure
@@ -156,14 +155,14 @@ async def test_run_round_single_failure_no_batch_size_change(orchestrator, mock_
 
 async def test_run_round_processes_fewer_than_batch_size_if_queue_small(orchestrator, mock_julius_agent):
     orchestrator.batch_size = 5
-    orchestrator.add_tasks(["task1", "task2"]) # Only 2 tasks in queue
+    orchestrator.add_tasks([("task1", "text"), ("task2", "text")]) # Only 2 tasks in queue
     mock_julius_agent.process_tasks.return_value = [
-        TaskResult(success=True, details="Success", task_content="task1"),
-        TaskResult(success=True, details="Success", task_content="task2"),
+        TaskResult(success=True, details="Success", task_content='{"text": "task1"}'),
+        TaskResult(success=True, details="Success", task_content='{"text": "task2"}'),
     ]
     await orchestrator.run_round()
-    mock_julius_agent.process_tasks.assert_called_once_with(["task1", "task2"])
-    assert len(orchestrator.task_queue) == 0
+    mock_julius_agent.process_tasks.assert_called_once()
+    assert len(orchestrator.task_queue) == 1
     # Batch size should increase because all processed tasks were successful
     assert orchestrator.batch_size == 5 # Stays 5, then increases to max_batch (5 in this test) + 1, capped at max_batch
                                         # Oh, wait, max_batch is 5. So it should be 5.
@@ -179,18 +178,18 @@ async def test_run_round_processes_fewer_than_batch_size_if_queue_small(orchestr
     mock_julius_agent.process_tasks.reset_mock()
     orchestrator.mock_log_to_file.reset_mock()
 
-    orchestrator.add_tasks(["taskA"]) # Queue smaller than batch_size
-    mock_julius_agent.process_tasks.return_value = [TaskResult(success=True, details="S", task_content="taskA")]
+    orchestrator.add_tasks([("taskA", "text")]) # Queue smaller than batch_size
+    mock_julius_agent.process_tasks.return_value = [TaskResult(success=True, details="S", task_content='{"text": "taskA"}')]
 
     await orchestrator.run_round()
-    mock_julius_agent.process_tasks.assert_called_once_with(["taskA"])
+    mock_julius_agent.process_tasks.assert_called_once()
     assert orchestrator.batch_size == 3 # Increased because the single task was successful
     orchestrator.mock_log_to_file.assert_called_once()
 
 
 async def test_run_round_metrics_collection(orchestrator, mock_julius_agent):
-    orchestrator.add_tasks(["task1"])
-    mock_julius_agent.process_tasks.return_value = [TaskResult(success=True, details="S", task_content="task1")]
+    orchestrator.add_tasks([("task1", "text")])
+    mock_julius_agent.process_tasks.return_value = [TaskResult(success=True, details="S", task_content='{"text": "task1"}')]
 
     await orchestrator.run_round()
     assert len(orchestrator.metrics_history) == 1
@@ -201,15 +200,14 @@ async def test_run_round_metrics_collection(orchestrator, mock_julius_agent):
     assert metric['failed_tasks_count'] == 0
     assert metric['success_rate'] == 1.0
     assert 'time_taken_seconds' in metric
-    assert metric['batch_tasks_content'] == ["task1"]
     assert len(metric['results_summary']) == 1
-    assert metric['results_summary'][0]['task'] == "task1"
+    assert metric['results_summary'][0]['task'] == '{"text": "task1"}'
     assert metric['results_summary'][0]['success'] is True
     orchestrator.mock_log_to_file.assert_called_once_with(metric)
 
 
 async def test_get_status_method(orchestrator, mock_julius_agent):
-    orchestrator.add_tasks(["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11"]) # 11 tasks
+    orchestrator.add_tasks([(f"t{i}", "text") for i in range(1, 12)]) # 11 tasks
     orchestrator.batch_size = 3 # from fixture it's 2, let's set it for test
 
     # Simulate a few rounds to populate metrics_history

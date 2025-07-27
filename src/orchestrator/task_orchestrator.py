@@ -2,6 +2,7 @@ import time
 import json
 import os
 from typing import List, Any, NamedTuple, Dict
+from katana_core.data_fusion import DataFusion
 
 # Forward declaration for JuliusAgent
 class JuliusAgent:
@@ -20,6 +21,7 @@ class TaskOrchestrator:
         self.min_batch_size = 1
         self.max_batch = max_batch
         self.task_queue: List[str] = []
+        self.data_fusion_service = DataFusion()
         self.metrics_history: List[Dict[str, Any]] = [] # Renamed from self.metrics to avoid confusion with a single metric entry
         self.metrics_log_file = metrics_log_file
         self._initialize_metrics_log_file()
@@ -41,9 +43,16 @@ class TaskOrchestrator:
                     json.dump([], f)
 
 
-    def add_tasks(self, tasks: List[str]) -> None:
+    def add_tasks(self, tasks: List[tuple[str, str]]) -> None:
         """Добавить список задач в очередь."""
-        self.task_queue.extend(tasks)
+        for task_data, task_format in tasks:
+            self.data_fusion_service.ingest(task_data, task_format)
+
+        # For now, we'll just add the string representation of the fused data to the task queue
+        # In a real-world scenario, we would have a more sophisticated way of handling this
+        fused_data_str = json.dumps(self.data_fusion_service.get_data())
+        self.task_queue.append(fused_data_str)
+
 
     def _log_metric_to_file(self, metric_entry: Dict[str, Any]):
         """Appends a single metric entry to the JSON log file."""

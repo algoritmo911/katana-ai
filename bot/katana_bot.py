@@ -93,6 +93,7 @@ MESSAGE_ROLE_ASSISTANT = "assistant"
 # --- MemoryManager Initialization ---
 # Ensure src is in PYTHONPATH or adjust import accordingly
 # Assuming `src` is in PYTHONPATH for cleaner imports
+from katana_core.data_fusion import DataFusion
 try:
     from src.memory.memory_manager import MemoryManager
 except ImportError:
@@ -113,10 +114,11 @@ chat_ttl = int(chat_ttl_str) if chat_ttl_str else None
 
 # memory_manager will be initialized by init_dependencies()
 memory_manager: Optional[MemoryManager] = None
+data_fusion_service: Optional[DataFusion] = None
 
 def init_dependencies():
     """Initializes global dependencies like MemoryManager."""
-    global memory_manager
+    global memory_manager, data_fusion_service
     if memory_manager is None:
         logger.info("Initializing MemoryManager...")
         # These variables are already defined at module level
@@ -131,6 +133,13 @@ def init_dependencies():
         logger.info("MemoryManager initialized.")
     else:
         logger.info("MemoryManager already initialized.")
+
+    if data_fusion_service is None:
+        logger.info("Initializing DataFusion service...")
+        data_fusion_service = DataFusion()
+        logger.info("DataFusion service initialized.")
+    else:
+        logger.info("DataFusion service already initialized.")
 
 # --- End MemoryManager Initialization ---
 
@@ -192,6 +201,10 @@ def handle_message_impl(message):
     # 1. Логирование входящего сообщения (уже сделано в handle_message)
     # logger.info(f"Processing message from chat_id {chat_id_str}: {user_message_text}")
 
+    # Ingest data into DataFusion service
+    data_fusion_service.ingest(user_message_text, 'text')
+    logger.info(f"Fused data: {data_fusion_service.get_data()}")
+
     # 2. Формирование контекста из MemoryManager
     # No explicit initialization like `if chat_id not in katana_states:` needed.
     # get_history will return empty list if no history.
@@ -223,6 +236,8 @@ def handle_message_impl(message):
         if is_valid_command_structure:
             is_json_command = True
             command_data = parsed_json
+            data_fusion_service.ingest(user_message_text, 'json')
+            logger.info(f"Fused data: {data_fusion_service.get_data()}")
         else:
             logger.info(f"Message from chat_id {chat_id_str} parsed as JSON but not a valid command structure: {user_message_text}")
 
