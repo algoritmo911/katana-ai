@@ -76,66 +76,63 @@ def stop_heartbeat_thread():
     else:
         logger.info("Heartbeat thread not running or already stopped.")
 
+# --- Заглушки и глобальные переменные ---
+# Это будет заменено реальной реализацией или импортом
+def get_katana_response(history: list[dict]) -> str:
+    """Заглушка для функции получения ответа от NLP модели."""
+    logger.info(f"get_katana_response called with history: {history}")
+    if not history:
+        return "Катана к вашим услугам. О чём поразмыслим?"
+    last_message = history[-1]['content']
+    return f"Размышляю над вашим последним сообщением: '{last_message}'... (это заглушка)"
+
 # Типы сообщений в истории
 MESSAGE_ROLE_USER = "user"
 MESSAGE_ROLE_ASSISTANT = "assistant"
 
-# --- Dependency Initialization ---
-# Adjust imports to be cleaner and handle potential ImportErrors
+# --- MemoryManager Initialization ---
+# Ensure src is in PYTHONPATH or adjust import accordingly
+# Assuming `src` is in PYTHONPATH for cleaner imports
 try:
     from src.memory.memory_manager import MemoryManager
-    from src.datafusions.datafusion import DataFusion
 except ImportError:
+    # Fallback for local execution if PYTHONPATH isn't set, e.g. when running katana_bot.py directly for testing
+    # This assumes katana_bot.py is in bot/ and src/ is a sibling directory
     import sys
     project_root = Path(__file__).resolve().parent.parent
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
+    sys.path.insert(0, str(project_root))
     from src.memory.memory_manager import MemoryManager
-    from src.datafusions.datafusion import DataFusion
 
 
-# Globals for dependencies, to be initialized by init_dependencies()
+redis_host = os.getenv('REDIS_HOST', 'localhost')
+redis_port = int(os.getenv('REDIS_PORT', '6379'))
+redis_password = os.getenv('REDIS_PASSWORD', None)
+redis_db = int(os.getenv('REDIS_DB', '0'))
+chat_ttl_str = os.getenv('REDIS_CHAT_HISTORY_TTL_SECONDS')
+chat_ttl = int(chat_ttl_str) if chat_ttl_str else None
+
+# memory_manager will be initialized by init_dependencies()
 memory_manager: Optional[MemoryManager] = None
-data_fusion: Optional[DataFusion] = None
 
 def init_dependencies():
-    """Initializes global dependencies like MemoryManager and DataFusion."""
-    global memory_manager, data_fusion
-
+    """Initializes global dependencies like MemoryManager."""
+    global memory_manager
     if memory_manager is None:
         logger.info("Initializing MemoryManager...")
-        redis_host = os.getenv('REDIS_HOST', 'localhost')
-        redis_port = int(os.getenv('REDIS_PORT', '6379'))
-        redis_password = os.getenv('REDIS_PASSWORD', None)
-        redis_db = int(os.getenv('REDIS_DB', '0'))
-        chat_ttl_str = os.getenv('REDIS_CHAT_HISTORY_TTL_SECONDS')
-        chat_ttl = int(chat_ttl_str) if chat_ttl_str else None
-
+        # These variables are already defined at module level
+        # redis_host, redis_port, redis_db, redis_password, chat_ttl
         memory_manager = MemoryManager(
-            host=redis_host, port=redis_port, db=redis_db,
-            password=redis_password, chat_history_ttl_seconds=chat_ttl
+            host=redis_host,
+            port=redis_port,
+            db=redis_db,
+            password=redis_password,
+            chat_history_ttl_seconds=chat_ttl
         )
         logger.info("MemoryManager initialized.")
     else:
         logger.info("MemoryManager already initialized.")
 
-    if data_fusion is None:
-        logger.info("Initializing DataFusion...")
-        # Assuming DataFusion is initialized without arguments for now
-        data_fusion = DataFusion()
-        logger.info("DataFusion initialized.")
-    else:
-        logger.info("DataFusion already initialized.")
-
-def get_katana_response(history: list[dict]) -> str:
-    """Gets a response from the NLP model via DataFusion."""
-    logger.info(f"get_katana_response called with history: {history}")
-    if data_fusion is None:
-        logger.error("DataFusion is not initialized.")
-        raise RuntimeError("DataFusion service not available.")
-
-    # DataFusion is expected to handle the logic of which NLP client to use
-    return data_fusion.get_response(history)
+# --- End MemoryManager Initialization ---
 
 
 # --- Конец заглушек ---
@@ -234,7 +231,6 @@ def handle_message_impl(message):
         pass # Не JSON, значит, обычное сообщение
 
     # Добавляем сообщение пользователя в историю
-    memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_USER, "content": user_message_text})
     current_history.append({"role": MESSAGE_ROLE_USER, "content": user_message_text})
 
     if is_json_command and command_data:
@@ -289,15 +285,16 @@ def handle_message_impl(message):
         try:
             # 3. Вызов get_katana_response с правильной историей
             katana_response_text = get_katana_response(current_history)
-            logger.info(f"Katana response for chat_id {chat_id_str}: {katana_response_text}")
+            logger.info(f"Katana response for chat_id {chat_id_str}: {katana_response_text}") # Corrected
 
             # 4. Отправка ответа через bot.reply_to
             bot.reply_to(message, katana_response_text)
-            logger.info(f"Replied to chat_id {chat_id_str}: {katana_response_text}")
+            logger.info(f"Replied to chat_id {chat_id_str}: {katana_response_text}") # Corrected
 
-            # 5. Запись исходящего сообщения в MemoryManager
+            # 5. Запись исходящего сообщения в состояние
+            # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text}) # Replaced
             memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text})
-            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}.")
+            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}. History length: {len(memory_manager.get_history(chat_id_str))}") # Corrected, log current length from manager
 
         except Exception as e:
             error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')

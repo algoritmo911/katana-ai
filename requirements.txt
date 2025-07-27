@@ -8,3 +8,5 @@ fastapi
 uvicorn[standard]
 redis
 PyYAML
+statsmodels
+prophet
