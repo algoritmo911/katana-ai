@@ -214,18 +214,18 @@ class KatanaCore:
                     if len(parts) == 2:
                         mem_key = parts[1]
                         recalled_value = self.memory.get(mem_key, "Not found in memory.")
-                        print(f"Recalled {mem_key}: {recalled_value}") # CLI output
+                        logger.info(f"Recalled {mem_key}: {recalled_value}")
                         logger.info(f"Recalled: {mem_key}", extra=cmd_context) # Corrected f-string
                     else:
                         logger.warning("Usage: recall <key>", extra=cmd_context)
 
                 elif cmd_key == "status":
-                    print(f"Current Status: {json.dumps(self.status, indent=2)}") # CLI output
+                    logger.info(f"Current Status: {json.dumps(self.status, indent=2)}")
                     logger.info("Displayed current status.", extra=cmd_context)
 
                 else:
                     logger.warning(f"Unknown command: '{cmd_input}'", extra=cmd_context)
-                    print(f"❌ Unknown command. Available: {list(self.commands.keys())} or 'remember/recall <key> <value>', 'status', 'exit'.")
+                    logger.warning(f"❌ Unknown command. Available: {list(self.commands.keys())} or 'remember/recall <key> <value>', 'status', 'exit'.")
 
             except KeyboardInterrupt:
                 shutdown_context = {**cli_user_context, 'message_id': 'keyboard_interrupt'}

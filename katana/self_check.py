@@ -1,9 +1,10 @@
 from pathlib import Path, PurePath
 from dotenv import load_dotenv
-import os, sys, logging, subprocess
+import os, sys, subprocess
+from katana.logger import get_logger
 
 CRITICAL = False
-log = logging.getLogger("katana.selfcheck")
+log = get_logger("katana.selfcheck")
 
 CHECKS = []
 
@@ -79,7 +80,4 @@ def run_all():
         sys.exit(1)
 
 if __name__ == '__main__':
-    import coloredlogs
-    coloredlogs.install(level='INFO', logger=log, fmt='%(asctime)s %(levelname)s %(message)s')
-    logging.basicConfig(level=logging.INFO, filename='logs/selfcheck.log')
     run_all()

@@ -3,11 +3,9 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from openai import OpenAI, APIError, AuthenticationError, RateLimitError # For openai >= 1.0.0
 import traceback # For more detailed error logging
-import logging # Import logging for setup_logging level
-from katana.logger import setup_logging, get_logger
+from katana.logger import get_logger
 
 # --- Initialize Logging ---
-setup_logging(log_level=logging.INFO) # Or logging.DEBUG, etc.
 logger = get_logger(__name__) # Get a logger for this module
 
 # --- Configuration ---

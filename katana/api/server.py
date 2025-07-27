@@ -9,18 +9,13 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 import uvicorn
 
-from katana.logger import (
-    setup_logging as setup_katana_logging,
-    get_logger as get_katana_logger,
-    DEFAULT_LOGGER_NAME,
-    DEFAULT_LOG_FILE_NAME
-)
+from katana.logger import get_logger as get_katana_logger
 
 # Initialize FastAPI app
 app = FastAPI()
 
 # Use the default log file name from the logging_config module
-LOG_FILE_PATH = Path(DEFAULT_LOG_FILE_NAME)
+LOG_FILE_PATH = Path("logs/katana.log")
 
 # Regex to parse log lines, made slightly more flexible for module names and messages
 # Example: INFO 2023-10-27 10:00:00,123 - my.module - This is a message
@@ -31,19 +26,13 @@ LOG_LINE_REGEX = re.compile(
     r"(.*)$"  # Message
 )
 
-# Ensure Katana's main logging is set up when the server starts.
-# This primarily ensures that if the API server is the first thing to run,
-# katana_events.log is properly configured for other parts of a larger app
-# or for the API server's own katana_logger usage if it were to use get_katana_logger().
-# For the API server's own internal logs (uvicorn, fastapi), they have their own logging.
-setup_katana_logging() # Ensures the main katana logger is configured
-# Use katana's logger for API server specific messages, namespaced under the main logger
-api_server_logger = get_katana_logger(DEFAULT_LOGGER_NAME + ".api")
+logger = get_katana_logger(__name__)
 
 
 # Pydantic model for the request body of /api/logs/level
 class LogLevelRequest(BaseModel):
     level: str
+
 
 @app.get("/api/logs/status", response_model=Dict[str, str])
 async def get_log_status():
@@ -51,12 +40,9 @@ async def get_log_status():
     Returns the current logging status for the Katana application.
     """
     # Get the logger configured by setup_katana_logging
-    katana_logger = logging.getLogger(DEFAULT_LOGGER_NAME)
+    katana_logger = logging.getLogger("katana")
     current_level_name = logging.getLevelName(katana_logger.getEffectiveLevel())
-    return {
-        "level": current_level_name,
-        "log_file": str(LOG_FILE_PATH.resolve())
-    }
+    return {"level": current_level_name, "log_file": str(LOG_FILE_PATH.resolve())}
 
 @app.get("/api/logs", response_model=List[Dict[str, str]])
 async def get_logs(
@@ -73,14 +59,14 @@ async def get_logs(
     api_context = {'user_id': 'api_user', 'chat_id': 'api_session', 'message_id': request_id}
 
     if not LOG_FILE_PATH.exists():
-        api_server_logger.error(f"Log file not found: {LOG_FILE_PATH}", extra=api_context)
+        logger.error(f"Log file not found: {LOG_FILE_PATH}", extra=api_context)
         raise HTTPException(status_code=404, detail=f"Log file not found: {LOG_FILE_PATH}")
 
     try:
         with open(LOG_FILE_PATH, "r", encoding="utf-8") as f:
             lines = f.readlines()
     except Exception as e:
-        api_server_logger.error(f"Could not read log file {LOG_FILE_PATH}: {e}", exc_info=True, extra=api_context)
+        logger.error(f"Could not read log file {LOG_FILE_PATH}: {e}", exc_info=True, extra=api_context)
         raise HTTPException(status_code=500, detail=f"Could not read log file: {str(e)}")
 
     all_parsed_logs: List[Dict[str, str]] = []
@@ -122,7 +108,7 @@ async def get_logs(
             elif line_content: # If it's not JSON and not matching old regex, log a debug message.
                 # Use a more specific message_id for these parsing issues.
                 parse_fail_ctx = {**api_context, 'message_id': f'{request_id}_parse_fail_line_{line_number}'}
-                api_server_logger.debug(
+                logger.debug(
                     f"Could not parse log line {line_number} as JSON or old format from {LOG_FILE_PATH}: '{line_content[:100]}...'",
                     extra=parse_fail_ctx
                 )
@@ -139,7 +125,7 @@ async def get_logs(
         # as an exact string match is what's needed. Client should send valid levels.
         # If it's an invalid level string, it simply won't match anything.
         filtered_logs = [log for log in filtered_logs if log["level"] == normalized_level]
-        api_server_logger.debug(f"Applied level filter: {normalized_level}, found {len(filtered_logs)} entries.")
+        logger.debug(f"Applied level filter: {normalized_level}, found {len(filtered_logs)} entries.")
 
 
     if search:
@@ -147,14 +133,14 @@ async def get_logs(
         filtered_logs = [
             log for log in filtered_logs if normalized_search in log["message"].lower()
         ]
-        api_server_logger.debug(f"Applied search filter: '{normalized_search}', found {len(filtered_logs)} entries after search.")
+        logger.debug(f"Applied search filter: '{normalized_search}', found {len(filtered_logs)} entries after search.")
 
     # Apply pagination to the filtered list
     start_index = (page - 1) * limit
     end_index = start_index + limit
     paginated_logs = filtered_logs[start_index:end_index]
 
-    api_server_logger.info(
+    logger.info(
         f"Serving {len(paginated_logs)} log entries. Page: {page}, Limit: {limit}, "
         f"Level Filter: {level or 'None'}, Search Filter: {search or 'None'}. "
         f"Total matched before pagination: {len(filtered_logs)}.",
@@ -174,7 +160,7 @@ async def set_log_level(request: LogLevelRequest):
 
     # Validate if the provided level string is a valid log level name
     if requested_level_str not in logging._nameToLevel:
-        api_server_logger.warning(f"Invalid log level requested: {request.level}", extra=api_context)
+        logger.warning(f"Invalid log level requested: {request.level}", extra=api_context)
         raise HTTPException(
             status_code=400,
             detail=f"Invalid log level '{request.level}'. Valid levels are: {list(logging._nameToLevel.keys())}"
@@ -189,21 +175,21 @@ async def set_log_level(request: LogLevelRequest):
         else:
              setup_katana_logging(log_level=numeric_level)
 
-        api_server_logger.info(f"Application log level set to {requested_level_str} by API request.", extra=api_context)
+        logger.info(f"Application log level set to {requested_level_str} by API request.", extra=api_context)
         return {"message": f"Log level set to {requested_level_str}"}
     except Exception as e:
-        api_server_logger.error(f"Failed to set log level to {requested_level_str}: {e}", exc_info=True, extra=api_context)
+        logger.error(f"Failed to set log level to {requested_level_str}: {e}", exc_info=True, extra=api_context)
         raise HTTPException(status_code=500, detail=f"Failed to set log level: {str(e)}")
 
 
 if __name__ == "__main__":
     # The setup_katana_logging() call at global scope ensures the file handler for katana_events.log
     # is attached early. FastAPI/Uvicorn have their own logging for HTTP requests etc.
-    # The api_server_logger is already an instance of the configured katana_logger.
+    # The logger is already an instance of the configured katana_logger.
 
     main_run_context = {'user_id': 'api_system', 'chat_id': 'api_startup', 'message_id': 'server_main_start'}
-    api_server_logger.info(f"Katana API server starting. Log file expected at: {LOG_FILE_PATH.resolve()}", extra=main_run_context)
-    api_server_logger.info("Access API documentation at http://localhost:8000/docs or http://localhost:8000/redoc", extra=main_run_context)
+    logger.info(f"Katana API server starting. Log file expected at: {LOG_FILE_PATH.resolve()}", extra=main_run_context)
+    logger.info("Access API documentation at http://localhost:8000/docs or http://localhost:8000/redoc", extra=main_run_context)
 
     # Uvicorn's log_level controls its own access logs, not Katana application logs.
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

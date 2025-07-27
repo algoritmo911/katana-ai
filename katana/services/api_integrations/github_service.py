@@ -18,8 +18,7 @@ except ImportError:
     pass # Actual logging will be done by the module-level logger if PYGITHUB_AVAILABLE is false.
 
 
-from katana.logger import get_logger, setup_logging # setup_logging for __main__
-# import logging # No longer needed here as get_logger handles it.
+from katana.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -185,8 +184,6 @@ def get_user_notifications(g: Github, since_iso: str = None, all_notifications: 
 
 # --- Main Execution (Example Usage) ---
 if __name__ == '__main__':
-    # Setup logging for the example execution
-    setup_logging(log_level=logging.INFO)
     # import traceback # For main example's error logging - logger.exception or logger.error with exc_info=True can be used instead
     main_context = {'user_id': 'github_service_main', 'chat_id': 'example_run', 'message_id': f'main_example_{datetime.utcnow().timestamp()}'}
 
@@ -202,25 +199,25 @@ if __name__ == '__main__':
 
         my_repos = list_user_repos(github_service, max_repos=3)
         if my_repos:
-            print("\n--- My Recent Repositories (up to 3) ---")
+            logger.info("\n--- My Recent Repositories (up to 3) ---")
             for repo_data in my_repos:
-                print(f"  Name: {repo_data['full_name']} (Lang: {repo_data['language']}, Last Updated: {repo_data['last_updated']})")
+                logger.info(f"  Name: {repo_data['full_name']} (Lang: {repo_data['language']}, Last Updated: {repo_data['last_updated']})")
                 if my_repos.index(repo_data) == 0: # Only get commits for the first repo in this example
                     repo_commits = get_repo_commits(github_service, repo_data['full_name'], max_commits=2)
                     if repo_commits:
-                        print(f"    Recent Commits for {repo_data['full_name']} (up to 2):")
+                        logger.info(f"    Recent Commits for {repo_data['full_name']} (up to 2):")
                         for commit_data in repo_commits:
-                            print(f"      SHA: {commit_data['sha'][:7]}, Author: {commit_data['author_name']}, Date: {commit_data['date_utc']}")
-                            print(f"      Msg: {commit_data['message'].splitlines()[0][:70]}...")
+                            logger.info(f"      SHA: {commit_data['sha'][:7]}, Author: {commit_data['author_name']}, Date: {commit_data['date_utc']}")
+                            logger.info(f"      Msg: {commit_data['message'].splitlines()[0][:70]}...")
         else:
             logger.info("No repositories found or an error occurred during list_user_repos.", extra=main_context)
 
-        print("\n--- My Unread Notifications (since 1 day ago) ---")
+        logger.info("\n--- My Unread Notifications (since 1 day ago) ---")
         since_yesterday_dt = datetime.now(timezone.utc) - timedelta(days=1)
         my_notifications = get_user_notifications(github_service, since_iso=since_yesterday_dt.isoformat(), all_notifications=False)
         if my_notifications:
             for notif_data in my_notifications[:3]:
-                print(f"  Repo: {notif_data['repository_full_name']}, Title: {notif_data['title']} (Reason: {notif_data['reason']}, Unread: {notif_data['unread']})")
+                logger.info(f"  Repo: {notif_data['repository_full_name']}, Title: {notif_data['title']} (Reason: {notif_data['reason']}, Unread: {notif_data['unread']})")
         else:
             logger.info("No unread notifications found since yesterday or an error occurred during get_user_notifications.", extra=main_context)
     else:
