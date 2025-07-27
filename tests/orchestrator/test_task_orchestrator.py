@@ -1,33 +1,26 @@
-import asyncio
 import pytest
-from unittest.mock import AsyncMock, patch, call # Using AsyncMock for async methods
-
-# Adjust import path based on how pytest will discover your modules.
-# If tests/ is at the same level as src/, and you run pytest from project root:
+from unittest.mock import AsyncMock, patch, MagicMock
 from src.orchestrator.task_orchestrator import TaskOrchestrator, TaskResult
-from src.agents.julius_agent import JuliusAgent # Needed for type hinting mock
+from src.agents.julius_agent import JuliusAgent
 
-# Pytest needs to be able to run async tests
 pytestmark = pytest.mark.asyncio
 
-# --- Helper Functions / Fixtures ---
-
 @pytest.fixture
-def mock_julius_agent(mocker):
-    """Fixture to create a mock JuliusAgent."""
-    agent = mocker.MagicMock(spec=JuliusAgent) # Use MagicMock for the class itself
-    agent.process_tasks = AsyncMock() # Specifically make process_tasks an AsyncMock
+def mock_julius_agent(mocker, mock_datafusion):
+    """Fixture to create a mock JuliusAgent that uses a mock DataFusion."""
+    # We mock the agent's process_tasks method directly, so we don't need to
+    # instantiate the real agent with a mock DataFusion.
+    agent = mocker.MagicMock(spec=JuliusAgent)
+    agent.process_tasks = AsyncMock()
     return agent
 
 @pytest.fixture
 def orchestrator(mock_julius_agent):
     """Fixture to create a TaskOrchestrator instance with a mocked agent."""
-    # Patching _initialize_metrics_log_file and _log_metric_to_file to prevent actual file I/O during tests
     with patch.object(TaskOrchestrator, '_initialize_metrics_log_file', return_value=None), \
          patch.object(TaskOrchestrator, '_log_metric_to_file', return_value=None) as mock_log_to_file:
-
         instance = TaskOrchestrator(agent=mock_julius_agent, batch_size=2, max_batch=5)
-        instance.mock_log_to_file = mock_log_to_file # Attach mock for assertions if needed
+        instance.mock_log_to_file = mock_log_to_file
         yield instance
 
 
