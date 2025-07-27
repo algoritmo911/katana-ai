@@ -41,12 +41,7 @@ else:
 
 # Теперь, когда переменные окружения (предположительно) загружены, импортируем бота
 try:
-    # Импортируем логгер бота, чтобы он также унаследовал файловый обработчик, если настроен
-    from bot.katana_bot import bot, logger as bot_logger, start_heartbeat_thread, stop_heartbeat_thread
-    # Если в bot.katana_bot своя конфигурация логирования, она может перезаписать эту.
-    # Убедимся, что katana_bot использует тот же logger или настраивается согласованно.
-    # В текущей реализации katana_bot.py использует logging.getLogger(__name__),
-    # так что он должен наследовать обработчики от корневого логгера.
+    from bot.katana_bot import bot, logger as bot_logger, init_dependencies, start_heartbeat_thread, stop_heartbeat_thread
 except ImportError as e:
     logger.error(f"❌ Failed to import from bot.katana_bot. Ensure it exists and PYTHONPATH is set correctly. Error: {e}", exc_info=True)
     exit(1)
@@ -57,6 +52,14 @@ except Exception as e:
 
 if __name__ == '__main__':
     logger.info("🚀 Starting Katana Bot locally...")
+
+    # Инициализация зависимостей, включая NLP-клиенты
+    # API ключи уже должны быть в os.environ благодаря load_dotenv()
+    init_dependencies(
+        openai_api_key=os.getenv('OPENAI_API_KEY'),
+        anthropic_api_key=os.getenv('ANTHROPIC_API_KEY')
+    )
+
     start_heartbeat_thread() # Start the heartbeat thread
     try:
         # bot.polling() в katana_bot.py уже настроен с none_stop=True

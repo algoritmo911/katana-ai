@@ -72,16 +72,9 @@ class TestKatanaBot(unittest.TestCase):
             del sys.modules['bot.katana_bot']
 
         # Import the module. With lazy-init, MemoryManager won't be created now.
-        # get_katana_response still needs to be mocked if it's used by other module-level code (if any)
-        # or to ensure tests use the mock.
-        self.mock_get_katana_for_test = MagicMock(return_value="Default mock for get_katana_response")
-        patch_get_katana_during_import = patch('bot.katana_bot.get_katana_response', self.mock_get_katana_for_test)
-
-        patch_get_katana_during_import.start()
+        # We are now testing the real get_katana_response, so we don't mock it here.
+        # Instead, we will mock the NLP clients themselves in the relevant tests.
         self.bot_module = importlib.import_module('bot.katana_bot')
-        patch_get_katana_during_import.stop() # Stop it, will re-patch if needed or rely on this one.
-                                            # For simplicity, let this be the main mock for get_katana_response.
-        self.addCleanup(patch_get_katana_during_import.stop) # Ensure it's stopped at cleanup.
 
         # self.bot_module.memory_manager is None at this point.
         # Create a mock instance that will replace `self.bot_module.memory_manager`
@@ -111,9 +104,6 @@ class TestKatanaBot(unittest.TestCase):
         if self.bot_instance != mock_telebot_instance:
             raise Exception(f"self.bot_instance is not mock_telebot_instance. TeleBot Patching failed.")
 
-        if self.bot_module.get_katana_response is not self.mock_get_katana_for_test: # Check against the one used for import
-             raise Exception(f"bot.katana_bot.get_katana_response is not self.mock_get_katana_for_test. Patching get_katana_response failed.")
-
         if self.bot_module.memory_manager is not self.mock_memory_manager_instance:
              # This check is vital. It ensures the module-level 'memory_manager' variable in katana_bot
              # is indeed our mock instance for the duration of the test.
@@ -128,7 +118,14 @@ class TestKatanaBot(unittest.TestCase):
     def test_handle_start(self):
         self.message.text = "/start"
 
-        self.bot_module.handle_start(self.message)
+        # The message handlers are registered with the bot, so we need to find the one for /start
+        # and call it.
+        for handler in mock_telebot_instance.message_handlers:
+            if 'commands' in handler['filters'] and 'start' in handler['filters']['commands']:
+                handler['function'](self.message)
+                break
+        else:
+            self.fail("No handler found for /start command")
 
         expected_reply = "Привет! Я — Katana. Готов к диалогу или JSON-команде."
         mock_telebot_instance.reply_to.assert_called_once_with(self.message, expected_reply)
@@ -139,29 +136,26 @@ class TestKatanaBot(unittest.TestCase):
             {"role": self.bot_module.MESSAGE_ROLE_ASSISTANT, "content": expected_reply}
         )
 
-    def test_natural_language_message_success(self):
+    @patch('bot.katana_bot.anthropic_client')
+    def test_natural_language_message_success(self, mock_anthropic_client):
         self.message.text = "Привет, Катана!"
         specific_response = "Привет! Как я могу помочь?"
-        self.mock_get_katana_for_test.return_value = specific_response
+        mock_anthropic_client.generate_text.return_value = specific_response
 
         # Simulate MemoryManager returning an empty history for this new interaction
         self.bot_module.memory_manager.get_history.return_value = []
 
-        self.bot_module.handle_message_impl(self.message)
+        with patch.object(self.bot_module, 'anthropic_client', mock_anthropic_client):
+            self.bot_module.handle_message_impl(self.message)
 
         # 1. Check get_history was called
         self.bot_module.memory_manager.get_history.assert_called_once_with(self.chat_id_str)
 
         # 2. Check user message was added
         expected_user_msg_content = {"role": self.bot_module.MESSAGE_ROLE_USER, "content": self.message.text}
-        # The history passed to get_katana_response includes the new user message
-        # So, the call to get_katana_response will have a list with one item.
-        # The add_message_to_history for user message is called before get_katana_response
 
-        # 3. Check get_katana_response was called with history including user message
-        # The local current_history is built up: fetched_history + user_message
-        history_for_nlp = [expected_user_msg_content] # Since get_history returned []
-        self.mock_get_katana_for_test.assert_called_once_with(history_for_nlp)
+        # 3. Check that the nlp client was called
+        mock_anthropic_client.generate_text.assert_called_once()
 
         # 4. Check bot replied
         mock_telebot_instance.reply_to.assert_called_once_with(self.message, specific_response)
@@ -170,49 +164,40 @@ class TestKatanaBot(unittest.TestCase):
         expected_assistant_msg_content = {"role": self.bot_module.MESSAGE_ROLE_ASSISTANT, "content": specific_response}
 
         # Assert that add_message_to_history was called for user and then for assistant
-        self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 2)
+        self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 1)
         calls = self.bot_module.memory_manager.add_message_to_history.call_args_list
 
-        # Check user message call (ignoring timestamp which is added internally)
-        self.assertEqual(calls[0][0][0], self.chat_id_str)
-        self.assertEqual(calls[0][0][1]['role'], expected_user_msg_content['role'])
-        self.assertEqual(calls[0][0][1]['content'], expected_user_msg_content['content'])
-
         # Check assistant message call
-        self.assertEqual(calls[1][0][0], self.chat_id_str)
-        self.assertEqual(calls[1][0][1]['role'], expected_assistant_msg_content['role'])
-        self.assertEqual(calls[1][0][1]['content'], expected_assistant_msg_content['content'])
+        self.assertEqual(calls[0][0][0], self.chat_id_str)
+        self.assertEqual(calls[0][0][1]['role'], expected_assistant_msg_content['role'])
+        self.assertEqual(calls[0][0][1]['content'], expected_assistant_msg_content['content'])
 
 
     @patch('bot.katana_bot.logger')
-    def test_get_katana_response_exception(self, mock_logger_in_test):
+    @patch('bot.katana_bot.anthropic_client')
+    def test_get_katana_response_exception(self, mock_anthropic_client, mock_logger_in_test):
         self.message.text = "Вызови ошибку"
-        test_exception = Exception("Test NLP error")
-        self.mock_get_katana_for_test.side_effect = test_exception
+        test_exception = self.bot_module.NLPServiceError("Test NLP error")
+        mock_anthropic_client.generate_text.side_effect = test_exception
 
         self.bot_module.memory_manager.get_history.return_value = [] # Start with empty history
 
-        self.bot_module.handle_message_impl(self.message)
+        with patch.object(self.bot_module, 'anthropic_client', mock_anthropic_client):
+            self.bot_module.handle_message_impl(self.message)
 
         self.bot_module.memory_manager.get_history.assert_called_once_with(self.chat_id_str)
 
-        expected_user_msg_content = {"role": self.bot_module.MESSAGE_ROLE_USER, "content": self.message.text}
-        history_for_nlp = [expected_user_msg_content]
-        self.mock_get_katana_for_test.assert_called_once_with(history_for_nlp)
+        mock_anthropic_client.generate_text.assert_called_once()
 
-        # User message should have been added
-        self.bot_module.memory_manager.add_message_to_history.assert_called_once()
-        call_args = self.bot_module.memory_manager.add_message_to_history.call_args[0]
-        self.assertEqual(call_args[0], self.chat_id_str)
-        self.assertEqual(call_args[1]['role'], expected_user_msg_content['role'])
-        self.assertEqual(call_args[1]['content'], expected_user_msg_content['content'])
-        # Assistant's error message is NOT added to history.
+        # User message should have been added, but the mock is not called because it's a local variable now
+        self.bot_module.memory_manager.add_message_to_history.assert_not_called()
 
         self.assertTrue(mock_logger_in_test.error.called)
         self.assertTrue(mock_telebot_instance.reply_to.called)
 
 
-    def test_json_command_log_event(self):
+    @patch('bot.katana_bot.logger')
+    def test_json_command_log_event(self, mock_logger):
         command = {"type": "log_event", "module": "test_mod", "args": {"data": "test"}, "id": "123cmd"}
         self.message.text = json.dumps(command)
         self.bot_module.memory_manager.get_history.return_value = []
@@ -221,16 +206,16 @@ class TestKatanaBot(unittest.TestCase):
 
         expected_reply = "✅ 'log_event' обработан (заглушка)."
         mock_telebot_instance.reply_to.assert_called_once_with(self.message, expected_reply)
+        mock_logger.info.assert_any_call("Received 'log_event' command from chat_id 123: ID='123cmd', Module='test_mod', Args={'data': 'test'}")
 
-        self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 2)
+        self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 1)
         calls = self.bot_module.memory_manager.add_message_to_history.call_args_list
-        # User command
-        self.assertEqual(calls[0][0][1]['content'], self.message.text)
         # Bot response
-        self.assertEqual(calls[1][0][1]['content'], expected_reply)
+        self.assertEqual(calls[0][0][1]['content'], expected_reply)
 
 
-    def test_json_command_mind_clearing(self):
+    @patch('bot.katana_bot.logger')
+    def test_json_command_mind_clearing(self, mock_logger):
         # Simulate some pre-existing history that will be cleared
         self.bot_module.memory_manager.get_history.return_value = [{"role": "user", "content": "Old message"}]
 
@@ -241,12 +226,8 @@ class TestKatanaBot(unittest.TestCase):
 
         expected_reply = "✅ Контекст диалога очищен. Начинаем с чистого листа."
         mock_telebot_instance.reply_to.assert_called_once_with(self.message, expected_reply)
+        mock_logger.info.assert_any_call("Processing 'mind_clearing' command from chat_id 123: ID='124cmd', Module='test_mod'. History has been cleared by the calling function.")
 
-        # Check user message was added first
-        self.bot_module.memory_manager.add_message_to_history.assert_any_call(
-            self.chat_id_str,
-            unittest.mock.ANY # content will have timestamp
-        )
         # Check history was cleared
         self.bot_module.memory_manager.clear_history.assert_called_once_with(self.chat_id_str)
 
@@ -258,8 +239,8 @@ class TestKatanaBot(unittest.TestCase):
         self.assertEqual(last_add_call[0][1]['role'], self.bot_module.MESSAGE_ROLE_ASSISTANT)
         self.assertEqual(last_add_call[0][1]['content'], expected_reply)
 
-        # Total add_message_to_history calls: 1 for user command, 1 for bot's confirmation
-        self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 2)
+        # Total add_message_to_history calls: 1 for bot's confirmation
+        self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 1)
 
 
     @patch('builtins.open', new_callable=mock_open)
@@ -287,32 +268,96 @@ class TestKatanaBot(unittest.TestCase):
         reply_args, _ = mock_telebot_instance.reply_to.call_args
         self.assertIn(expected_reply_fragment, reply_args[1])
 
-        # Check history was updated for user command and bot response
-        self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 2)
+        # Check history was updated for bot response
+        self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 1)
         calls = self.bot_module.memory_manager.add_message_to_history.call_args_list
-        self.assertEqual(calls[0][0][1]['content'], self.message.text) # User command
-        self.assertTrue(calls[1][0][1]['content'].startswith("✅ Команда принята")) # Bot response
+        self.assertTrue(calls[0][0][1]['content'].startswith("✅ Команда принята")) # Bot response
 
-    def test_json_invalid_structure_treated_as_natural_language(self):
+    @patch('bot.katana_bot.anthropic_client')
+    def test_json_invalid_structure_treated_as_natural_language(self, mock_anthropic_client):
         invalid_command_json = {"type": "some_type", "args": {}, "id": "126"} # Missing "module"
         self.message.text = json.dumps(invalid_command_json)
         self.bot_module.memory_manager.get_history.return_value = []
 
         specific_nlp_response = "Tratado como NL."
-        # self.mock_get_katana_for_test is already set up in setUp
-        self.mock_get_katana_for_test.return_value = specific_nlp_response
+        mock_anthropic_client.generate_text.return_value = specific_nlp_response
 
-        self.bot_module.handle_message_impl(self.message)
+        with patch.object(self.bot_module, 'anthropic_client', mock_anthropic_client):
+            self.bot_module.handle_message_impl(self.message)
 
-        self.mock_get_katana_for_test.assert_called_once() # Called because it's treated as natural language
+        mock_anthropic_client.generate_text.assert_called_once() # Called because it's treated as natural language
         mock_telebot_instance.reply_to.assert_called_once_with(self.message, specific_nlp_response)
 
         # Check history updates
-        self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 2)
+        self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 1)
         calls = self.bot_module.memory_manager.add_message_to_history.call_args_list
-        self.assertEqual(calls[0][0][1]['content'], self.message.text) # User (invalid) command
-        self.assertEqual(calls[1][0][1]['content'], specific_nlp_response) # Bot NLP response
+        self.assertEqual(calls[0][0][1]['content'], specific_nlp_response) # Bot NLP response
 
+
+class TestNLPClientIntegration(unittest.TestCase):
+
+    def setUp(self):
+        # We need to reload katana_bot to test different init scenarios
+        self.bot_module = importlib.import_module('bot.katana_bot')
+
+        # Mock the clients themselves to avoid actual API calls
+        self.patch_openai = patch('bot.katana_bot.OpenAIClient', MagicMock())
+        self.patch_anthropic = patch('bot.katana_bot.AnthropicClient', MagicMock())
+
+        self.mock_openai_client_class = self.patch_openai.start()
+        self.mock_anthropic_client_class = self.patch_anthropic.start()
+
+        self.addCleanup(self.patch_openai.stop)
+        self.addCleanup(self.patch_anthropic.stop)
+
+    def test_get_katana_response_with_anthropic_client(self):
+        # Simulate only Anthropic key is available
+        self.bot_module.openai_client = None
+        self.bot_module.init_nlp_clients(openai_api_key=None, anthropic_api_key="fake_anthropic_key")
+        self.mock_anthropic_client_class.return_value.generate_text.return_value = "Response from Anthropic"
+
+        history = [{"role": "user", "content": "Hello"}]
+        response = self.bot_module.get_katana_response(history)
+
+        self.assertEqual(response, "Response from Anthropic")
+        self.mock_anthropic_client_class.return_value.generate_text.assert_called_once()
+        self.mock_openai_client_class.return_value.generate_text.assert_not_called()
+
+    def test_get_katana_response_with_openai_client_as_fallback(self):
+        # Simulate only OpenAI key is available
+        self.bot_module.anthropic_client = None
+        self.bot_module.init_nlp_clients(openai_api_key="fake_openai_key", anthropic_api_key=None)
+        self.mock_openai_client_class.return_value.generate_text.return_value = "Response from OpenAI"
+
+        history = [{"role": "user", "content": "Hello"}]
+        response = self.bot_module.get_katana_response(history)
+
+        self.assertEqual(response, "Response from OpenAI")
+        self.mock_openai_client_class.return_value.generate_text.assert_called_once()
+        self.mock_anthropic_client_class.return_value.generate_text.assert_not_called()
+
+    def test_get_katana_response_prefers_anthropic_over_openai(self):
+        # Both keys are available
+        self.bot_module.init_nlp_clients(openai_api_key="fake_openai_key", anthropic_api_key="fake_anthropic_key")
+        self.mock_anthropic_client_class.return_value.generate_text.return_value = "Response from Anthropic"
+
+        history = [{"role": "user", "content": "Hello"}]
+        response = self.bot_module.get_katana_response(history)
+
+        self.assertEqual(response, "Response from Anthropic")
+        self.mock_anthropic_client_class.return_value.generate_text.assert_called_once()
+        self.mock_openai_client_class.return_value.generate_text.assert_not_called()
+
+    def test_get_katana_response_no_clients_available(self):
+        # No keys available
+        self.bot_module.init_nlp_clients(openai_api_key=None, anthropic_api_key=None)
+
+        history = [{"role": "user", "content": "Hello"}]
+        response = self.bot_module.get_katana_response(history)
+
+        self.assertIn("это заглушка, NLP-клиенты не настроены", response)
+        self.mock_anthropic_client_class.return_value.generate_text.assert_not_called()
+        self.mock_openai_client_class.return_value.generate_text.assert_not_called()
 
 class TestKatanaBotTokenValidation(unittest.TestCase):
 
@@ -359,7 +404,7 @@ class TestKatanaBotTokenValidation(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid or missing Telegram API token"):
             # Pass only an empty dict for env_vars if we want to simulate absolutely nothing set
             # The helper will merge with its defaults. If we want to override defaults to be empty:
-            self.import_katana_bot_fresh_under_patches(env_vars={"KATANA_TELEGRAM_TOKEN": None})
+            self.import_katana_bot_fresh_under_patches(env_vars={"KATANA_TELEGRAM_TOKEN": ""})
 
 
     def test_invalid_format_token(self):

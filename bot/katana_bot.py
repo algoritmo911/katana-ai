@@ -76,15 +76,88 @@ def stop_heartbeat_thread():
     else:
         logger.info("Heartbeat thread not running or already stopped.")
 
-# --- Заглушки и глобальные переменные ---
-# Это будет заменено реальной реализацией или импортом
+# --- NLP Client Initialization ---
+# Import clients and instantiate based on available API keys
+try:
+    from .nlp_clients.openai_client import OpenAIClient
+    from .nlp_clients.anthropic_client import AnthropicClient
+    from .nlp_clients.base_nlp_client import NLPServiceError
+except ImportError:
+    # Adjust path for direct execution
+    import sys
+    from pathlib import Path
+    project_root = Path(__file__).resolve().parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    from bot.nlp_clients.openai_client import OpenAIClient
+    from bot.nlp_clients.anthropic_client import AnthropicClient
+    from bot.nlp_clients.base_nlp_client import NLPServiceError
+
+# Global NLP client instances
+openai_client: Optional[OpenAIClient] = None
+anthropic_client: Optional[AnthropicClient] = None
+
+def init_nlp_clients(openai_api_key: str, anthropic_api_key: str):
+    """Initializes the NLP clients if their API keys are available."""
+    global openai_client, anthropic_client
+    if openai_api_key:
+        try:
+            openai_client = OpenAIClient(api_key=openai_api_key)
+            logger.info("OpenAI client initialized successfully.")
+        except NLPServiceError as e:
+            logger.error(f"Failed to initialize OpenAI client: {e}")
+    else:
+        logger.warning("OpenAI API key not provided. OpenAI client will not be available.")
+
+    if anthropic_api_key:
+        try:
+            anthropic_client = AnthropicClient(api_key=anthropic_api_key)
+            logger.info("Anthropic client initialized successfully.")
+        except NLPServiceError as e:
+            logger.error(f"Failed to initialize Anthropic client: {e}")
+    else:
+        logger.warning("Anthropic API key not provided. Anthropic client will not be available.")
+
 def get_katana_response(history: list[dict]) -> str:
-    """Заглушка для функции получения ответа от NLP модели."""
-    logger.info(f"get_katana_response called with history: {history}")
+    """
+    Generates a response using an available NLP client.
+    It prefers a primary client (e.g., Anthropic) and falls back to a secondary (e.g., OpenAI).
+    If no clients are available, it returns a stub response.
+    """
     if not history:
         return "Катана к вашим услугам. О чём поразмыслим?"
+
     last_message = history[-1]['content']
-    return f"Размышляю над вашим последним сообщением: '{last_message}'... (это заглушка)"
+    prompt = f"User's message: '{last_message}'. History is available for context."
+
+    # --- Client Selection Logic ---
+    # This logic can be expanded. For now, we'll prefer Anthropic if available.
+    client_to_use = None
+    client_name = "No client"
+
+    if anthropic_client:
+        client_to_use = anthropic_client
+        client_name = "Anthropic"
+    elif openai_client:
+        client_to_use = openai_client
+        client_name = "OpenAI"
+
+    if client_to_use:
+        logger.info(f"Using {client_name} client to generate response.")
+        try:
+            # The `generate_text` methods in the simulated clients expect a `scenario` argument.
+            # In a real implementation, you'd just pass the prompt.
+            # We'll use "success" for the simulation.
+            response = client_to_use.generate_text(prompt, scenario="success")
+            return response
+        except NLPServiceError as e:
+            logger.error(f"Error from {client_name} client: {e}")
+            # Fallback to a generic error message for the user
+            return f"😕 Произошла ошибка при обращении к NLP-сервису ({client_name}). Попробуйте позже."
+    else:
+        # Fallback stub response if no clients are initialized
+        logger.warning("No NLP clients available. Returning a stub response.")
+        return f"Размышляю над вашим последним сообщением: '{last_message}'... (это заглушка, NLP-клиенты не настроены)"
 
 # Типы сообщений в истории
 MESSAGE_ROLE_USER = "user"
@@ -114,13 +187,14 @@ chat_ttl = int(chat_ttl_str) if chat_ttl_str else None
 # memory_manager will be initialized by init_dependencies()
 memory_manager: Optional[MemoryManager] = None
 
-def init_dependencies():
-    """Initializes global dependencies like MemoryManager."""
+def init_dependencies(openai_api_key: Optional[str] = None, anthropic_api_key: Optional[str] = None):
+    """
+    Initializes global dependencies like MemoryManager and NLP clients.
+    API keys can be passed directly or fetched from environment variables.
+    """
     global memory_manager
     if memory_manager is None:
         logger.info("Initializing MemoryManager...")
-        # These variables are already defined at module level
-        # redis_host, redis_port, redis_db, redis_password, chat_ttl
         memory_manager = MemoryManager(
             host=redis_host,
             port=redis_port,
@@ -132,10 +206,13 @@ def init_dependencies():
     else:
         logger.info("MemoryManager already initialized.")
 
-# --- End MemoryManager Initialization ---
+    # Initialize NLP clients
+    # If keys are not passed, they will be fetched from environment variables inside this call.
+    openai_key_to_use = openai_api_key or os.getenv('OPENAI_API_KEY')
+    anthropic_key_to_use = anthropic_api_key or os.getenv('ANTHROPIC_API_KEY')
+    init_nlp_clients(openai_api_key=openai_key_to_use, anthropic_api_key=anthropic_key_to_use)
 
-
-# --- Конец заглушек ---
+# --- End Dependencies Initialization ---
 
 # Получаем токен из переменной окружения
 API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN')
@@ -168,13 +245,38 @@ COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 #     """Логирование события бота."""
 #     logger.info(message)
 
-def handle_log_event(command_data, chat_id_str: str): # chat_id is now string
-    """Обработка команды 'log_event' (заглушка)."""
-    logger.info(f"handle_log_event called for chat_id {chat_id_str} with data: {command_data}")
+def handle_log_event(command_data, chat_id_str: str):
+    """
+    Handles the 'log_event' command by logging the provided data.
+    This is a more concrete implementation than a simple stub.
+    """
+    event_id = command_data.get('id', 'unknown_id')
+    module = command_data.get('module', 'unknown_module')
+    event_args = command_data.get('args', {})
 
-def handle_mind_clearing(command_data, chat_id_str: str): # chat_id is now string
-    """Обработка команды 'mind_clearing' (заглушка)."""
-    logger.info(f"handle_mind_clearing called for chat_id {chat_id_str} with data: {command_data}")
+    log_message = (
+        f"Received 'log_event' command from chat_id {chat_id_str}: "
+        f"ID='{event_id}', Module='{module}', Args={event_args}"
+    )
+    logger.info(log_message)
+
+    # Here you could add more advanced logic, like writing to a specific event log file
+    # or sending the event to a monitoring system.
+    # For now, logging to the main log is sufficient.
+
+def handle_mind_clearing(command_data, chat_id_str: str):
+    """
+    Handles the 'mind_clearing' command.
+    The primary action (clearing history) is already performed in `handle_message_impl`.
+    This function serves to log the event in detail and for any future extended logic.
+    """
+    event_id = command_data.get('id', 'unknown_id')
+    module = command_data.get('module', 'unknown_module')
+    logger.info(
+        f"Processing 'mind_clearing' command from chat_id {chat_id_str}: "
+        f"ID='{event_id}', Module='{module}'. "
+        "History has been cleared by the calling function."
+    )
 
 def handle_message_impl(message):
     """
@@ -198,6 +300,9 @@ def handle_message_impl(message):
     # For now, we retrieve full history. Later, a limit can be passed based on token constraints.
     current_history = memory_manager.get_history(chat_id_str)
     logger.info(f"Retrieved history for chat_id {chat_id_str}. Length: {len(current_history)}")
+
+    # Add the new user message to the history before processing
+    current_history.append({"role": MESSAGE_ROLE_USER, "content": user_message_text})
 
 
     # Попытка разобрать сообщение как JSON-команду
@@ -229,9 +334,6 @@ def handle_message_impl(message):
     except json.JSONDecodeError:
         logger.info(f"Message from chat_id {chat_id_str} is not JSON, treating as natural language: {user_message_text}")
         pass # Не JSON, значит, обычное сообщение
-
-    # Добавляем сообщение пользователя в историю
-    current_history.append({"role": MESSAGE_ROLE_USER, "content": user_message_text})
 
     if is_json_command and command_data:
         command_type = command_data.get("type")
@@ -365,7 +467,8 @@ if __name__ == '__main__':
         logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     logger.info("Bot starting directly from katana_bot.py...")
-    init_dependencies() # Initialize dependencies including MemoryManager
+    # When running directly, API keys are fetched from environment variables by init_dependencies
+    init_dependencies()
     start_heartbeat_thread()  # Start heartbeat when run directly
     try:
         # bot.polling() # Old call

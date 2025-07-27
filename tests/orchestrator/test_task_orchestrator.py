@@ -296,4 +296,3 @@ async def test_run_round_no_tasks_in_batch_after_pop(orchestrator, mock_julius_a
     # Test with batch_size 1, queue becomes empty unexpectedly after check (hard to test cleanly)
     # The current code is robust against this unless `self.task_queue.pop(0)` itself raises an error
     # not caught, which would fail the test anyway.
-    pass
