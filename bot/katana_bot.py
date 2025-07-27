@@ -196,8 +196,15 @@ def handle_message_impl(message):
     # No explicit initialization like `if chat_id not in katana_states:` needed.
     # get_history will return empty list if no history.
     # For now, we retrieve full history. Later, a limit can be passed based on token constraints.
-    current_history = memory_manager.get_history(chat_id_str)
+    current_history = []
+    if memory_manager:
+        current_history = memory_manager.get_history(chat_id_str)
     logger.info(f"Retrieved history for chat_id {chat_id_str}. Length: {len(current_history)}")
+
+    # Добавляем текущее сообщение пользователя в историю для обработки
+    current_history.append({"role": MESSAGE_ROLE_USER, "content": user_message_text})
+    if memory_manager:
+        memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_USER, "content": user_message_text})
 
 
     # Попытка разобрать сообщение как JSON-команду
@@ -230,9 +237,6 @@ def handle_message_impl(message):
         logger.info(f"Message from chat_id {chat_id_str} is not JSON, treating as natural language: {user_message_text}")
         pass # Не JSON, значит, обычное сообщение
 
-    # Добавляем сообщение пользователя в историю
-    current_history.append({"role": MESSAGE_ROLE_USER, "content": user_message_text})
-
     if is_json_command and command_data:
         command_type = command_data.get("type")
         logger.info(f"Processing JSON command: type='{command_type}' for chat_id {chat_id_str}")
@@ -243,19 +247,22 @@ def handle_message_impl(message):
             bot.reply_to(message, bot_response_text)
             logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}") # Corrected
             # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced by memory_manager call
-            memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+            if memory_manager:
+                memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
             return
         elif command_type == "mind_clearing":
             handle_mind_clearing(command_data, chat_id_str) # Corrected
             # katana_states[chat_id_str] = [] # Replaced by memory_manager call
-            memory_manager.clear_history(chat_id_str)
+            if memory_manager:
+                memory_manager.clear_history(chat_id_str)
             logger.info(f"Mind clearing for chat_id {chat_id_str}. History reset.") # Corrected
             bot_response_text = "✅ Контекст диалога очищен. Начинаем с чистого листа."
             bot.reply_to(message, bot_response_text)
             logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}") # Corrected
             # Добавляем ответ ассистента как первое сообщение после очистки
             # katana_states[chat_id_str].append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced
-            memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+            if memory_manager:
+                memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
             return
         else: # Другие JSON команды (сохранение файла)
             logger.info(f"Command type '{command_type}' not specifically handled, proceeding with default save.")
@@ -273,7 +280,8 @@ def handle_message_impl(message):
             bot.reply_to(message, bot_response_text)
             logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}") # Corrected
             # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced
-            memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+            if memory_manager:
+                memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
             logger.info(f"Saved command from {chat_id_str} to {command_file_path}") # Corrected
             return
     else:
@@ -293,8 +301,9 @@ def handle_message_impl(message):
 
             # 5. Запись исходящего сообщения в состояние
             # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text}) # Replaced
-            memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text})
-            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}. History length: {len(memory_manager.get_history(chat_id_str))}") # Corrected, log current length from manager
+            if memory_manager:
+                memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text})
+            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}. History length: {len(current_history)}")
 
         except Exception as e:
             error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
@@ -315,22 +324,24 @@ def handle_message_impl(message):
 def handle_start(message):
     """Ответ на /start"""
     chat_id_str = str(message.chat.id)
-    response_text = "Привет! Я — Katana. Готов к диалогу или JSON-команде."
+    logger.info(f"/start received from {chat_id_str}. Clearing history.")
+
+    # Очищаем историю, чтобы начать с чистого листа
+    if memory_manager:
+        memory_manager.clear_history(chat_id_str)
+        logger.info(f"📜 История очищена для пользователя {chat_id_str}")
+
+    response_text = "⚔️ Добро пожаловать, агент активирован.\nВаша история очищена, сессия готова.\nНапишите свою первую команду или просто \"Привет\"."
     bot.reply_to(message, response_text)
     logger.info(f"Replied to chat_id {chat_id_str}: {response_text}")
-    logger.info(f"/start received from {chat_id_str}")
 
-    # For /start, we might want to clear any existing short-term history
-    # or simply add the welcome message. Current behavior of just adding is fine.
-    # If we wanted to ensure a clean slate on /start:
-    # memory_manager.clear_history(chat_id_str)
-
-    # Add the assistant's welcome message to the history.
-    memory_manager.add_message_to_history(
-        chat_id_str,
-        {"role": MESSAGE_ROLE_ASSISTANT, "content": response_text}
-    )
-    logger.info(f"Welcome message added to history for chat_id {chat_id_str} via MemoryManager.")
+    # Добавляем приветственное сообщение ассистента в новую историю
+    if memory_manager:
+        memory_manager.add_message_to_history(
+            chat_id_str,
+            {"role": MESSAGE_ROLE_ASSISTANT, "content": response_text}
+        )
+    logger.info(f"Welcome message added to new history for chat_id {chat_id_str}.")
 
 
 @bot.message_handler(func=lambda message: True)
