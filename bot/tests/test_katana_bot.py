@@ -11,7 +11,7 @@ class TestKatanaBot(unittest.TestCase):
 
     @patch('bot.katana_bot.bot.reply_to')
     @patch('bot.katana_bot.memory_manager')
-    def test_start_command_clears_history_once(self, mock_memory_manager, mock_reply_to):
+    def test_handle_start(self, mock_memory_manager, mock_reply_to):
         # Создаем мок-сообщение с chat.id
         mock_message = MagicMock()
         mock_message.chat.id = 12345
@@ -29,6 +29,9 @@ class TestKatanaBot(unittest.TestCase):
         self.assertEqual(args[0], mock_message)
         self.assertIn("агент активирован", args[1])
 
+        # Проверяем, что get_history не вызывается
+        mock_memory_manager.get_history.assert_not_called()
+
         # Проверяем, что приветственное сообщение добавлено в историю
         mock_memory_manager.add_message_to_history.assert_called_once()
         add_msg_call_args = mock_memory_manager.add_message_to_history.call_args[0]
@@ -42,7 +45,7 @@ class TestKatanaBot(unittest.TestCase):
     @patch('bot.katana_bot.get_katana_response', return_value="Test response")
     @patch('bot.katana_bot.bot.reply_to')
     @patch('bot.katana_bot.memory_manager')
-    def test_get_history_called_once_in_message_handler(self, mock_memory_manager, mock_reply_to, mock_get_katana_response):
+    def test_handle_message_impl(self, mock_memory_manager, mock_reply_to, mock_get_katana_response):
         # Создаем мок-сообщение
         mock_message = MagicMock()
         mock_message.chat.id = 12345
