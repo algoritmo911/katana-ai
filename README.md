@@ -22,41 +22,36 @@ To run the Katana bot on your local machine, follow these steps:
 
 -   Python 3.8+
 -   pip (Python package installer)
+-   Doppler CLI
 
-### 2. Setup Environment Variables
+### 2. Setup Environment Variables with Doppler
 
-The bot requires certain API keys and tokens to be set as environment variables.
+This project uses [Doppler](https://doppler.com) to manage environment variables.
 
-1.  Copy the example environment file:
+1.  **Install Doppler:** If you haven't already, install the Doppler CLI. The `start.sh` script will attempt to do this for you if it's not found.
+2.  **Login to Doppler:**
     ```bash
-    cp .env.example .env
+    doppler login
     ```
-2.  Edit the `.env` file and fill in your actual credentials:
-
-    ```env
-    KATANA_TELEGRAM_TOKEN="YOUR_TELEGRAM_BOT_TOKEN" # Get this from BotFather on Telegram
-    ANTHROPIC_API_KEY="YOUR_ANTHROPIC_API_KEY"     # Optional: if you use Anthropic models
-    OPENAI_API_KEY="YOUR_OPENAI_API_KEY"         # Optional: if you use OpenAI models
+3.  **Setup the project:**
+    ```bash
+    doppler setup
     ```
+    Follow the prompts to select the project and config you want to use.
 
-    -   `KATANA_TELEGRAM_TOKEN`: This is essential for the bot to connect to Telegram.
-    -   `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are needed if the bot is configured to use these NLP services. If not used, the bot will log a warning but should still run with placeholder/stub responses.
+### 3. Install Dependencies and Run the Bot
 
-### 3. Install Dependencies
-
-Install the required Python packages:
+A `start.sh` script is provided to handle installation and execution.
 
 ```bash
-pip install -r requirements.txt
+./start.sh
 ```
 
-### 4. Run the Bot
-
-Execute the local runner script:
-
-```bash
-python run_bot_locally.py
-```
+This script will:
+1.  Check for and install the Doppler CLI if it's not present.
+2.  Create a Python virtual environment (`venv`).
+3.  Install the required dependencies from `requirements.txt`.
+4.  Run the application using `doppler run`, which injects the environment variables from your Doppler project.
 
 You should see log messages in your console indicating that the bot is starting and has successfully loaded the environment variables.
 

@@ -74,14 +74,7 @@ class TestKatanaBot(unittest.TestCase):
         # Import the module. With lazy-init, MemoryManager won't be created now.
         # get_katana_response still needs to be mocked if it's used by other module-level code (if any)
         # or to ensure tests use the mock.
-        self.mock_get_katana_for_test = MagicMock(return_value="Default mock for get_katana_response")
-        patch_get_katana_during_import = patch('bot.katana_bot.get_katana_response', self.mock_get_katana_for_test)
-
-        patch_get_katana_during_import.start()
         self.bot_module = importlib.import_module('bot.katana_bot')
-        patch_get_katana_during_import.stop() # Stop it, will re-patch if needed or rely on this one.
-                                            # For simplicity, let this be the main mock for get_katana_response.
-        self.addCleanup(patch_get_katana_during_import.stop) # Ensure it's stopped at cleanup.
 
         # self.bot_module.memory_manager is None at this point.
         # Create a mock instance that will replace `self.bot_module.memory_manager`
@@ -111,8 +104,6 @@ class TestKatanaBot(unittest.TestCase):
         if self.bot_instance != mock_telebot_instance:
             raise Exception(f"self.bot_instance is not mock_telebot_instance. TeleBot Patching failed.")
 
-        if self.bot_module.get_katana_response is not self.mock_get_katana_for_test: # Check against the one used for import
-             raise Exception(f"bot.katana_bot.get_katana_response is not self.mock_get_katana_for_test. Patching get_katana_response failed.")
 
         if self.bot_module.memory_manager is not self.mock_memory_manager_instance:
              # This check is vital. It ensures the module-level 'memory_manager' variable in katana_bot
@@ -139,10 +130,11 @@ class TestKatanaBot(unittest.TestCase):
             {"role": self.bot_module.MESSAGE_ROLE_ASSISTANT, "content": expected_reply}
         )
 
-    def test_natural_language_message_success(self):
+    @patch('bot.katana_bot.get_katana_response')
+    def test_natural_language_message_success(self, mock_get_katana_response):
         self.message.text = "Привет, Катана!"
         specific_response = "Привет! Как я могу помочь?"
-        self.mock_get_katana_for_test.return_value = specific_response
+        mock_get_katana_response.return_value = specific_response
 
         # Simulate MemoryManager returning an empty history for this new interaction
         self.bot_module.memory_manager.get_history.return_value = []
@@ -161,7 +153,7 @@ class TestKatanaBot(unittest.TestCase):
         # 3. Check get_katana_response was called with history including user message
         # The local current_history is built up: fetched_history + user_message
         history_for_nlp = [expected_user_msg_content] # Since get_history returned []
-        self.mock_get_katana_for_test.assert_called_once_with(history_for_nlp)
+        mock_get_katana_response.assert_called_once_with(history_for_nlp)
 
         # 4. Check bot replied
         mock_telebot_instance.reply_to.assert_called_once_with(self.message, specific_response)
@@ -184,11 +176,12 @@ class TestKatanaBot(unittest.TestCase):
         self.assertEqual(calls[1][0][1]['content'], expected_assistant_msg_content['content'])
 
 
+    @patch('bot.katana_bot.get_katana_response')
     @patch('bot.katana_bot.logger')
-    def test_get_katana_response_exception(self, mock_logger_in_test):
+    def test_get_katana_response_exception(self, mock_logger_in_test, mock_get_katana_response):
         self.message.text = "Вызови ошибку"
         test_exception = Exception("Test NLP error")
-        self.mock_get_katana_for_test.side_effect = test_exception
+        mock_get_katana_response.side_effect = test_exception
 
         self.bot_module.memory_manager.get_history.return_value = [] # Start with empty history
 
@@ -198,7 +191,7 @@ class TestKatanaBot(unittest.TestCase):
 
         expected_user_msg_content = {"role": self.bot_module.MESSAGE_ROLE_USER, "content": self.message.text}
         history_for_nlp = [expected_user_msg_content]
-        self.mock_get_katana_for_test.assert_called_once_with(history_for_nlp)
+        mock_get_katana_response.assert_called_once_with(history_for_nlp)
 
         # User message should have been added
         self.bot_module.memory_manager.add_message_to_history.assert_called_once()
@@ -293,18 +286,19 @@ class TestKatanaBot(unittest.TestCase):
         self.assertEqual(calls[0][0][1]['content'], self.message.text) # User command
         self.assertTrue(calls[1][0][1]['content'].startswith("✅ Команда принята")) # Bot response
 
-    def test_json_invalid_structure_treated_as_natural_language(self):
+    @patch('bot.katana_bot.get_katana_response')
+    def test_json_invalid_structure_treated_as_natural_language(self, mock_get_katana_response):
         invalid_command_json = {"type": "some_type", "args": {}, "id": "126"} # Missing "module"
         self.message.text = json.dumps(invalid_command_json)
         self.bot_module.memory_manager.get_history.return_value = []
 
         specific_nlp_response = "Tratado como NL."
         # self.mock_get_katana_for_test is already set up in setUp
-        self.mock_get_katana_for_test.return_value = specific_nlp_response
+        mock_get_katana_response.return_value = specific_nlp_response
 
         self.bot_module.handle_message_impl(self.message)
 
-        self.mock_get_katana_for_test.assert_called_once() # Called because it's treated as natural language
+        mock_get_katana_response.assert_called_once() # Called because it's treated as natural language
         mock_telebot_instance.reply_to.assert_called_once_with(self.message, specific_nlp_response)
 
         # Check history updates
