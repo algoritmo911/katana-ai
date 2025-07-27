@@ -25,4 +25,4 @@ jobs:
 
     - name: Check for outdated dependencies
       run: |
-        pip-compile --dry-run bot/requirements.in -o bot/requirements.txt
+        pip-compile --upgrade --dry-run --resolver=backtracking bot/requirements.in

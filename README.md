@@ -87,13 +87,20 @@ npm test
 
 ## ⚙️ Переменные окружения
 
-Создайте файл `.env` в директории `bot/` со следующим содержимым:
+Создайте файл `.env` в директории `bot/` по примеру `.env.example`:
 
 ```env
-# .env
-PORT=3000
-SECRET_KEY=my_super_secret
-NEXT_PUBLIC_API_URL=http://localhost:5000
+# .env.example
+
+# Telegram
+KATANA_TELEGRAM_TOKEN=123456:ABCDEF
+
+# OpenAI
+OPENAI_API_KEY=sk-...
+
+# Supabase
+SUPABASE_URL=https://....supabase.co
+SUPABASE_KEY=...
 ```
 
 > **Опционально: Doppler**
@@ -109,13 +116,33 @@ NEXT_PUBLIC_API_URL=http://localhost:5000
 *   `requirements.in`: здесь вы указываете необходимые пакеты.
 *   `requirements.txt`: этот файл генерируется автоматически.
 
-Чтобы обновить зависимости:
+**Установка и обновление зависимостей:**
 
 ```bash
-pip-compile requirements.in
-pip-sync
+# Установка pip-tools
+pip install pip-tools
+
+# Компиляция requirements.in в requirements.txt
+pip-compile bot/requirements.in
+
+# Установка зависимостей из requirements.txt
+pip install -r bot/requirements.txt
 ```
 
 ### UI
 
 Зависимости для UI управляются через `package.json`.
+
+## 🚀 Локальный запуск
+
+**Запустите бота в режиме разработки:**
+
+```bash
+./start.sh --dev
+```
+
+**Запустите тесты:**
+
+```bash
+./start.sh --test
+```
