@@ -1,27 +1,93 @@
 # Katana AI
 
-## 🚀 Run project locally
+## 📝 Обзор
+
+Этот проект состоит из двух основных частей:
+
+*   **`/bot`**: Python-бот, который является ядром проекта.
+*   **`/ui`**: Основной пользовательский интерфейс для взаимодействия с ботом.
+*   **`/legacy_ui`**: Устаревший пользовательский интерфейс.
+
+## 🚀 Как начать
+
+### 1. Установка
+
+**Клонируйте репозиторий:**
 
 ```bash
+git clone https://github.com/algoritmo911/katana-ai.git
+cd katana-ai
+```
+
+**Настройте Python-бота:**
+
+```bash
+cd bot
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+**Настройте UI:**
+
+```bash
+cd ../ui
 npm install
+```
+
+### 2. Запуск
+
+**Запустите бота:**
+
+Для удобства вы можете использовать скрипт `start.sh`:
+
+```bash
+./start.sh
+```
+
+Или вручную:
+
+```bash
+cd bot
+source venv/bin/activate
+python katana_bot.py
+```
+
+**Запустите UI:**
+
+```bash
+cd ../ui
 npm run dev
 ```
 
-## 🧪 Run tests
+## 🧪 Тестирование
+
+### Python-бот
+
+Чтобы запустить тесты для бота:
 
 ```bash
+cd bot
+python -m unittest discover
+```
+
+### UI
+
+Чтобы запустить тесты для UI:
+
+```bash
+cd ../ui
 npm test
 ```
 
-## Project Structure
+## 🐛 Отладка
 
--   `/bot`: Python bot
--   `/ui`: Main UI
--   `/legacy_ui`: Legacy UI
+*   **Ошибка `ModuleNotFoundError` в Python:** Убедитесь, что вы активировали виртуальное окружение (`source venv/bin/activate`).
+*   **Проблемы с `npm`:** Попробуйте удалить `node_modules` и `package-lock.json`, а затем снова запустить `npm install`.
 
-## Environment Variables
+## ⚙️ Переменные окружения
 
-Create a `.env` file in the `bot/` directory with the following content:
+Создайте файл `.env` в директории `bot/` со следующим содержимым:
 
 ```env
 # .env
@@ -30,45 +96,26 @@ SECRET_KEY=my_super_secret
 NEXT_PUBLIC_API_URL=http://localhost:5000
 ```
 
-## 🧪 Testing & Debugging
+> **Опционально: Doppler**
+>
+> Если вы используете Doppler для управления секретами, убедитесь, что он настроен правильно.
 
-To run tests:
+## 🤝 Управление зависимостями
+
+### Python
+
+Мы используем `pip-tools` для управления Python-зависимостями.
+
+*   `requirements.in`: здесь вы указываете необходимые пакеты.
+*   `requirements.txt`: этот файл генерируется автоматически.
+
+Чтобы обновить зависимости:
 
 ```bash
-npm test
+pip-compile requirements.in
+pip-sync
 ```
 
-If you face issues with specific mocks (like `socket.io-client`, or `@mui/icons-material`), check `setupTests.js`.
+### UI
 
-Some tests may require isolated mocking or patching due to runtime env (CI / local).
-
-## 🧪 Testing & Mocking Strategy
-
-We use `jest` with `jsdom` environment.
-
-### 📁 setupTests.js
-
-This file includes global mocks and setup for testing libraries.
-
-### 📁 __mocks__/
-
-Custom mocks live in the `/__mocks__/` directory and are auto-loaded via `jest.config.js`.
-
-> If you're mocking:
-- `socket.io-client`: use `__mocks__/socket-io-client-mock.js`
-- `@mui/icons-material/*`: use `__mocks__/mui-icon-mock.js`
-
-### 🛠️ Example configuration
-
-```js
-// jest.config.js
-module.exports = {
-  testEnvironment: "jsdom",
-  setupFilesAfterEnv: ["<rootDir>/setupTests.js"],
-  moduleNameMapper: {
-    "\\.(css|less|scss)$": "identity-obj-proxy",
-    "^@mui/icons-material/(.*)$": "<rootDir>/__mocks__/mui-icon-mock.js",
-    "^socket.io-client$": "<rootDir>/__mocks__/socket-io-client-mock.js"
-  }
-};
-```
+Зависимости для UI управляются через `package.json`.
