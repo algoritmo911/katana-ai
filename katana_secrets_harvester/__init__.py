@@ -1,1 +1,0 @@
-# Katana Secrets Harvester package

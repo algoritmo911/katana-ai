@@ -1,1 +1,0 @@
-# katana_core package

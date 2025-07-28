@@ -1,0 +1,48 @@
+[Unit]
+Description=Katana Telegram Bot
+After=network.target # Ensures network is up before starting
+Documentation=file:///path/to/your/katana-bot-project/README.md # Update this path
+
+[Service]
+# User and Group that will run the bot
+# Ensure this user has necessary permissions for the WorkingDirectory and log files.
+# User=katana_bot_user
+# Group=katana_bot_group
+
+# Working directory for the bot
+# Replace with the absolute path to your project's root directory
+WorkingDirectory=/opt/katana-bot # Example path, update this
+
+# Path to the .env file
+# The bot's run_bot_locally.py script uses python-dotenv to load this.
+EnvironmentFile=/opt/katana-bot/.env # Example path, update this
+
+# Command to start the bot
+# Ensure your Python executable path is correct.
+# Using 'run_bot_locally.py' as it handles .env loading and unified startup.
+ExecStart=/usr/bin/python3 /opt/katana-bot/run_bot_locally.py # Example path, update this
+
+# Restart policy
+Restart=always          # Restart the service if it exits, for any reason other than a clean stop
+RestartSec=10           # Restart service after 10 seconds
+
+# Standard output and error logging
+# 'journal' sends logs to systemd-journald.
+# Alternatively, you can specify files:
+# StandardOutput=file:/var/log/katana-bot/katana-bot.out.log
+# StandardError=file:/var/log/katana-bot/katana-bot.err.log
+# If logging to files, ensure the directory exists and the user has write permissions.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=katana-bot
+
+# Optional: Add environment variables directly if not using EnvironmentFile
+# Environment="PYTHONUNBUFFERED=1"
+# Environment="ANOTHER_VAR=value"
+
+# Optional: Resource limits (example)
+# LimitNOFILE=65536 # Max number of open files
+# LimitNPROC=2048   # Max number of processes
+
+[Install]
+WantedBy=multi-user.target # Start the bot when the system reaches multi-user state

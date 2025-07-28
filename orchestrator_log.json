@@ -1,0 +1,37 @@
+[
+  {
+    "round": 1,
+    "batch_size": 100,
+    "avg_time_per_task_seconds": 0.5,
+    "error_types_in_batch": {
+      "TimeoutError": 5,
+      "APIError": 2
+    },
+    "start_time": "2023-10-26T10:00:00.000000",
+    "end_time": "2023-10-26T10:01:00.000000"
+  },
+  {
+    "round": 2,
+    "batch_size": 120,
+    "avg_time_per_task_seconds": 0.45,
+    "error_types_in_batch": ["ConnectionError"],
+    "start_time": "2023-10-26T10:02:00.000000",
+    "end_time": "2023-10-26T10:03:15.000000"
+  },
+  {
+    "round": 3,
+    "batch_size": 90,
+    "avg_time_per_task_seconds": 0.6,
+    "error_types_in_batch": {},
+    "start_time": "2023-10-26T10:04:00.000000",
+    "end_time": "2023-10-26T10:05:00.000000"
+  },
+  {
+    "round": 4,
+    "batch_size": 150,
+    "avg_time_per_task_seconds": null,
+    "error_types_in_batch": ["ValueError", "TypeError"],
+    "start_time": "2023-10-26T10:06:00",
+    "end_time": null
+  }
+]

@@ -1,134 +1,287 @@
-# katana-ai
+# Katana Telegram Bot
 
-## Logging System & UI
+Katana is a Telegram bot designed for flexible interaction and command processing.
 
-This project includes a comprehensive logging system with a user interface for viewing and configuring logs.
+## Project Structure
 
-### Features
+-   `bot/`: Contains the core bot logic.
+    -   `katana_bot.py`: Main entry point and message handling for the bot.
+    -   `nlp_clients/`: Clients for interacting with NLP models (e.g., Anthropic, OpenAI).
+    -   `commands/`: Directory where received JSON commands might be stored or processed.
+-   `ui/`: Contains the source code for a potential web UI (details might vary).
+-   `legacy_ui/`: Contains source code for a previous web UI.
+-   `requirements.txt`: Python dependencies.
+-   `run_bot_locally.py`: Script to run the bot locally.
+-   `.env.example`: Example file for environment variable configuration.
 
-*   **Centralized Backend Logging:** All Python components utilize a standardized logging setup (`katana/logging_config.py`) that outputs to both console and a rotating file (`katana_events.log`).
-*   **Log Viewer UI:** A dedicated "Logs" page in the web interface (`/logs`) allows users to:
-    *   View log entries. The current implementation fetches logs on demand. Real-time polling or WebSocket updates are potential future enhancements.
-    *   Paginate through logs.
-    *   Filter logs by level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-    *   Search log messages for specific keywords.
-*   **Log Configuration UI:** From the "Logs" page, users can:
-    *   View the current application-wide logging level and the path to the log file.
-    *   Change the application's logging level dynamically.
+## Running Locally
 
-### Logging API Endpoints
+To run the Katana bot on your local machine, follow these steps:
 
-The backend exposes the following API endpoints (typically running on `http://localhost:8000` if `katana/api/server.py` is run directly):
+### 1. Prerequisites
 
-*   **`GET /api/logs`**: Fetches log entries.
-    *   Query Parameters:
-        *   `page` (int, default: 1): For pagination.
-        *   `limit` (int, default: 100): Entries per page.
-        *   `level` (str, optional): Filter by log level (e.g., "INFO", "ERROR"). Case-insensitive on the backend.
-        *   `search` (str, optional): Filter by a search term within log messages. Case-insensitive.
-    *   Returns: JSON array of log objects, newest first. Each object contains `timestamp`, `level`, `module`, `message`.
+-   Python 3.8+
+-   pip (Python package installer)
 
-*   **`GET /api/logs/status`**: Retrieves the current logging status.
-    *   Returns: JSON object with `level` (current log level string) and `log_file` (path to log file).
+### 2. Setup Environment Variables
 
-*   **`POST /api/logs/level`**: Sets the application's global log level.
-    *   Request Body (JSON): `{ "level": "DEBUG" }` (valid levels: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL").
-    *   Returns: Success or error message.
+The bot requires certain API keys and tokens to be set as environment variables.
 
-### Log Monitoring in Development
-
-For details on how to monitor and analyze `katana_events.log` in a development environment using tools like `jq`, and for notes on integrating with more advanced log management systems, please see:
-[Dev Log Monitoring Guide](./docs/logging_monitoring.md)
-
----
-
-**IMPORTANT: Current Environmental Limitations & Testing Status**
-
-As of the latest updates, there are significant environmental blockers that prevent the full execution of the testing suite.
-
-*   **Package Installation Timeouts:** Attempts to install both Python packages (via `pip`, e.g., `httpx` for backend tests) and Node.js packages (via `npm`, e.g., Jest, React Testing Library, Cypress for frontend tests) consistently time out after approximately 400 seconds. This appears to be a hard limit or severe network/resource throttling within the execution environment.
-*   **Impact on Testing:**
-    *   **Backend API Tests:** Written (`katana/api/tests/test_api_server.py`) but **cannot be run** due to the inability to install `httpx`.
-    *   **Frontend Unit Tests:** Configuration files for Jest/React Testing Library are in place (`katana/ui/jest.config.js`, etc.). Test files have been drafted for `LogViewer.tsx`, `LogConfiguration.tsx`, and `LogsPage.tsx` (`katana/ui/src/components/__tests__/` and `katana/ui/src/pages/__tests__/`). However, these tests **cannot be run** because the necessary `npm` packages (Jest, RTL) could not be installed.
-    *   **End-to-End (E2E) Tests:** Scenarios have been outlined for Cypress (see `katana/tests/e2e_scenarios_logging.md`). However, Cypress setup (via `npm install`) is also expected to fail under the current environmental constraints.
-
-**Resolving these installation timeouts is crucial for enabling the test suites.**
-
----
-
-### Running Tests (If Environment is Functional)
-
-**1. Backend API Tests:**
-
-*   **Prerequisites:** Python, `pip`, and a functional environment allowing package installation.
-*   **Setup:**
+1.  Copy the example environment file:
     ```bash
-    # From the project root
-    # (Optional: Create and activate a virtual environment)
-    # python -m venv venv
-    # source venv/bin/activate
-
-    # Install required packages for the API server and tests
-    pip install fastapi "uvicorn[standard]" httpx pytest
-
-    # Ensure PYTHONPATH is set to include the project root for imports like 'katana.api.server'
-    # This is often needed when running pytest from the root directory.
-    # export PYTHONPATH=.
+    cp .env.example .env
     ```
-*   **Execution:**
-    ```bash
-    # From the project root, ensuring PYTHONPATH includes the current directory
-    PYTHONPATH=. pytest katana/api/tests/test_api_server.py
+2.  Edit the `.env` file and fill in your actual credentials:
+
+    ```env
+    KATANA_TELEGRAM_TOKEN="YOUR_TELEGRAM_BOT_TOKEN" # Get this from BotFather on Telegram
+    ANTHROPIC_API_KEY="YOUR_ANTHROPIC_API_KEY"     # Optional: if you use Anthropic models
+    OPENAI_API_KEY="YOUR_OPENAI_API_KEY"         # Optional: if you use OpenAI models
     ```
 
-**2. Frontend Unit Tests:**
+    -   `KATANA_TELEGRAM_TOKEN`: This is essential for the bot to connect to Telegram.
+    -   `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are needed if the bot is configured to use these NLP services. If not used, the bot will log a warning but should still run with placeholder/stub responses.
 
-*   **Prerequisites:** Node.js, `npm`, and a functional environment allowing `npm install`.
-*   **Setup (from `katana/ui/` directory):**
-    ```bash
-    cd katana/ui
-    npm install # This would install Jest, RTL, and other devDependencies
-    ```
-*   **Execution (from `katana/ui/` directory):**
-    ```bash
-    npm test
-    ```
-    This will run Jest and look for test files (e.g., `*.test.tsx`).
+### 3. Install Dependencies
 
-**3. Frontend End-to-End Tests (Cypress - Conceptual):**
-
-*   **Prerequisites:** Node.js, `npm`, a functional environment allowing `npm install`, and the application (frontend and backend API) running.
-*   **Detailed Scenarios:** See `katana/tests/e2e_scenarios_logging.md`.
-*   **Setup (from `katana/ui/` directory):**
-    ```bash
-    cd katana/ui
-    npm install cypress --save-dev # Or as per project's Cypress setup
-    ```
-*   **Execution (from `katana/ui/` directory, typically):**
-    ```bash
-    npx cypress open # To open the Cypress Test Runner
-    # Or
-    npx cypress run # To run tests headlessly
-    ```
-
----
-
-## Daily Self-Diagnosis
-
-This project includes a self-diagnosis script that runs daily at 3 AM UTC. The script checks the following:
-
-- The presence of the `.env` file.
-- The absence of `__pycache__` directories and `.pyc` files.
-- The availability of Redis and Telegram.
-- The freshness of the dependencies.
-- The validity of the project structure.
-- The existence of the `logs` directory.
-- The passing of the tests.
-
-The results of the self-diagnosis are logged in `logs/selfcheck.log`. If any critical errors are found, the script will exit with a non-zero exit code, which will cause the CI to fail.
-
-You can also run the self-diagnosis script manually by running the following command:
+Install the required Python packages:
 
 ```bash
-python -m katana.self_check
+pip install -r requirements.txt
+```
+
+### 4. Run the Bot
+
+Execute the local runner script:
+
+```bash
+python run_bot_locally.py
+```
+
+You should see log messages in your console indicating that the bot is starting and has successfully loaded the environment variables.
+
+### 5. Verify Bot is Alive
+
+-   Open your Telegram client.
+-   Find your bot (the one associated with `KATANA_TELEGRAM_TOKEN`).
+-   Send it a `/start` command or any text message.
+-   Check your console logs. You should see the incoming message logged and the bot's response. The bot should reply to you in Telegram.
+
+## Bot Stability Features
+
+The current version of the bot includes several features to improve its stability:
+
+-   **Continuous Polling**: `bot.polling(none_stop=True)` is used to ensure the bot keeps running even if there are minor errors during message handling or network issues with Telegram.
+-   **Global Error Handling**: The main message handler has a `try-except` block to catch unexpected exceptions. These errors are logged with a full stack trace, but the bot process itself will not crash.
+-   **Environment Variable Logging**: On startup, the bot logs whether critical environment variables (like API tokens) have been successfully loaded or are missing.
+-   **Response Logging**: Each reply sent by the bot to a user is logged, which aids in debugging.
+
+## Recommendations for Auto-запуска and Перезапуска (Production/Staging)
+
+For running the bot in a more persistent manner (e.g., on a server), it's recommended to use a process manager. This will handle automatically restarting the bot if it ever crashes unexpectedly (despite the `none_stop=True` and `try-except` measures) or after a server reboot.
+
+### systemd (Linux)
+
+A robust way to manage the Katana bot on a Linux server is by using `systemd`. This ensures the bot automatically starts on boot and restarts if it unexpectedly fails.
+
+1.  **Prepare your Environment:**
+    *   Ensure your bot project (including `run_bot_locally.py`, `requirements.txt`, and your `.env` file) is deployed to a stable directory on your server, for example, `/opt/katana-bot`.
+    *   It's recommended to run the bot under a dedicated user account with limited privileges.
+        ```bash
+        # Example: Create a user 'katana_bot_user'
+        sudo useradd -r -s /bin/false katana_bot_user
+        sudo chown -R katana_bot_user:katana_bot_user /opt/katana-bot
+        ```
+    *   Make sure Python 3 and `pip` are installed system-wide or in a virtual environment accessible by the service. If using a virtual environment, the `ExecStart` path in the service file must point to the Python executable within that venv.
+
+2.  **Copy the Service File:**
+    *   A template systemd service file is provided in `deploy/systemd/katana-bot.service`. Copy this file to your systemd directory:
+        ```bash
+        sudo cp deploy/systemd/katana-bot.service /etc/systemd/system/katana-bot.service
+        ```
+
+3.  **Customize the Service File:**
+    *   Open `/etc/systemd/system/katana-bot.service` with a text editor (e.g., `sudo nano` or `sudo vim`).
+    *   **Crucially, update the following placeholders:**
+        *   `Documentation`: (Optional) Correct the path to your README.
+        *   `User` and `Group`: Uncomment and set to the dedicated user you created (e.g., `katana_bot_user`). If you didn't create a specific user, you can run it as another user, but a dedicated one is safer.
+        *   `WorkingDirectory`: Set this to the absolute path where your bot project is located (e.g., `/opt/katana-bot`).
+        *   `EnvironmentFile`: Set this to the absolute path of your `.env` file (e.g., `/opt/katana-bot/.env`).
+        *   `ExecStart`: Ensure this points to your Python 3 executable and the absolute path to `run_bot_locally.py` within your project (e.g., `/usr/bin/python3 /opt/katana-bot/run_bot_locally.py` or `/opt/katana-bot/venv/bin/python /opt/katana-bot/run_bot_locally.py` if using a venv).
+    *   Review other settings like `RestartSec` as needed. The default logging is to `journald`.
+
+4.  **Reload systemd, Enable, and Start the Service:**
+    *   After saving your changes to the service file, tell systemd to reload its configuration:
+        ```bash
+        sudo systemctl daemon-reload
+        ```
+    *   Enable the service to start automatically on boot:
+        ```bash
+        sudo systemctl enable katana-bot.service
+        ```
+    *   Start the service immediately:
+        ```bash
+        sudo systemctl start katana-bot.service
+        ```
+
+5.  **Check Service Status and Logs:**
+    *   Verify that the service is running:
+        ```bash
+        sudo systemctl status katana-bot.service
+        ```
+        You should see output indicating it's "active (running)".
+    *   View the bot's logs (if `StandardOutput=journal` and `StandardError=journal` are used):
+        ```bash
+        sudo journalctl -u katana-bot.service -f
+        ```
+        The `-f` flag follows the log output in real-time. Press `Ctrl+C` to exit.
+        If you have configured file logging (see "File-based Logging" section below), logs will also be available in the specified file.
+
+6.  **Stopping or Restarting the Service:**
+    *   To stop the service:
+        ```bash
+        sudo systemctl stop katana-bot.service
+        ```
+    *   To restart the service (e.g., after updating the bot's code or `.env` file):
+        ```bash
+        sudo systemctl restart katana-bot.service
+        ```
+
+## Logging
+
+The project uses a standardized logging system that can be configured to log to both the console and a file. For more information, see the [logging documentation](docs/logging.md).
+
+## Liveness Monitoring (Heartbeat File)
+
+To monitor if the bot is actively running and processing, a heartbeat mechanism is implemented. The bot periodically writes the current timestamp to a specified file. An external script can then check this file's freshness.
+
+### How it Works
+
+1.  **Bot-side:**
+    *   If `HEARTBEAT_FILE_PATH` is set in the `.env` file, the bot starts a background thread.
+    *   This thread updates the content of `HEARTBEAT_FILE_PATH` with the current UTC timestamp at an interval defined by `HEARTBEAT_INTERVAL_SECONDS` (default 30 seconds).
+2.  **Monitoring-side:**
+    *   The `tools/check_heartbeat.py` script can be run (e.g., by a cron job) to check the heartbeat file.
+    *   It reads the timestamp from the file and compares it to the current time.
+    *   If the file is missing, unreadable, or the timestamp is older than `HEARTBEAT_MAX_AGE_SECONDS` (default 120 seconds), the script exits with a non-zero status code (CRITICAL or WARNING), indicating a problem.
+    *   Otherwise, it exits with a zero status code (OK).
+
+### Setup
+
+1.  **Configure Environment Variables:**
+    Add these variables to your `.env` file:
+    ```env
+    # .env
+    HEARTBEAT_FILE_PATH="/var/run/katana-bot/heartbeat.txt"  # Or /tmp/katana_bot_heartbeat.txt
+    HEARTBEAT_INTERVAL_SECONDS="30"                         # Bot updates file every 30s
+    HEARTBEAT_MAX_AGE_SECONDS="120"                         # Monitor script flags error if older than 120s
+    ```
+    *   Choose a `HEARTBEAT_FILE_PATH` where the bot user has write permissions. Common locations are `/tmp/` or `/var/run/your_bot_name/`.
+        ```bash
+        # Example for /var/run/katana-bot/
+        sudo mkdir -p /var/run/katana-bot
+        sudo chown katana_bot_user:katana_bot_user /var/run/katana-bot # Use your bot's user
+        sudo chmod 775 /var/run/katana-bot # Ensure user can write
+        ```
+    *   `HEARTBEAT_MAX_AGE_SECONDS` should be greater than `HEARTBEAT_INTERVAL_SECONDS` (e.g., 2-4 times the interval) to allow for minor delays.
+
+2.  **Schedule `check_heartbeat.py`:**
+    Use a cron job to run `tools/check_heartbeat.py` periodically (e.g., every minute or every 5 minutes).
+    Open your crontab for editing (e.g., `crontab -e` for the current user, or edit system cron files):
+    ```cron
+    # Example: Run check_heartbeat.py every 5 minutes
+    # Make sure to use absolute paths and the correct python interpreter
+    # Adjust file paths and user for `su` if running as root but checking a file owned by another user.
+    */5 * * * * /usr/bin/python3 /path/to/your/katana-bot-project/tools/check_heartbeat.py --file-path /var/run/katana-bot/heartbeat.txt --max-age 120 >> /var/log/katana-bot/heartbeat_check.log 2>&1
+    ```
+    *   The command passes `--file-path` and `--max-age` explicitly, but these can also be controlled by setting `HEARTBEAT_FILE_PATH` and `HEARTBEAT_MAX_AGE_SECONDS` in the environment where the cron job runs.
+    *   The output (OK, CRITICAL, WARNING) and exit code of `check_heartbeat.py` can be used by monitoring systems (like Nagios, Zabbix, or custom alerting scripts) to trigger notifications if the bot appears to be down.
+
+3.  **Alerting (Conceptual):**
+    The `check_heartbeat.py` script currently prints CRITICAL/WARNING messages to standard output. To get actual alerts:
+    *   Modify `check_heartbeat.py` to include logic for sending an email, a Telegram message, or calling another alerting API when a CRITICAL state is detected.
+    *   Or, use a monitoring system that can interpret the script's exit codes and output to manage alerts.
+
+This heartbeat mechanism provides a simple yet effective way to monitor the bot's liveness.
+    For actual alert notifications, the `send_telegram_alert` function (or a similar custom function for email/other services) in `tools/check_heartbeat.py` needs to be implemented and configured with necessary API tokens and recipient details (e.g., via `ALERT_TELEGRAM_BOT_TOKEN` and `ALERT_TELEGRAM_CHAT_ID` environment variables).
+
+## Deployment Guide
+
+For a comprehensive, step-by-step guide to deploying the bot on a new server, including environment setup, configuration, and service management, please refer to the [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) file.
+
+## Graceful Shutdown
+
+The bot includes mechanisms for a basic graceful shutdown:
+- When the bot is stopped (e.g., via `Ctrl+C` or `systemctl stop`), the heartbeat thread is signaled to stop and is joined before the application fully exits. This is handled in `run_bot_locally.py` and the `if __name__ == '__main__'` block of `bot/katana_bot.py`.
+- **Further Considerations**: True graceful shutdown of active message handlers (ensuring they complete processing before exit) is more complex with the current `pyTelegramBotAPI` polling model. For applications requiring this, a different approach to message processing (e.g., a queue and worker threads) might be needed.
+
+### Supervisor
+
+1.  Install Supervisor: `sudo apt-get install supervisor` (or equivalent for your OS).
+2.  Create a configuration file for the bot, e.g., `/etc/supervisor/conf.d/katana-bot.conf`:
+
+    ```ini
+    [program:katana-bot]
+    command=/usr/bin/python /path/to/your/katana-bot-project/run_bot_locally.py ; Full command
+    directory=/path/to/your/katana-bot-project/ ; Project directory
+    autostart=true
+    autorestart=true
+    stderr_logfile=/var/log/katana-bot.err.log
+    stdout_logfile=/var/log/katana-bot.out.log
+    user=your_username ; User to run as
+    environment=PYTHONUNBUFFERED=1 # Ensures logs are written immediately
+    # You might need to ensure .env variables are loaded,
+    # either by sourcing them in the command or ensuring supervisor user has them.
+    # Alternatively, have run_bot_locally.py load them via python-dotenv, which it does.
+    ```
+    Ensure the paths and username are correct. The `python-dotenv` library used in `run_bot_locally.py` should handle loading variables from the `.env` file in the specified `directory`.
+
+3.  Tell Supervisor to read the new config:
+    ```bash
+    sudo supervisorctl reread
+    sudo supervisorctl update
+    ```
+4.  Start the bot process:
+    ```bash
+    sudo supervisorctl start katana-bot
+    ```
+5.  Check status:
+    ```bash
+    sudo supervisorctl status katana-bot
+    ```
+
+Choose the method that best fits your deployment environment. Both systemd and Supervisor are robust options.
+
+## CI/CD (Continuous Integration / Continuous Deployment)
+
+A basic CI workflow is set up using GitHub Actions. You can find the configuration in `.github/workflows/ci.yml`.
+
+### Current CI Setup
+
+-   **Trigger**: The workflow runs on pushes and pull requests to the `dev` and `main` branches.
+-   **Jobs**:
+    1.  `lint-and-test`:
+        *   Checks out the code.
+        *   Sets up multiple Python versions (e.g., 3.9, 3.10, 3.11) to test compatibility.
+        *   Installs dependencies from `requirements.txt`.
+        *   **Lints**: Runs `flake8` to check for code style issues and potential errors.
+        *   **Tests**: Runs `pytest` to execute automated tests. (Assumes tests are located in standard pytest-discoverable locations like `bot/tests/`).
+
+### Extending CI/CD
+
+This is a foundational CI setup. You can extend it by:
+
+-   **Adding more tests**: Increase test coverage for more robust validation.
+-   **Building artifacts**: If you need to package the bot (e.g., into a Docker container or a Python wheel), add a build job.
+-   **Deployment (CD)**: Add jobs to automatically deploy the bot to staging or production environments after successful tests and builds on specific branches (e.g., `main`). This would typically involve:
+    *   Building a Docker image and pushing it to a registry.
+    *   Or, copying files to a server and restarting the systemd/supervisor service.
+    *   Using GitHub secrets to store deployment credentials securely.
+-   **Notifications**: Configure notifications (e.g., Slack, email) for build successes or failures.
+
+The `ci.yml` file includes commented-out placeholders for a build job as an example starting point.
+
+---
+
+Happy botting with Katana! ⚔️
 ```

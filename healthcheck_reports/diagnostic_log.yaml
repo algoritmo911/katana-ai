@@ -1,0 +1,44 @@
+- event: Health check started
+  timestamp: '2025-07-03T18:36:53.074221'
+- event: Katana files validation started
+  timestamp: '2025-07-03T18:36:53.074309'
+- event_id: validate_json_katana.commands.json_20250703183653074331
+  file: /app/katana.commands.json
+  timestamp: '2025-07-03T18:36:53.074357'
+  exists: true
+  status: valid
+- event_id: validate_json_katana.history.json_20250703183653074499
+  file: /app/katana.history.json
+  timestamp: '2025-07-03T18:36:53.074512'
+  exists: true
+  status: valid
+- event: Katana files validation completed
+  timestamp: '2025-07-03T18:36:53.074638'
+  summary_results:
+    commands_file:
+      exists: true
+      is_valid_json: true
+      is_not_empty: true
+      error: null
+    history_file:
+      exists: true
+      is_valid_json: true
+      is_not_empty: true
+      error: null
+- event: rclone check started
+  timestamp: '2025-07-03T18:36:53.074724'
+- event: rclone_check_attempt
+  timestamp: '2025-07-03T18:36:53.074738'
+  status: not_found_error
+- event: rclone check completed
+  timestamp: '2025-07-03T18:36:53.088572'
+  summary_result:
+    installed: false
+    accessible: false
+    remotes: null
+    error: rclone command not found
+- event: Successfully generated /app/healthcheck_reports/health_report.json
+  status: success
+  timestamp: '2025-07-03T18:36:53.089224'
+- event: Health check process completing
+  timestamp: '2025-07-03T18:36:53.089253'
