@@ -112,6 +112,82 @@ class TestCommandProcessor(unittest.TestCase):
 
             self.assertEqual(mock_post.call_count, 3)
 
+    def test_command_priority(self):
+        # Enqueue two commands with different priorities
+        low_priority_command = {"type": "test_type", "priority": 200}
+        high_priority_command = {"type": "test_type", "priority": 10}
+
+        # We need to manually call enqueue to control the order
+        state = KatanaState()
+        state.enqueue(low_priority_command)
+        state.enqueue(high_priority_command)
+
+        # Dequeue commands and check their order
+        dequeued_high = state.dequeue()
+        dequeued_low = state.dequeue()
+
+        self.assertEqual(dequeued_high.get('priority'), 10)
+        self.assertEqual(dequeued_low.get('priority'), 200)
+
+    @patch('bot.handle_log_event')
+    def test_command_cancellation(self, mock_handle_log_event):
+        state = KatanaState()
+        command_to_cancel = {"type": "log_event", "id": "cancel_this"}
+        command_to_process = {"type": "log_event", "id": "process_this"}
+
+        # Enqueue both
+        uid_to_cancel = state.enqueue(command_to_cancel)
+        state.enqueue(command_to_process)
+
+        # Cancel one
+        state.cancel_command(uid_to_cancel)
+
+        # Process the queue
+        with patch('bot.katana_state', state):
+            with patch('time.sleep'):
+                 # Since the loop breaks on None, we need to add it to the queue
+                state.enqueue({"type": "poison_pill"})
+                # This is a hacky way to stop the loop for the test
+                original_dequeue = state.dequeue
+                def dequeue_with_stop():
+                    item = original_dequeue()
+                    if item and item.get("type") == "poison_pill":
+                        return None
+                    return item
+                state.dequeue = dequeue_with_stop
+                bot.command_processor_loop()
+
+        # Assert that only the non-cancelled command was processed
+        mock_handle_log_event.assert_called_once()
+        self.assertEqual(mock_handle_log_event.call_args[0][0]['id'], "process_this")
+
+    @patch('bot.handle_log_event')
+    def test_overwrite_result(self, mock_handle_log_event):
+        state = KatanaState()
+        command = {"type": "log_event", "id": "overwrite_this", "overwrite_result": True}
+
+        # Enqueue the same command twice
+        state.enqueue(command)
+        state.enqueue(command)
+
+        # Process the queue
+        with patch('bot.katana_state', state):
+            with patch('time.sleep'):
+                # Add poison pill to stop the loop
+                state.enqueue({"type": "poison_pill"})
+                original_dequeue = state.dequeue
+                def dequeue_with_stop():
+                    item = original_dequeue()
+                    if item and item.get("type") == "poison_pill":
+                        return None
+                    return item
+                state.dequeue = dequeue_with_stop
+                bot.command_processor_loop()
+
+        # Assert that the command was processed twice
+        self.assertEqual(mock_handle_log_event.call_count, 2)
+
+
     @patch('requests.post')
     def test_callback_url_is_called(self, mock_post):
         with patch('bot.katana_logger'):

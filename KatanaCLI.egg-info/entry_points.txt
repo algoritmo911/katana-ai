@@ -1,0 +1,2 @@
+[console_scripts]
+katana-cli = app.cli.katana_cli:cli

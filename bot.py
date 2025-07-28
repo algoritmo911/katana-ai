@@ -127,15 +127,22 @@ def command_processor_loop():
         if command_data is None:
             break
         try:
+            katana_uid = command_data.get("katana_uid")
+            if not command_data.get("overwrite_result", False):
+                if katana_uid in katana_state.cancelled_commands:
+                    katana_logger.info(f"Skipping cancelled command: {katana_uid}")
+                    katana_state.cancelled_commands.remove(katana_uid)
+                    continue
+
             katana_logger.info(f"Processing command: {command_data}")
             command_type = command_data.get("type")
             chat_id = command_data.get("chat_id", "N/A") # Assuming chat_id is passed in command_data
-            katana_uid = command_data.get("katana_uid")
             log_command(
                 command_id=katana_uid,
                 command=command_type,
                 args=command_data.get("args"),
                 status="processing",
+                priority=command_data.get("priority", 100),
             )
 
             if command_type == "log_event":
@@ -146,6 +153,7 @@ def command_processor_loop():
                     command=command_type,
                     args=command_data.get("args"),
                     status="success",
+                    priority=command_data.get("priority", 100),
                 )
             elif command_type == "mind_clearing":
                 handle_mind_clearing(command_data, chat_id)
@@ -155,6 +163,7 @@ def command_processor_loop():
                     command=command_type,
                     args=command_data.get("args"),
                     status="success",
+                    priority=command_data.get("priority", 100),
                 )
             elif command_type == "n8n_trigger":
                 handle_n8n_trigger(command_data, chat_id)
@@ -163,6 +172,7 @@ def command_processor_loop():
                     command=command_type,
                     args=command_data.get("args"),
                     status="success",
+                    priority=command_data.get("priority", 100),
                 )
             else:
                 katana_logger.warning(f"Unknown command type: {command_type}")
@@ -172,6 +182,7 @@ def command_processor_loop():
                     args=command_data.get("args"),
                     status="failed",
                     error="Unknown command type",
+                    priority=command_data.get("priority", 100),
                 )
         except Exception as e:
             katana_logger.error(f"Error processing command: {command_data}. Reason: {e}", exc_info=True)
@@ -181,6 +192,7 @@ def command_processor_loop():
                 args=command_data.get("args"),
                 status="failed",
                 error=str(e),
+                priority=command_data.get("priority", 100),
             )
         finally:
             katana_state.task_done()
@@ -226,6 +238,7 @@ def handle_message_logic(bot, message):
         command=command_data.get("type"),
         args=command_data.get("args"),
         status="queued",
+        priority=command_data.get("priority", 100),
     )
     bot.reply_to(message, f"✅ Command received and queued with ID: {katana_uid}")
     katana_logger.info(f"Enqueued command from {chat_id} with Katana UID: {katana_uid}")

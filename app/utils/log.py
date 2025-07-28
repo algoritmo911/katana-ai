@@ -3,7 +3,7 @@ from datetime import datetime
 
 COMMAND_LOG_FILE = "command_log.jsonl"
 
-def log_command(command_id, command, args, status, result=None, error=None):
+def log_command(command_id, command, args, status, priority=100, cancelled=False, result=None, error=None):
     """Logs the status of a command to the command log file."""
     log_entry = {
         "command_id": command_id,
@@ -11,6 +11,8 @@ def log_command(command_id, command, args, status, result=None, error=None):
         "args": args,
         "timestamp": datetime.utcnow().isoformat(),
         "status": status,
+        "priority": priority,
+        "cancelled": cancelled,
         "result": result,
         "error": error,
     }

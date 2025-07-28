@@ -35,9 +35,32 @@ def status():
 
 @cli.command()
 @click.argument('command_id')
+def status(command_id):
+    """Displays the status of a specific command."""
+    try:
+        import requests
+        response = requests.get(f"http://localhost:5001/command/{command_id}")
+        response.raise_for_status()
+        click.echo(json.dumps(response.json(), indent=2))
+    except requests.exceptions.RequestException as e:
+        click.echo(f"Error: {e}", err=True)
+
+@cli.command()
+@click.argument('command_id')
 def cancel(command_id):
     """Cancels a command in the queue by its ID."""
-    click.echo(f"Canceling command {command_id} is not yet implemented.")
+    # This is a simplified implementation. In a real-world scenario, you would
+    # need a way to access the state of the running bot process.
+    click.echo(f"Attempting to cancel command: {command_id}")
+    try:
+        # This is not a robust way to share state between processes.
+        # For a real application, consider using a database, a message queue (like Redis),
+        # or another form of IPC to manage shared state.
+        state = KatanaState()
+        state.cancel_command(command_id)
+        click.echo(f"Command {command_id} has been marked for cancellation.")
+    except Exception as e:
+        click.echo(f"Error canceling command: {e}", err=True)
 
 @cli.command()
 def flush():

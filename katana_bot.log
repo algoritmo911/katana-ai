@@ -461,3 +461,24 @@ RuntimeError: Simulated polling error!
 2025-07-28 18:49:16,777 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
 2025-07-28 18:49:16,777 - INFO - Successfully processed command: log_event
 2025-07-28 18:49:16,779 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 19:09:27,962 - INFO - Received message from 12345: not a valid json
+2025-07-28 19:09:27,962 - ERROR - Invalid JSON from 12345: not a valid json
+2025-07-28 19:09:27,965 - INFO - Received message from 12345: {"type": "test_type", "module": "test_module", "args": {"data": "value"}, "id": "test_id_valid"}
+2025-07-28 19:09:27,966 - INFO - Enqueued command from 12345 with Katana UID: test_uid
+2025-07-28 19:09:27,995 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 19:09:27,996 - INFO - Successfully processed command: log_event
+2025-07-28 19:09:27,999 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 19:10:23,430 - INFO - Received message from 12345: not a valid json
+2025-07-28 19:10:23,430 - ERROR - Invalid JSON from 12345: not a valid json
+2025-07-28 19:10:23,433 - INFO - Received message from 12345: {"type": "test_type", "module": "test_module", "args": {"data": "value"}, "id": "test_id_valid"}
+2025-07-28 19:10:23,434 - INFO - Enqueued command from 12345 with Katana UID: test_uid
+2025-07-28 19:10:23,441 - INFO - Skipping cancelled command: 322ac1df-8548-485a-8f65-b6bdac2c642d
+2025-07-28 19:10:23,442 - INFO - Processing command: {'type': 'log_event', 'id': 'process_this', 'katana_uid': '3537e68a-c09e-4b09-9555-214d70eef35f'}
+2025-07-28 19:10:23,442 - INFO - Successfully processed command: log_event
+2025-07-28 19:10:23,449 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 19:10:23,450 - INFO - Successfully processed command: log_event
+2025-07-28 19:10:23,452 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 19:10:23,454 - INFO - Processing command: {'type': 'log_event', 'id': 'overwrite_this', 'overwrite_result': True, 'katana_uid': 'ceddebbd-8548-45a4-8178-eb7553e6f4f7'}
+2025-07-28 19:10:23,455 - INFO - Successfully processed command: log_event
+2025-07-28 19:10:23,455 - INFO - Processing command: {'type': 'log_event', 'id': 'overwrite_this', 'overwrite_result': True, 'katana_uid': 'ceddebbd-8548-45a4-8178-eb7553e6f4f7'}
+2025-07-28 19:10:23,455 - INFO - Successfully processed command: log_event

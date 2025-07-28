@@ -1,19 +1,24 @@
 import unittest
+from unittest.mock import patch
 from click.testing import CliRunner
 from app.cli.katana_cli import cli
 
 class TestCli(unittest.TestCase):
-    def test_status_command(self):
+    @patch('requests.get')
+    def test_status_command(self, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"status": "queued"}
         runner = CliRunner()
-        result = runner.invoke(cli, ['status'])
+        result = runner.invoke(cli, ['status', 'test_id'])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Queue status functionality is not yet fully implemented.", result.output)
+        self.assertIn('"status": "queued"', result.output)
 
-    def test_cancel_command(self):
+    @patch('app.cli.katana_cli.KatanaState')
+    def test_cancel_command(self, mock_katana_state):
         runner = CliRunner()
         result = runner.invoke(cli, ['cancel', 'test_id'])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Canceling command test_id is not yet implemented.", result.output)
+        self.assertIn("Command test_id has been marked for cancellation.", result.output)
 
     def test_flush_command(self):
         runner = CliRunner()

@@ -5,3 +5,28 @@
 {"command_id": null, "command": "log_event", "args": {}, "timestamp": "2025-07-28T18:49:16.777864", "status": "success", "result": null, "error": null}
 {"command_id": null, "command": "n8n_trigger", "args": {}, "timestamp": "2025-07-28T18:49:16.779327", "status": "processing", "result": null, "error": null}
 {"command_id": null, "command": "n8n_trigger", "args": {}, "timestamp": "2025-07-28T18:49:16.779633", "status": "success", "result": null, "error": null}
+{"command_id": "test_id", "command": "test_command", "args": {}, "timestamp": "2025-07-28T18:59:37.080676", "status": "queued", "result": null, "error": null}
+{"command_id": "test_id", "command": "test_command", "args": {}, "timestamp": "2025-07-28T19:00:33.306537", "status": "queued", "result": null, "error": null}
+{"command_id": "test_id", "command": "test_command", "args": {}, "timestamp": "2025-07-28T19:02:15.012577", "status": "queued", "result": null, "error": null}
+{"command_id": "test_uid", "command": "test_type", "args": {"data": "value"}, "timestamp": "2025-07-28T19:09:27.965795", "status": "queued", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "test_uid", "command": "test_type", "args": null, "timestamp": "2025-07-28T19:09:27.972705", "status": "processing", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "test_uid", "command": "test_type", "args": null, "timestamp": "2025-07-28T19:09:27.973294", "status": "failed", "priority": 100, "cancelled": false, "result": null, "error": "Unknown command type"}
+{"command_id": null, "command": "log_event", "args": {}, "timestamp": "2025-07-28T19:09:27.995460", "status": "processing", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": null, "command": "log_event", "args": {}, "timestamp": "2025-07-28T19:09:27.996155", "status": "success", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": null, "command": "n8n_trigger", "args": {}, "timestamp": "2025-07-28T19:09:27.999258", "status": "processing", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": null, "command": "n8n_trigger", "args": {}, "timestamp": "2025-07-28T19:09:27.999675", "status": "success", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "test_uid", "command": "test_type", "args": {"data": "value"}, "timestamp": "2025-07-28T19:10:23.433635", "status": "queued", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "test_uid", "command": "test_type", "args": null, "timestamp": "2025-07-28T19:10:23.440143", "status": "processing", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "test_uid", "command": "test_type", "args": null, "timestamp": "2025-07-28T19:10:23.440664", "status": "failed", "priority": 100, "cancelled": false, "result": null, "error": "Unknown command type"}
+{"command_id": "3537e68a-c09e-4b09-9555-214d70eef35f", "command": "log_event", "args": null, "timestamp": "2025-07-28T19:10:23.442116", "status": "processing", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "3537e68a-c09e-4b09-9555-214d70eef35f", "command": "log_event", "args": null, "timestamp": "2025-07-28T19:10:23.442468", "status": "success", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": null, "command": "log_event", "args": {}, "timestamp": "2025-07-28T19:10:23.449606", "status": "processing", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": null, "command": "log_event", "args": {}, "timestamp": "2025-07-28T19:10:23.450204", "status": "success", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": null, "command": "n8n_trigger", "args": {}, "timestamp": "2025-07-28T19:10:23.452938", "status": "processing", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": null, "command": "n8n_trigger", "args": {}, "timestamp": "2025-07-28T19:10:23.453309", "status": "success", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "ceddebbd-8548-45a4-8178-eb7553e6f4f7", "command": "log_event", "args": null, "timestamp": "2025-07-28T19:10:23.455032", "status": "processing", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "ceddebbd-8548-45a4-8178-eb7553e6f4f7", "command": "log_event", "args": null, "timestamp": "2025-07-28T19:10:23.455609", "status": "success", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "ceddebbd-8548-45a4-8178-eb7553e6f4f7", "command": "log_event", "args": null, "timestamp": "2025-07-28T19:10:23.455761", "status": "processing", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "ceddebbd-8548-45a4-8178-eb7553e6f4f7", "command": "log_event", "args": null, "timestamp": "2025-07-28T19:10:23.455896", "status": "success", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "test_id", "command": "test_command", "args": {}, "timestamp": "2025-07-28T22:10:53.630885", "status": "queued", "priority": 100, "cancelled": false, "result": null, "error": null}
+{"command_id": "test_id", "command": "test_command", "args": {}, "timestamp": "2025-07-28T22:12:59.509513", "status": "queued", "priority": 100, "cancelled": false, "result": null, "error": null}
