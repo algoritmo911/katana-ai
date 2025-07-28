@@ -1,0 +1,49 @@
+[
+  {
+    "id": "1",
+    "type": "cmd1",
+    "module": "test",
+    "args": {},
+    "started_at": "2024-01-01T00:00:00",
+    "finished_at": null,
+    "status": "RUNNING",
+    "parent_id": null,
+    "children_ids": [
+      "2",
+      "3"
+    ]
+  },
+  {
+    "id": "2",
+    "type": "cmd2",
+    "module": "test",
+    "args": {},
+    "started_at": "2024-01-01T00:01:00",
+    "finished_at": null,
+    "status": "RUNNING",
+    "parent_id": "1",
+    "children_ids": []
+  },
+  {
+    "id": "3",
+    "type": "cmd3",
+    "module": "test",
+    "args": {},
+    "started_at": "2024-01-01T00:02:00",
+    "finished_at": null,
+    "status": "RUNNING",
+    "parent_id": "1",
+    "children_ids": []
+  },
+  {
+    "id": "4",
+    "type": "cmd4",
+    "module": "test",
+    "args": {},
+    "started_at": "2024-01-01T00:03:00",
+    "finished_at": null,
+    "status": "RUNNING",
+    "parent_id": null,
+    "children_ids": []
+  }
+]
