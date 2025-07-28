@@ -1,6 +1,1 @@
-python-telegram-bot==20.8
-python-dotenv==1.0.0
-# Add other dependencies here as needed, e.g.
-# requests
-# numpy
-# spacy (for more advanced NLP)
+pyTelegramBotAPI
