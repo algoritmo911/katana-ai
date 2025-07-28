@@ -4,6 +4,7 @@ import os
 import logging # Added
 from pathlib import Path
 from datetime import datetime
+from command_graph import Command, CommandGraph
 
 # --- Logger Setup ---
 katana_logger = logging.getLogger('katana_logger')
@@ -25,7 +26,8 @@ katana_logger.addHandler(console_handler)
 # TODO: Get API token from environment variable or secrets manager
 API_TOKEN = 'YOUR_API_TOKEN'
 
-bot = telebot.TeleBot(API_TOKEN)
+bot = None # Initialize bot to None
+command_graph = CommandGraph()
 
 # Directory for storing command files
 COMMAND_FILE_DIR = Path('commands')
@@ -43,6 +45,11 @@ def handle_log_event(command_data, chat_id):
     katana_logger.info(f"EVENT LOGGED by {chat_id} for module {module_name}: {event_args}")
     # Actual implementation for log_event (e.g., writing to a specific event store) could go here.
     # For now, logging the event details is the primary action.
+
+def handle_get_command_graph(chat_id):
+    """Handles the 'get_command_graph' command."""
+    dot_representation = command_graph.to_dot()
+    bot.send_message(chat_id, f"```dot\n{dot_representation}\n```", parse_mode="MarkdownV2")
 
 def handle_mind_clearing(command_data, chat_id):
     """Placeholder for handling 'mind_clearing' commands."""
@@ -87,7 +94,6 @@ def _validate_command(command_data, chat_id, required_fields, logger, command_te
 
 # --- Main Message Handler ---
 
-@bot.message_handler(func=lambda message: True)
 def handle_message(message):
     """Handles incoming messages."""
     chat_id = message.chat.id
@@ -116,6 +122,12 @@ def handle_message(message):
         # _validate_command already logs the detailed error
         return
 
+    # Create and add command to graph
+    parent_id = command_data.get("parent_id") # Optional: for child commands
+    command = Command(command_data, parent_id=parent_id)
+    command_graph.add_command(command)
+    katana_logger.info(f"Command {command.id} added to graph. Parent: {parent_id}")
+
     # 3. Command routing based on 'type' (if parsing and validation are successful)
     command_type = command_data.get("type")
 
@@ -127,6 +139,10 @@ def handle_message(message):
     elif command_type == "mind_clearing":
         handle_mind_clearing(command_data, chat_id)
         bot.reply_to(message, "✅ 'mind_clearing' processed (placeholder).")
+        katana_logger.info(f"Successfully processed command for {chat_id}: {command_type}")
+        return
+    elif command_type == "get_command_graph":
+        handle_get_command_graph(chat_id)
         katana_logger.info(f"Successfully processed command for {chat_id}: {command_type}")
         return
 
@@ -153,6 +169,12 @@ def handle_message(message):
         # Optionally, add more specific error handling or re-raise
 
 if __name__ == '__main__':
+    bot = telebot.TeleBot(API_TOKEN)
+
+    @bot.message_handler(func=lambda message: True)
+    def message_handler_wrapper(message):
+        handle_message(message)
+
     katana_logger.info("Bot starting...")
     try:
         bot.polling()

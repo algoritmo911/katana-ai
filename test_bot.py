@@ -7,6 +7,7 @@ import os # For main execution context
 
 # Assuming bot.py is in the same directory or accessible in PYTHONPATH
 import bot
+from command_graph import Command, CommandGraph
 
 class TestBot(unittest.TestCase):
 
@@ -19,11 +20,11 @@ class TestBot(unittest.TestCase):
         self.original_command_file_dir = bot.COMMAND_FILE_DIR
         bot.COMMAND_FILE_DIR = self.test_commands_dir
 
-        # Mock the bot object and its methods
-        self.mock_bot_instance = MagicMock()
-        # Patch the bot instance within the 'bot' module
-        self.bot_patcher = patch('bot.bot', self.mock_bot_instance)
-        self.mock_bot_module_instance = self.bot_patcher.start()
+        # Mock the TeleBot class
+        self.mock_telebot_patcher = patch('telebot.TeleBot')
+        self.mock_telebot = self.mock_telebot_patcher.start()
+        self.mock_bot_instance = self.mock_telebot.return_value
+        bot.bot = self.mock_bot_instance
 
         # Mock datetime to control timestamps in filenames
         self.mock_datetime_patcher = patch('bot.datetime')
@@ -34,12 +35,17 @@ class TestBot(unittest.TestCase):
         self.mock_logger_patcher = patch('bot.katana_logger')
         self.mock_logger = self.mock_logger_patcher.start()
 
+        # Patch CommandGraph
+        self.mock_command_graph_patcher = patch('bot.command_graph', MagicMock(spec=CommandGraph))
+        self.mock_command_graph = self.mock_command_graph_patcher.start()
+
 
     def tearDown(self):
         # Stop patchers
-        self.bot_patcher.stop()
+        self.mock_telebot_patcher.stop()
         self.mock_datetime_patcher.stop()
         self.mock_logger_patcher.stop() # Stop logger patcher
+        self.mock_command_graph_patcher.stop()
 
         # Clean up: remove dummy directory and its contents
         if self.test_commands_dir.exists():
@@ -64,7 +70,7 @@ class TestBot(unittest.TestCase):
         bot.handle_message(mock_message)
 
         # Check reply to user
-        self.mock_bot_module_instance.reply_to.assert_called_with(
+        self.mock_bot_instance.reply_to.assert_called_with(
             mock_message,
             expected_reply_message_part # The error_msg from _validate_command is directly used for reply
         )
@@ -95,8 +101,8 @@ class TestBot(unittest.TestCase):
             saved_data = json.load(f)
         self.assertEqual(saved_data, command)
 
-        self.mock_bot_module_instance.reply_to.assert_called_once()
-        args, _ = self.mock_bot_module_instance.reply_to.call_args # Use _ for kwargs if not used
+        self.mock_bot_instance.reply_to.assert_called_once()
+        args, _ = self.mock_bot_instance.reply_to.call_args # Use _ for kwargs if not used
         self.assertEqual(args[0], mock_message)
         self.assertTrue(args[1].startswith("✅ Command received and saved as"))
         self.assertIn(str(expected_file_path), args[1])
@@ -113,7 +119,7 @@ class TestBot(unittest.TestCase):
         mock_message = self._create_mock_message(invalid_json_string)
 
         bot.handle_message(mock_message)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Invalid JSON format.")
+        self.mock_bot_instance.reply_to.assert_called_with(mock_message, "Error: Invalid JSON format.")
         # Check initial "Received message" log
         self.mock_logger.info.assert_any_call(f"Received message from {mock_message.chat.id}: {invalid_json_string}")
         # Check the specific error log from _parse_command
@@ -171,7 +177,7 @@ class TestBot(unittest.TestCase):
 
         bot.handle_message(mock_message) # This will call the actual handle_log_event
 
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
+        self.mock_bot_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
 
         # Check for standard logs from handle_message
         self.mock_logger.info.assert_any_call(f"Received message from {mock_message.chat.id}: {mock_message.text}")
@@ -193,7 +199,7 @@ class TestBot(unittest.TestCase):
             mock_handle_log_event_func_local.assert_not_called()
 
         expected_error_msg = "Error: Missing required field 'module'."
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_error_msg)
+        self.mock_bot_instance.reply_to.assert_called_with(mock_message, expected_error_msg)
         # The logger call for "Received message" would have happened.
         self.mock_logger.info.assert_any_call(f"Received message from {mock_message.chat.id}: {mock_message.text}")
         self.mock_logger.error.assert_called_with(f"Validation failed for {mock_message.chat.id}: {expected_error_msg} (Command: {mock_message.text})")
@@ -206,7 +212,7 @@ class TestBot(unittest.TestCase):
         bot.handle_message(mock_message)
 
         mock_handle_mind_clearing_func.assert_called_once_with(command, mock_message.chat.id)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'mind_clearing' processed (placeholder).")
+        self.mock_bot_instance.reply_to.assert_called_with(mock_message, "✅ 'mind_clearing' processed (placeholder).")
         self.mock_logger.info.assert_any_call(f"Received message from {mock_message.chat.id}: {mock_message.text}")
         self.mock_logger.info.assert_any_call(f"Successfully processed command for {mock_message.chat.id}: mind_clearing")
 
@@ -226,8 +232,8 @@ class TestBot(unittest.TestCase):
             saved_data = json.load(f)
         self.assertEqual(saved_data, command)
 
-        self.mock_bot_module_instance.reply_to.assert_called_once()
-        args, _ = self.mock_bot_module_instance.reply_to.call_args # Use _ if kwargs not needed
+        self.mock_bot_instance.reply_to.assert_called_once()
+        args, _ = self.mock_bot_instance.reply_to.call_args # Use _ if kwargs not needed
         self.assertEqual(args[0], mock_message)
         self.assertTrue(args[1].startswith("✅ Command received and saved as"))
         self.assertIn(str(expected_file_path), args[1])
@@ -247,7 +253,7 @@ class TestBot(unittest.TestCase):
         bot.handle_message(mock_message)
 
         # Check that reply indicates an error
-        self.mock_bot_module_instance.reply_to.assert_called_with(
+        self.mock_bot_instance.reply_to.assert_called_with(
             mock_message,
             "Error: Could not save command. Please contact administrator."
         )
@@ -291,7 +297,7 @@ class TestBot(unittest.TestCase):
 
         bot.handle_message(mock_message)
 
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
+        self.mock_bot_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
 
         self.mock_logger.info.assert_any_call(f"Received message from {mock_message.chat.id}: {mock_message.text}")
         self.mock_logger.info.assert_any_call(f"Successfully processed command for {mock_message.chat.id}: log_event")
@@ -301,62 +307,25 @@ class TestBot(unittest.TestCase):
             f"EVENT LOGGED by {mock_message.chat.id} for module {command['module']}: {expected_log_args_detail}"
         )
 
+    def test_get_command_graph(self):
+        command = {"type": "get_command_graph", "module": "graph_module", "args": {}, "id": "get_graph_cmd"}
+        mock_message = self._create_mock_message(command)
+
+        # Mock the to_dot method to return a predictable string
+        self.mock_command_graph.to_dot.return_value = "digraph G {}"
+
+        bot.handle_message(mock_message)
+
+        # Verify that the bot sends a message with the DOT string
+        self.mock_bot_instance.send_message.assert_called_once_with(
+            mock_message.chat.id,
+            "```dot\ndigraph G {}\n```",
+            parse_mode="MarkdownV2"
+        )
+        self.mock_logger.info.assert_any_call(f"Successfully processed command for {mock_message.chat.id}: get_command_graph")
+
 
 if __name__ == '__main__':
     # Added os import for this class, ensure bot.py gets API_TOKEN if main is tested more directly.
     # For now, the startup/shutdown tests are specific about what they patch and call.
     unittest.main()
-
-```
-# Add main execution path logging tests (simplified approach)
-# These tests are a bit conceptual as directly running __main__ is complex.
-# They verify that if the main execution path's logging lines were called,
-# the logger would behave as expected.
-
-class TestBotMainExecutionLogging(unittest.TestCase):
-    def setUp(self):
-        self.mock_logger_patcher = patch('bot.katana_logger')
-        self.mock_logger = self.mock_logger_patcher.start()
-
-        # Mock bot.bot (TeleBot instance) to control polling call
-        # Patch where it's defined/used in bot.py's __main__ context if different from TestBot.setUp
-        self.mock_telebot_instance_main = MagicMock()
-        self.telebot_patcher_main = patch('bot.bot', self.mock_telebot_instance_main)
-        self.mock_telebot_module_instance_main = self.telebot_patcher_main.start()
-
-
-    def tearDown(self):
-        self.mock_logger_patcher.stop()
-        self.telebot_patcher_main.stop()
-
-    def test_bot_startup_and_shutdown_logging_normal_exit(self):
-        # Simulate the sequence in if __name__ == '__main__':
-        # These calls are to the global katana_logger instance in bot.py
-        bot.katana_logger.info("Bot starting...")
-        # Simulate bot.polling() completing without error
-        # self.mock_telebot_module_instance_main.polling() # This would be the actual call
-        bot.katana_logger.info("Bot stopped.")
-
-        self.mock_logger.info.assert_any_call("Bot starting...")
-        self.mock_logger.info.assert_any_call("Bot stopped.")
-        self.mock_logger.error.assert_not_called()
-
-
-    def test_bot_startup_and_shutdown_logging_polling_exception(self):
-        polling_error_message = "Simulated polling error!"
-
-        # Simulate the sequence in if __name__ == '__main__':
-        bot.katana_logger.info("Bot starting...")
-        try:
-            # Simulate bot.polling() raising an exception
-            # self.mock_telebot_module_instance_main.polling.side_effect = RuntimeError(polling_error_message)
-            # self.mock_telebot_module_instance_main.polling()
-            raise RuntimeError(polling_error_message) # Direct simulation for clarity
-        except Exception as e:
-            bot.katana_logger.error(f"Bot polling failed: {e}", exc_info=True)
-        finally:
-            bot.katana_logger.info("Bot stopped.")
-
-        self.mock_logger.info.assert_any_call("Bot starting...")
-        self.mock_logger.error.assert_called_once_with(f"Bot polling failed: {polling_error_message}", exc_info=True)
-        self.mock_logger.info.assert_any_call("Bot stopped.")
