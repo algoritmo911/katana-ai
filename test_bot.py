@@ -111,3 +111,19 @@ class TestCommandProcessor(unittest.TestCase):
                 bot.handle_n8n_trigger(command, 123)
 
             self.assertEqual(mock_post.call_count, 3)
+
+    @patch('requests.post')
+    def test_callback_url_is_called(self, mock_post):
+        with patch('bot.katana_logger'):
+            command = {
+                "type": "test_type",
+                "katana_uid": "test_uid",
+                "callback_url": "http://localhost:1234/callback"
+            }
+            side_effect_list = [command, None]
+            with patch('bot.katana_state') as mock_katana_state:
+                mock_katana_state.dequeue.side_effect = lambda: side_effect_list.pop(0)
+                with patch('time.sleep'):
+                    bot.command_processor_loop()
+
+            mock_post.assert_called_with("http://localhost:1234/callback", json=command)

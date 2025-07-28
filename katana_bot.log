@@ -454,3 +454,10 @@ RuntimeError: Simulated polling error!
 2025-07-28 18:38:14,235 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
 2025-07-28 18:38:14,235 - INFO - Successfully processed command: log_event
 2025-07-28 18:38:14,237 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 18:49:16,764 - INFO - Received message from 12345: not a valid json
+2025-07-28 18:49:16,765 - ERROR - Invalid JSON from 12345: not a valid json
+2025-07-28 18:49:16,767 - INFO - Received message from 12345: {"type": "test_type", "module": "test_module", "args": {"data": "value"}, "id": "test_id_valid"}
+2025-07-28 18:49:16,768 - INFO - Enqueued command from 12345 with Katana UID: test_uid
+2025-07-28 18:49:16,777 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 18:49:16,777 - INFO - Successfully processed command: log_event
+2025-07-28 18:49:16,779 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}

@@ -9,6 +9,7 @@ from pathlib import Path
 from datetime import datetime
 from unittest.mock import MagicMock
 from katana_state import KatanaState
+from app.utils.log import log_command
 
 # --- Logger Setup ---
 katana_logger = logging.getLogger('katana_logger')
@@ -129,34 +130,65 @@ def command_processor_loop():
             katana_logger.info(f"Processing command: {command_data}")
             command_type = command_data.get("type")
             chat_id = command_data.get("chat_id", "N/A") # Assuming chat_id is passed in command_data
+            katana_uid = command_data.get("katana_uid")
+            log_command(
+                command_id=katana_uid,
+                command=command_type,
+                args=command_data.get("args"),
+                status="processing",
+            )
 
             if command_type == "log_event":
                 handle_log_event(command_data, chat_id)
                 katana_logger.info(f"Successfully processed command: {command_type}")
+                log_command(
+                    command_id=katana_uid,
+                    command=command_type,
+                    args=command_data.get("args"),
+                    status="success",
+                )
             elif command_type == "mind_clearing":
                 handle_mind_clearing(command_data, chat_id)
                 katana_logger.info(f"Successfully processed command: {command_type}")
+                log_command(
+                    command_id=katana_uid,
+                    command=command_type,
+                    args=command_data.get("args"),
+                    status="success",
+                )
             elif command_type == "n8n_trigger":
                 handle_n8n_trigger(command_data, chat_id)
+                log_command(
+                    command_id=katana_uid,
+                    command=command_type,
+                    args=command_data.get("args"),
+                    status="success",
+                )
             else:
-                # Default behavior: save to file
-                katana_logger.info(f"Command type '{command_type}' not specifically handled, proceeding with default save.")
-                timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
-                command_file_name = f"{timestamp_str}_{chat_id}.json"
-                module_name = command_data.get('module', 'telegram_general')
-                module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{module_name}" if module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
-                module_command_dir.mkdir(parents=True, exist_ok=True)
-                command_file_path = module_command_dir / command_file_name
-                try:
-                    with open(command_file_path, "w", encoding="utf-8") as f:
-                        json.dump(command_data, f, ensure_ascii=False, indent=2)
-                    katana_logger.info(f"Saved command to {command_file_path}")
-                except IOError as e:
-                    katana_logger.error(f"Failed to save command to {command_file_path}. Reason: {e}")
+                katana_logger.warning(f"Unknown command type: {command_type}")
+                log_command(
+                    command_id=katana_uid,
+                    command=command_type,
+                    args=command_data.get("args"),
+                    status="failed",
+                    error="Unknown command type",
+                )
         except Exception as e:
             katana_logger.error(f"Error processing command: {command_data}. Reason: {e}", exc_info=True)
+            log_command(
+                command_id=katana_uid,
+                command=command_type,
+                args=command_data.get("args"),
+                status="failed",
+                error=str(e),
+            )
         finally:
             katana_state.task_done()
+            if "callback_url" in command_data:
+                try:
+                    requests.post(command_data["callback_url"], json=command_data)
+                except requests.exceptions.RequestException as e:
+                    katana_logger.error(f"Failed to send callback for {katana_uid}. Reason: {e}")
 
 def handle_message_logic(bot, message):
     """Handles incoming messages."""
@@ -189,6 +221,12 @@ def handle_message_logic(bot, message):
     # 3. Enqueue Command
     command_data['chat_id'] = chat_id
     katana_uid = katana_state.enqueue(command_data)
+    log_command(
+        command_id=katana_uid,
+        command=command_data.get("type"),
+        args=command_data.get("args"),
+        status="queued",
+    )
     bot.reply_to(message, f"✅ Command received and queued with ID: {katana_uid}")
     katana_logger.info(f"Enqueued command from {chat_id} with Katana UID: {katana_uid}")
 

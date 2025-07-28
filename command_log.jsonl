@@ -1,0 +1,7 @@
+{"command_id": "test_uid", "command": "test_type", "args": {"data": "value"}, "timestamp": "2025-07-28T18:49:16.767486", "status": "queued", "result": null, "error": null}
+{"command_id": "test_uid", "command": "test_type", "args": null, "timestamp": "2025-07-28T18:49:16.770860", "status": "processing", "result": null, "error": null}
+{"command_id": "test_uid", "command": "test_type", "args": null, "timestamp": "2025-07-28T18:49:16.771291", "status": "failed", "result": null, "error": "Unknown command type"}
+{"command_id": null, "command": "log_event", "args": {}, "timestamp": "2025-07-28T18:49:16.777523", "status": "processing", "result": null, "error": null}
+{"command_id": null, "command": "log_event", "args": {}, "timestamp": "2025-07-28T18:49:16.777864", "status": "success", "result": null, "error": null}
+{"command_id": null, "command": "n8n_trigger", "args": {}, "timestamp": "2025-07-28T18:49:16.779327", "status": "processing", "result": null, "error": null}
+{"command_id": null, "command": "n8n_trigger", "args": {}, "timestamp": "2025-07-28T18:49:16.779633", "status": "success", "result": null, "error": null}
