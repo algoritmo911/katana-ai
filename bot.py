@@ -2,8 +2,13 @@ import telebot
 import json
 import os
 import logging # Added
+import time
+import requests
+import threading
 from pathlib import Path
 from datetime import datetime
+from unittest.mock import MagicMock
+from katana_state import KatanaState
 
 # --- Logger Setup ---
 katana_logger = logging.getLogger('katana_logger')
@@ -25,11 +30,14 @@ katana_logger.addHandler(console_handler)
 # TODO: Get API token from environment variable or secrets manager
 API_TOKEN = 'YOUR_API_TOKEN'
 
-bot = telebot.TeleBot(API_TOKEN)
+bot = None
 
 # Directory for storing command files
 COMMAND_FILE_DIR = Path('commands')
 COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Katana State Initialisation
+katana_state = KatanaState()
 
 # Removed log_local_bot_event function
 
@@ -49,6 +57,26 @@ def handle_mind_clearing(command_data, chat_id):
     katana_logger.info(f"handle_mind_clearing called for chat_id {chat_id} with data: {command_data}")
     # Actual implementation for mind_clearing will go here
     # bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
+
+def handle_n8n_trigger(command_data, chat_id):
+    """Handles 'n8n_trigger' commands by sending a POST request to n8n."""
+    n8n_webhook_url = "http://localhost:5678/webhook/Katana%20Orchestrator"
+    katana_logger.info(f"Triggering n8n webhook for command: {command_data.get('katana_uid')}")
+
+    retries = 3
+    for i in range(retries):
+        try:
+            response = requests.post(n8n_webhook_url, json=command_data, timeout=10)
+            response.raise_for_status()  # Raise an exception for bad status codes
+            katana_logger.info(f"n8n webhook triggered successfully for {command_data.get('katana_uid')}. Response: {response.text}")
+            # TODO: Send response back to the user/queue
+            return
+        except requests.exceptions.RequestException as e:
+            katana_logger.warning(f"Attempt {i+1} failed to trigger n8n webhook for {command_data.get('katana_uid')}. Reason: {e}")
+            if i < retries - 1:
+                time.sleep(2 ** i)  # Exponential backoff
+            else:
+                katana_logger.error(f"Failed to trigger n8n webhook for {command_data.get('katana_uid')} after {retries} retries.")
 
 # --- Helper Functions for handle_message ---
 
@@ -87,8 +115,50 @@ def _validate_command(command_data, chat_id, required_fields, logger, command_te
 
 # --- Main Message Handler ---
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
+
+def command_processor_loop():
+    """
+    The main loop for processing commands from the queue.
+    Runs in a separate thread.
+    """
+    while True:
+        command_data = katana_state.dequeue()
+        if command_data is None:
+            break
+        try:
+            katana_logger.info(f"Processing command: {command_data}")
+            command_type = command_data.get("type")
+            chat_id = command_data.get("chat_id", "N/A") # Assuming chat_id is passed in command_data
+
+            if command_type == "log_event":
+                handle_log_event(command_data, chat_id)
+                katana_logger.info(f"Successfully processed command: {command_type}")
+            elif command_type == "mind_clearing":
+                handle_mind_clearing(command_data, chat_id)
+                katana_logger.info(f"Successfully processed command: {command_type}")
+            elif command_type == "n8n_trigger":
+                handle_n8n_trigger(command_data, chat_id)
+            else:
+                # Default behavior: save to file
+                katana_logger.info(f"Command type '{command_type}' not specifically handled, proceeding with default save.")
+                timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+                command_file_name = f"{timestamp_str}_{chat_id}.json"
+                module_name = command_data.get('module', 'telegram_general')
+                module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{module_name}" if module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
+                module_command_dir.mkdir(parents=True, exist_ok=True)
+                command_file_path = module_command_dir / command_file_name
+                try:
+                    with open(command_file_path, "w", encoding="utf-8") as f:
+                        json.dump(command_data, f, ensure_ascii=False, indent=2)
+                    katana_logger.info(f"Saved command to {command_file_path}")
+                except IOError as e:
+                    katana_logger.error(f"Failed to save command to {command_file_path}. Reason: {e}")
+        except Exception as e:
+            katana_logger.error(f"Error processing command: {command_data}. Reason: {e}", exc_info=True)
+        finally:
+            katana_state.task_done()
+
+def handle_message_logic(bot, message):
     """Handles incoming messages."""
     chat_id = message.chat.id
     command_text = message.text
@@ -116,47 +186,36 @@ def handle_message(message):
         # _validate_command already logs the detailed error
         return
 
-    # 3. Command routing based on 'type' (if parsing and validation are successful)
-    command_type = command_data.get("type")
+    # 3. Enqueue Command
+    command_data['chat_id'] = chat_id
+    katana_uid = katana_state.enqueue(command_data)
+    bot.reply_to(message, f"✅ Command received and queued with ID: {katana_uid}")
+    katana_logger.info(f"Enqueued command from {chat_id} with Katana UID: {katana_uid}")
 
-    if command_type == "log_event":
-        handle_log_event(command_data, chat_id)
-        bot.reply_to(message, "✅ 'log_event' processed (placeholder).")
-        katana_logger.info(f"Successfully processed command for {chat_id}: {command_type}")
-        return
-    elif command_type == "mind_clearing":
-        handle_mind_clearing(command_data, chat_id)
-        bot.reply_to(message, "✅ 'mind_clearing' processed (placeholder).")
-        katana_logger.info(f"Successfully processed command for {chat_id}: {command_type}")
-        return
+def register_handlers(bot):
+    @bot.message_handler(func=lambda message: True)
+    def handle_message(message):
+        handle_message_logic(bot, message)
 
-    # If type is not matched, proceed with default behavior (saving)
-    katana_logger.info(f"Command type '{command_type}' for chat_id {chat_id} not specifically handled, proceeding with default save.")
+def create_bot(token, bot_class=telebot.TeleBot):
+    bot = bot_class(token)
+    register_handlers(bot)
+    return bot
 
-    # Save the command to a file
-    timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
-    command_file_name = f"{timestamp_str}_{chat_id}.json"
-
-    module_name = command_data.get('module', 'telegram_general') # Module name validated to exist by this point
-    module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{module_name}" if module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
-    module_command_dir.mkdir(parents=True, exist_ok=True)
-    command_file_path = module_command_dir / command_file_name
-
-    try:
-        with open(command_file_path, "w", encoding="utf-8") as f:
-            json.dump(command_data, f, ensure_ascii=False, indent=2)
-        bot.reply_to(message, f"✅ Command received and saved as `{command_file_path}`.")
-        katana_logger.info(f"Saved command from {chat_id} to {command_file_path}")
-    except IOError as e:
-        katana_logger.error(f"Failed to save command for {chat_id} to {command_file_path}. Reason: {e}")
-        bot.reply_to(message, f"Error: Could not save command. Please contact administrator.")
-        # Optionally, add more specific error handling or re-raise
-
-if __name__ == '__main__':
+def main():
+    bot = create_bot(API_TOKEN)
     katana_logger.info("Bot starting...")
+    # Start the command processor in a background thread
+    processor_thread = threading.Thread(target=command_processor_loop, daemon=True)
+    processor_thread.start()
+    katana_logger.info("Command processor thread started.")
+
     try:
         bot.polling()
     except Exception as e:
         katana_logger.error(f"Bot polling failed: {e}", exc_info=True) # Log exception info
     finally:
         katana_logger.info("Bot stopped.")
+
+if __name__ == '__main__':
+    main()

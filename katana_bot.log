@@ -1,0 +1,456 @@
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,298 - INFO - Bot starting...
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,299 - INFO - Bot stopped.
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - INFO - Bot starting...
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,305 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 213, in test_bot_startup_and_shutdown_logging_polling_exception
+    raise RuntimeError(polling_error_message) # Direct simulation for clarity
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Simulated polling error!
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:55:47,306 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot starting...
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,111 - INFO - Bot stopped.
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,114 - INFO - Bot starting...
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,115 - ERROR - Bot polling failed: Simulated polling error!
+Traceback (most recent call last):
+  File "/app/test_bot.py", line 200, in test_bot_startup_and_shutdown_logging_polling_exception
+    self.mock_telebot.return_value.polling()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: Simulated polling error!
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,116 - INFO - Bot stopped.
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,125 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,126 - INFO - Successfully processed command: log_event
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 14:58:48,130 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:02:49,208 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:02:49,209 - INFO - Successfully processed command: log_event
+2025-07-28 15:02:49,212 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:02:49,212 - INFO - Triggering n8n webhook for command: None
+2025-07-28 15:02:49,222 - WARNING - Attempt 1 failed to trigger n8n webhook for None. Reason: HTTPConnectionPool(host='localhost', port=5678): Max retries exceeded with url: /webhook/Katana%20Orchestrator (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0e2f132750>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-07-28 15:02:49,226 - WARNING - Attempt 2 failed to trigger n8n webhook for None. Reason: HTTPConnectionPool(host='localhost', port=5678): Max retries exceeded with url: /webhook/Katana%20Orchestrator (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0e2effd130>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-07-28 15:02:49,228 - WARNING - Attempt 3 failed to trigger n8n webhook for None. Reason: HTTPConnectionPool(host='localhost', port=5678): Max retries exceeded with url: /webhook/Katana%20Orchestrator (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0e2effd8e0>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-07-28 15:02:49,228 - ERROR - Failed to trigger n8n webhook for None after 3 retries.
+2025-07-28 15:04:00,482 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:04:00,482 - INFO - Successfully processed command: log_event
+2025-07-28 15:04:00,490 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:04:34,423 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:04:34,424 - INFO - Successfully processed command: log_event
+2025-07-28 15:04:34,431 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:05:09,034 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:05:09,034 - INFO - Successfully processed command: log_event
+2025-07-28 15:05:09,038 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:05:26,746 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:05:26,746 - INFO - Successfully processed command: log_event
+2025-07-28 15:05:26,754 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:06:11,280 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:06:11,281 - INFO - Successfully processed command: log_event
+2025-07-28 15:06:11,284 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:07:23,026 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:07:23,026 - INFO - Successfully processed command: log_event
+2025-07-28 15:07:23,029 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:07:51,712 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:07:51,712 - INFO - Successfully processed command: log_event
+2025-07-28 15:07:51,715 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:08:20,806 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 15:08:20,807 - INFO - Successfully processed command: log_event
+2025-07-28 15:08:20,809 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 18:24:09,162 - INFO - Received message from 12345: not a valid json
+2025-07-28 18:24:09,163 - ERROR - Invalid JSON from 12345: not a valid json
+2025-07-28 18:24:09,165 - INFO - Received message from 12345: {"type": "test_type", "module": "test_module", "args": {"data": "value"}, "id": "test_id_valid"}
+2025-07-28 18:24:09,166 - INFO - Enqueued command from 12345 with Katana UID: test_uid
+2025-07-28 18:24:09,182 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 18:24:09,182 - INFO - Successfully processed command: log_event
+2025-07-28 18:24:09,186 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 18:36:29,127 - INFO - Received message from 12345: not a valid json
+2025-07-28 18:36:29,127 - ERROR - Invalid JSON from 12345: not a valid json
+2025-07-28 18:36:29,130 - INFO - Received message from 12345: {"type": "test_type", "module": "test_module", "args": {"data": "value"}, "id": "test_id_valid"}
+2025-07-28 18:36:29,130 - INFO - Enqueued command from 12345 with Katana UID: test_uid
+2025-07-28 18:36:29,139 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 18:36:29,139 - INFO - Successfully processed command: log_event
+2025-07-28 18:36:29,147 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 18:37:15,817 - INFO - Received message from 12345: not a valid json
+2025-07-28 18:37:15,818 - ERROR - Invalid JSON from 12345: not a valid json
+2025-07-28 18:37:15,820 - INFO - Received message from 12345: {"type": "test_type", "module": "test_module", "args": {"data": "value"}, "id": "test_id_valid"}
+2025-07-28 18:37:15,821 - INFO - Enqueued command from 12345 with Katana UID: test_uid
+2025-07-28 18:37:15,830 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 18:37:15,830 - INFO - Successfully processed command: log_event
+2025-07-28 18:37:15,838 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 18:38:14,225 - INFO - Received message from 12345: not a valid json
+2025-07-28 18:38:14,225 - ERROR - Invalid JSON from 12345: not a valid json
+2025-07-28 18:38:14,227 - INFO - Received message from 12345: {"type": "test_type", "module": "test_module", "args": {"data": "value"}, "id": "test_id_valid"}
+2025-07-28 18:38:14,228 - INFO - Enqueued command from 12345 with Katana UID: test_uid
+2025-07-28 18:38:14,235 - INFO - Processing command: {'type': 'log_event', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
+2025-07-28 18:38:14,235 - INFO - Successfully processed command: log_event
+2025-07-28 18:38:14,237 - INFO - Processing command: {'type': 'n8n_trigger', 'module': 'test', 'args': {}, 'id': 1, 'chat_id': 123}
