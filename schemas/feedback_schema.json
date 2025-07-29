@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Katana Feedback Message",
+  "description": "Schema for messages sent from the monitoring system back to the Katana core.",
+  "type": "object",
+  "properties": {
+    "trace_id": {
+      "description": "The trace_id of the command that triggered the feedback.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "timestamp": {
+      "description": "Timestamp of the event in ISO 8601 format.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "action": {
+      "description": "The action that should be taken.",
+      "type": "string",
+      "enum": ["restart_module", "run_command", "send_alert"]
+    },
+    "payload": {
+      "description": "A JSON object containing data associated with the action.",
+      "type": "object"
+    }
+  },
+  "required": ["timestamp", "action"]
+}

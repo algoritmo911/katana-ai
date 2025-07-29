@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Katana Command Log",
+  "description": "Schema for Katana command logs.",
+  "type": "object",
+  "properties": {
+    "trace_id": {
+      "description": "Unique identifier for a trace, spanning multiple commands.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "span_id": {
+      "description": "Unique identifier for a single command execution (a span in the trace).",
+      "type": "string"
+    },
+    "parent_id": {
+      "description": "The span_id of the parent command, if any.",
+      "type": ["string", "null"]
+    },
+    "timestamp": {
+      "description": "Timestamp of the event in ISO 8601 format.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "command": {
+      "description": "The name of the command being executed.",
+      "type": "string"
+    },
+    "user_id": {
+      "description": "The ID of the user who initiated the command.",
+      "type": ["string", "null"]
+    },
+    "input": {
+      "description": "The input arguments and keyword arguments for the command.",
+      "type": "object",
+      "properties": {
+        "args": { "type": "array" },
+        "kwargs": { "type": "object" }
+      }
+    },
+    "metadata": {
+      "description": "Any additional metadata about the command or its environment.",
+      "type": "object"
+    }
+  },
+  "required": ["trace_id", "span_id", "timestamp", "command"]
+}

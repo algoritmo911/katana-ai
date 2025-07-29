@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Katana Events Log",
+  "description": "Schema for Katana events logs.",
+  "type": "object",
+  "properties": {
+    "trace_id": {
+      "description": "Unique identifier for a trace, spanning multiple commands.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "timestamp": {
+      "description": "Timestamp of the event in ISO 8601 format.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "name": {
+      "description": "The name of the event.",
+      "type": "string"
+    },
+    "data": {
+      "description": "A JSON object containing data associated with the event.",
+      "type": "object"
+    }
+  },
+  "required": ["timestamp", "name"]
+}

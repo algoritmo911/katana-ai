@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Katana Errors Log",
+  "description": "Schema for Katana errors logs.",
+  "type": "object",
+  "properties": {
+    "trace_id": {
+      "description": "Unique identifier for a trace, spanning multiple commands.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "span_id": {
+      "description": "Unique identifier for a single command execution (a span in the trace).",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Timestamp of the event in ISO 8601 format.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "error": {
+      "description": "The error that occurred.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "stacktrace": { "type": "string" }
+      },
+      "required": ["type", "message"]
+    },
+    "metadata": {
+      "description": "Any additional metadata about the error.",
+      "type": "object"
+    }
+  },
+  "required": ["trace_id", "span_id", "timestamp", "error"]
+}

@@ -1,0 +1,48 @@
+**High-Level Architecture Diagram**
+
+*   **Title:** Katana Monitoring System - High-Level Architecture
+*   **Nodes:**
+    *   `Katana Agents` (Represents the core Katana application)
+    *   `Log Collector / Broker` (Represents Kafka)
+    *   `Data Storage & Processing Layer` (Represents TimescaleDB, Redis, and Faust)
+    *   `API Layer` (A future component)
+    *   `UI: Streamlit / React` (The user interface)
+    *   `Analytics Engine` (The ML/anomaly detection component)
+    *   `Alerting & Notification` (The alerting component)
+*   **Edges:**
+    *   `Katana Agents` -> `Log Collector / Broker` (label: "logs, events")
+    *   `Log Collector / Broker` -> `Data Storage & Processing Layer`
+    *   `Data Storage & Processing Layer` -> `API Layer`
+    *   `API Layer` -> `UI: Streamlit / React`
+    *   `Data Storage & Processing Layer` -> `Analytics Engine` (bidirectional)
+    *   `Analytics Engine` -> `Alerting & Notification`
+
+**Kafka Ingestion Layer Diagram**
+
+*   **Title:** Kafka Ingestion Layer
+*   **Nodes:**
+    *   `Log Producer`
+    *   `Kafka Topics` (A group of topics: `logs`, `metrics`, `events`, `commands`, `errors`, `feedback`)
+    *   `Faust Stream Processor`
+    *   `TimescaleDB`
+    *   `Redis Streams`
+*   **Edges:**
+    *   `Log Producer` -> `Kafka Topics`
+    *   `Kafka Topics` -> `Faust Stream Processor`
+    *   `Faust Stream Processor` -> `TimescaleDB` (label: "enriched data")
+    *   `Faust Stream Processor` -> `Redis Streams` (label: "hot-path data")
+
+**Feedback Loop Diagram**
+
+*   **Title:** Reactive Feedback Loop
+*   **Nodes:**
+    *   `Faust Stream Processor`
+    *   `Anomaly Detector`
+    *   `Alerting System` (e.g., Slack, Email)
+    *   `Katana Self-Heal API`
+    *   `Command Trigger`
+*   **Edges:**
+    *   `Faust Stream Processor` -> `Anomaly Detector`
+    *   `Anomaly Detector` -> `Alerting System` (label: "alert")
+    *   `Anomaly Detector` -> `Command Trigger` (label: "anomaly detected")
+    *   `Command Trigger` -> `Katana Self-Heal API` (label: "healing command")
