@@ -12,7 +12,7 @@ def config():
     pass
 
 @config.command()
-@click.argument("key")
+@click.argument("key", type=click.Choice(["endpoint", "ws_endpoint"]))
 @click.argument("value")
 def set(key, value):
     """

@@ -4,14 +4,28 @@ from rich.console import Console
 from rich.table import Table
 from katana.core.cli_logic.queue import get_queue
 
+import asyncio
+
 @click.command()
 @click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
-def queue(output_json):
+@click.pass_context
+def queue(ctx, output_json):
     """
     Show the command queue.
     """
     console = Console()
-    command_queue = get_queue()
+    api_client = ctx.obj.get("api_client")
+
+    if not api_client:
+        console.print("Not connected to a Katana core. Please provide a WebSocket endpoint using the --ws-endpoint option or by setting it in the config file.")
+        # Fallback to mock data
+        command_queue = get_queue()
+    else:
+        try:
+            command_queue = asyncio.run(api_client.send_command("queue", {}))
+        except Exception as e:
+            console.print(f"Error connecting to Katana core: {e}")
+            return
 
     if output_json:
         console.print(json.dumps(command_queue, indent=4))

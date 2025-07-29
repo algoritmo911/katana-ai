@@ -8,6 +8,8 @@ setup(
     install_requires=[
         "click",
         "rich",
+        "websockets",
+        "pytest-asyncio",
     ],
     entry_points={
         "console_scripts": [

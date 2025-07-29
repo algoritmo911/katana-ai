@@ -4,6 +4,8 @@ from rich.console import Console
 from rich.table import Table
 from katana.core.cli_logic.status import get_status
 
+import asyncio
+
 @click.command()
 @click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
 @click.pass_context
@@ -12,11 +14,25 @@ def status(ctx, output_json):
     Get the status of the Katana AI.
     """
     console = Console()
-    if not ctx.obj.get('auth_token'):
-        console.print("🔒 Authentication required. Please provide a token using the --auth-token option or by creating a ~/.katana/cli_auth.json file.")
-        return
+    api_client = ctx.obj.get("api_client")
 
-    status_data = get_status()
+    if not api_client:
+        console.print("Not connected to a Katana core. Please provide a WebSocket endpoint using the --ws-endpoint option or by setting it in the config file.")
+        # Fallback to mock data
+        if not ctx.obj.get('auth_token'):
+            console.print("🔒 Authentication required. Please provide a token using the --auth-token option or by creating a ~/.katana/cli_auth.json file.")
+            return
+
+        status_data = get_status()
+    else:
+        if not ctx.obj.get('auth_token'):
+            console.print("🔒 Authentication required. Please provide a token using the --auth-token option or by creating a ~/.katana/cli_auth.json file.")
+            return
+        try:
+            status_data = asyncio.run(api_client.send_command("status", {}))
+        except Exception as e:
+            console.print(f"Error connecting to Katana core: {e}")
+            return
 
     if output_json:
         console.print(json.dumps(status_data, indent=4))

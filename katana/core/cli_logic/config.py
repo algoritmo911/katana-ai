@@ -16,12 +16,21 @@ def get_config():
         except json.JSONDecodeError:
             return {}
 
+from katana.core.auth import get_key
+from cryptography.fernet import Fernet
+
 def set_config_value(key, value):
     """
     Sets a config value in ~/.katana/config.json.
     """
     config = get_config()
-    config[key] = value
+    if key == "token":
+        encryption_key = get_key()
+        f = Fernet(encryption_key)
+        encrypted_token = f.encrypt(value.encode()).decode()
+        config[key] = encrypted_token
+    else:
+        config[key] = value
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)

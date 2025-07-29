@@ -3,4 +3,6 @@ Name: katana-ai
 Version: 0.2
 Requires-Dist: click
 Requires-Dist: rich
+Requires-Dist: websockets
+Requires-Dist: pytest-asyncio
 Dynamic: requires-dist
