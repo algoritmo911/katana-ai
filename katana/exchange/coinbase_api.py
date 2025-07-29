@@ -60,7 +60,8 @@ def get_spot_price(pair: str = "BTC-USD") -> float | None:
             )
             return None
 
-        price = float(Decimal(price_str))  # Use Decimal for precision then convert
+        # Use Decimal for precision then convert
+        price = float(Decimal(price_str))
         coinbase_logger.info(f"Successfully fetched spot price for {pair}: {price}")
         return price
 
@@ -84,10 +85,8 @@ def get_spot_price(pair: str = "BTC-USD") -> float | None:
             f"An unexpected error occurred with requests module for {pair}: {req_err}"
         )
         return None
-    except (
-        InvalidOperation,
-        ValueError,
-    ) as val_err:  # Handle issues with Decimal conversion or float()
+    # Handle issues with Decimal conversion or float()
+    except (InvalidOperation, ValueError) as val_err:
         coinbase_logger.error(
             f"Error converting price to float for {pair}. Price string: '{price_str}'. Error: {val_err}"
         )

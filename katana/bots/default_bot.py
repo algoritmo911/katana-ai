@@ -9,7 +9,7 @@ class KatanaBot(BaseBot):
     def __init__(self, bot_name="KatanaBot", profile=None):
         super().__init__(bot_name, profile)
 
-    async def handle_message(self, command_string: str):
+    def handle_command(self, command_string: str):
         logger.info(f"Bot '{self.name}' received command: {command_string}")
         parts = command_string.strip().lower().split()
         if not parts:
@@ -26,11 +26,14 @@ class KatanaBot(BaseBot):
                 logger.info(f"Attempting to fetch price for pair: {pair} via command.")
                 price = get_spot_price(pair)
                 if price is not None:
-                    response_message = f"{self.name}: Current price for {pair}: {price}"
+                    response_message = f"{
+                        self.name}: Current price for {pair}: {price}"
                 else:
-                    response_message = f"{self.name}: Could not fetch price for {pair}."
+                    response_message = f"{
+                        self.name}: Could not fetch price for {pair}."
             else:
-                response_message = f"{self.name}: !price command requires one argument (e.g., !price BTC-USD)"
+                response_message = f"{
+                    self.name}: !price command requires one argument (e.g., !price BTC-USD)"
         elif command == "!greet":
             response_message = f"Hello from {self.name}!"
         else:

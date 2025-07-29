@@ -57,7 +57,8 @@ class TraderAgent:
         """
         api_url = f"https://api.coinbase.com/v2/prices/{self.symbol}/spot"
         trader_data_logger.info(
-            f"Attempting to fetch price for {self.symbol} from {api_url}"
+            f"Attempting to fetch price for {
+                self.symbol} from {api_url}"
         )
         response_text_for_error_logging = ""
 
@@ -68,16 +69,21 @@ class TraderAgent:
 
             data = response.json()
             trader_data_logger.info(
-                f"CoinBase API response for {self.symbol}: {json.dumps(data)}"
+                f"CoinBase API response for {
+                    self.symbol}: {
+                    json.dumps(data)}"
             )
 
             price_str = data.get("data", {}).get("amount")
             if price_str is None:
                 trader_data_logger.error(
-                    f"Price amount not found in CoinBase API response for {self.symbol}. Data: {json.dumps(data)}"
+                    f"Price amount not found in CoinBase API response for {
+                        self.symbol}. Data: {
+                        json.dumps(data)}"
                 )
                 trader_logger.error(
-                    f"Could not parse price for {self.symbol}: 'amount' field missing in API response."
+                    f"Could not parse price for {
+                        self.symbol}: 'amount' field missing in API response."
                 )
                 return None
 
@@ -87,15 +93,15 @@ class TraderAgent:
             price_data_to_save = {
                 "symbol": self.symbol,
                 "price": price,
-                "timestamp": datetime.now(
-                    timezone.utc
-                ).isoformat(),  # Use timezone.utc for explicit UTC
+                # Use timezone.utc for explicit UTC
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             try:
                 with open(TRADER_DATA_JSON_FILE, "w") as f_json:
                     json.dump(price_data_to_save, f_json, indent=4)
                 trader_data_logger.info(
-                    f"Successfully saved latest price for {self.symbol} to {TRADER_DATA_JSON_FILE}"
+                    f"Successfully saved latest price for {
+                        self.symbol} to {TRADER_DATA_JSON_FILE}"
                 )
             except IOError as e:
                 trader_data_logger.error(
@@ -106,36 +112,49 @@ class TraderAgent:
 
         except requests.exceptions.Timeout:
             trader_data_logger.error(
-                f"Timeout while fetching price for {self.symbol} from {api_url}."
-            )
-            trader_logger.error(f"Could not fetch price for {self.symbol}: Timeout.")
-        except requests.exceptions.HTTPError as e:
-            trader_data_logger.error(
-                f"HTTP error for {self.symbol} ({api_url}): {e}. Response: {response_text_for_error_logging}"
+                f"Timeout while fetching price for {
+                    self.symbol} from {api_url}."
             )
             trader_logger.error(
-                f"Could not fetch price for {self.symbol}: HTTP Error {e.response.status_code if e.response else 'Unknown'}."
+                f"Could not fetch price for {
+                    self.symbol}: Timeout."
+            )
+        except requests.exceptions.HTTPError as e:
+            trader_data_logger.error(
+                f"HTTP error for {
+                    self.symbol} ({api_url}): {e}. Response: {response_text_for_error_logging}"
+            )
+            trader_logger.error(
+                f"Could not fetch price for {
+                    self.symbol}: HTTP Error {
+                    e.response.status_code if e.response else 'Unknown'}."
             )
         except requests.exceptions.RequestException as e:
             trader_data_logger.error(
-                f"Request exception while fetching price for {self.symbol} ({api_url}): {e}"
+                f"Request exception while fetching price for {
+                    self.symbol} ({api_url}): {e}"
             )
             trader_logger.error(
-                f"Could not fetch price for {self.symbol}: Network error."
+                f"Could not fetch price for {
+                    self.symbol}: Network error."
             )
         except json.JSONDecodeError as e:
             trader_data_logger.error(
-                f"Error parsing CoinBase API JSON response for {self.symbol} ({api_url}): {e}. Response text: {response_text_for_error_logging}"
+                f"Error parsing CoinBase API JSON response for {
+                    self.symbol} ({api_url}): {e}. Response text: {response_text_for_error_logging}"
             )
             trader_logger.error(
-                f"Could not parse price for {self.symbol}: Invalid JSON response from API."
+                f"Could not parse price for {
+                    self.symbol}: Invalid JSON response from API."
             )
         except (KeyError, ValueError) as e:
             trader_data_logger.error(
-                f"Error processing CoinBase API response data for {self.symbol} ({api_url}): {e}. Data: {response_text_for_error_logging}"
+                f"Error processing CoinBase API response data for {
+                    self.symbol} ({api_url}): {e}. Data: {response_text_for_error_logging}"
             )
             trader_logger.error(
-                f"Could not parse price for {self.symbol}: Unexpected data structure or invalid value."
+                f"Could not parse price for {
+                    self.symbol}: Unexpected data structure or invalid value."
             )
 
         return None
@@ -150,15 +169,18 @@ class TraderAgent:
 
         if current_price is None:
             trader_logger.error(
-                f"Decision aborted for {self.symbol} due to failure in retrieving price."
+                f"Decision aborted for {
+                    self.symbol} due to failure in retrieving price."
             )
             print(
-                f"Trader Agent ({self.symbol}): Could not retrieve current price. See logs in '{LOG_DIR}/' for details."
+                f"Trader Agent ({
+                    self.symbol}): Could not retrieve current price. See logs in '{LOG_DIR}/' for details."
             )
             return
 
         trader_logger.info(
-            f"Analyzing market for {self.symbol}. Current retrieved price: {current_price} USD."
+            f"Analyzing market for {
+                self.symbol}. Current retrieved price: {current_price} USD."
         )
 
         decision_record = {
@@ -188,7 +210,8 @@ class TraderAgent:
             with open(DECISIONS_JSON_FILE, "w") as f:
                 json.dump(decisions_history, f, indent=4)
             trader_logger.info(
-                f"Decision record for {self.symbol} saved to {DECISIONS_JSON_FILE}"
+                f"Decision record for {
+                    self.symbol} saved to {DECISIONS_JSON_FILE}"
             )
         except IOError as e:
             trader_logger.error(
@@ -198,7 +221,8 @@ class TraderAgent:
             trader_logger.error(
                 f"Failed to decode existing decisions from {DECISIONS_JSON_FILE}: {e}. Overwriting with new decision."
             )
-            # Fallback: If JSON is corrupt, overwrite with a list containing the current decision
+            # Fallback: If JSON is corrupt, overwrite with a list containing
+            # the current decision
             with open(DECISIONS_JSON_FILE, "w") as f:
                 json.dump([decision_record], f, indent=4)
 
@@ -206,24 +230,36 @@ class TraderAgent:
             "symbol": self.symbol,
             "price": current_price,
             "mode": self.mode,
-            "decision_type": decision_record["decision_type"],  # from decision_record
+            # from decision_record
+            "decision_type": decision_record["decision_type"],
             "reason": decision_record["reason"],  # from decision_record
         }
 
         print_message = ""  # Ensure print_message is defined
         if self.mode == "learning":
-            trader_logger.info(f"LEARNING_MODE_DECISION: {json.dumps(log_details)}")
-            print_message = f"Trader Agent ({self.symbol}): Mode: learning. Price: {current_price} USD. Decision: {log_details['decision_type']}. See logs."
+            trader_logger.info(
+                f"LEARNING_MODE_DECISION: {
+                    json.dumps(log_details)}"
+            )
+            print_message = f"Trader Agent ({
+                self.symbol}): Mode: learning. Price: {current_price} USD. Decision: {
+                log_details['decision_type']}. See logs."
         elif self.mode == "active":
             trader_logger.info(
-                f"ACTIVE_MODE_ACTION_PLACEHOLDER: {json.dumps(log_details)}"
+                f"ACTIVE_MODE_ACTION_PLACEHOLDER: {
+                    json.dumps(log_details)}"
             )
-            print_message = f"Trader Agent ({self.symbol}): Mode: active. Price: {current_price} USD. Decision: {log_details['decision_type']} (placeholder action). See logs."
+            print_message = f"Trader Agent ({
+                self.symbol}): Mode: active. Price: {current_price} USD. Decision: {
+                log_details['decision_type']} (placeholder action). See logs."
         else:  # Unknown mode
             trader_logger.warning(
-                f"UNKNOWN_MODE_DECISION: {json.dumps(log_details)}. Defaulting to learning behavior."
+                f"UNKNOWN_MODE_DECISION: {
+                    json.dumps(log_details)}. Defaulting to learning behavior."
             )
-            print_message = f"Trader Agent ({self.symbol}): Mode: unknown ({self.mode}). Defaulting to learning. Price: {current_price} USD. See logs."
+            print_message = f"Trader Agent ({
+                self.symbol}): Mode: unknown ({
+                self.mode}). Defaulting to learning. Price: {current_price} USD. See logs."
 
         print(print_message)
 
@@ -236,7 +272,8 @@ if __name__ == "__main__":
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
-    # Add console handler to trader_logger if not already present (e.g. by an importer)
+    # Add console handler to trader_logger if not already present (e.g. by an
+    # importer)
     if not any(isinstance(h, logging.StreamHandler) for h in trader_logger.handlers):
         ch_trader = logging.StreamHandler()
         ch_trader.setLevel(logging.INFO)

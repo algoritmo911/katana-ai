@@ -23,7 +23,9 @@ class TelegramInterface:
             return True
         except Exception as e:
             logger.error(
-                f"Failed to set webhook to {self.webhook_url}: {e}", exc_info=True
+                f"Failed to set webhook to {
+                    self.webhook_url}: {e}",
+                exc_info=True,
             )
             return False
 

@@ -63,18 +63,40 @@ This script will:
 2. Run `black` to format the code (it will reformat files if needed).
 3. Run `pytest` with `coverage` to execute unit tests and report test coverage.
 
-## Continuous Integration (CI) Pipeline
+## Katana Agent Orchestrator
 
-The project uses GitHub Actions for CI. The workflow is defined in `.github/workflows/main.yml`.
-When you push changes to `main` or create a pull request targeting `main`, the CI pipeline automatically:
-1. Sets up a clean Python environment.
-2. Installs all dependencies from `requirements.txt`.
-3. Runs the `./run_checks.sh` script, which includes:
-    - Linting with `flake8`.
-    - Formatting checks with `black`.
-    - Unit tests with `pytest` and coverage reporting.
+The project now includes the Katana Agent Orchestrator, a sophisticated system for managing and routing requests to a fleet of AI agents.
 
-If any of these steps fail, a CI build will be marked as failed, helping to catch issues early.
+### Architecture
+
+The orchestrator is built around the following key components:
+
+-   **Agent Router**: The central component responsible for routing requests to agents.
+-   **Dispatcher**: A pluggable component that implements different routing strategies (e.g., Round Robin, Load Aware).
+-   **Metrics Engine**: Collects and exposes metrics about agent performance and health using Prometheus.
+-   **Agent Health Evaluator**: Monitors the health of agents and provides feedback to the dispatcher.
+
+### API
+
+The orchestrator exposes a REST API for managing agents and routing requests.
+
+-   `POST /api/route`: Route a request to an agent.
+-   `GET /api/agents`: List all registered agents.
+-   `POST /api/agents/register`: Register a new agent.
+-   `POST /api/agents/deregister`: Deregister an agent.
+-   `POST /router/strategy`: Set the routing strategy.
+-   `POST /agents/{agent_id}/pause`: Pause an agent.
+-   `POST /agents/{agent_id}/resume`: Resume an agent.
+-   `GET /agents/stats`: Get statistics about the agents.
+-   `GET /metrics`: Get Prometheus metrics.
+
+### Usage
+
+To use the orchestrator, you can send requests to the API endpoints. For example, to set the routing strategy to "load_aware":
+
+```bash
+curl -X POST "http://localhost:8000/router/strategy?strategy=load_aware"
+```
 
 ## CI/CD Pipeline with Deployment
 

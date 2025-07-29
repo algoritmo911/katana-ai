@@ -15,7 +15,9 @@ class PsyBot(BaseBot):
 
     def handle_message(self, message):
         # Simple echo for now, to be expanded with psychoanalytic logic
-        response = f"{self.name} ({self.mood}): You said '{message}'. How does that make you feel?"
+        response = f"{
+            self.name} ({
+            self.mood}): You said '{message}'. How does that make you feel?"
         self.memory[message] = response
         return response
 

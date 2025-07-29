@@ -1,8 +1,26 @@
 [
     {
-        "timestamp": "2025-07-29T18:28:00.803373+00:00",
+        "timestamp": "2025-07-29T18:57:27.160228+00:00",
         "symbol": "BTC-USD",
-        "price": 117551.225,
+        "price": 30000,
+        "decision_type": "observe",
+        "confidence": 0.5,
+        "reason": "Initial observation in learning mode.",
+        "mode": "learning"
+    },
+    {
+        "timestamp": "2025-07-29T19:07:20.476149+00:00",
+        "symbol": "BTC-USD",
+        "price": 30000,
+        "decision_type": "observe",
+        "confidence": 0.5,
+        "reason": "Initial observation in learning mode.",
+        "mode": "learning"
+    },
+    {
+        "timestamp": "2025-07-29T19:08:37.256471+00:00",
+        "symbol": "BTC-USD",
+        "price": 30000,
         "decision_type": "observe",
         "confidence": 0.5,
         "reason": "Initial observation in learning mode.",

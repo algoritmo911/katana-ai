@@ -1,13 +1,12 @@
 import logging
 from katana.message_dispatcher import MessageDispatcher
-from katana.agent_router.router import AgentRouter
 
 logger = logging.getLogger(__name__)
 
 
 class SignalHub:
-    def __init__(self, router: AgentRouter):
-        self.dispatcher = MessageDispatcher(router)
+    def __init__(self):
+        self.dispatcher = MessageDispatcher()
 
     async def route_signal(self, source, user_id, message, criticality="low"):
         logger.info(
