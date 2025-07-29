@@ -1,5 +1,7 @@
 import click
 from katana.graph.command_graph import CommandGraph
+from katana.graph.snapshot_store import SnapshotStore
+from katana.graph.graph_diff import diff_graphs
 
 @click.group()
 def graph():
@@ -47,20 +49,6 @@ def errors(path):
         click.echo(f"Error: Command graph file not found at '{path}'")
 
 @graph.command()
-@click.argument('path')
-def save(path):
-    """Saves the command graph to a file."""
-    # This is a placeholder, as the graph is not yet integrated with the bot
-    click.echo("Saving the command graph is not yet implemented.")
-
-@graph.command()
-@click.argument('path')
-def load(path):
-    """Loads the command graph from a file."""
-    # This is a placeholder, as the graph is not yet integrated with the bot
-    click.echo("Loading the command graph is not yet implemented.")
-
-@graph.command()
 @click.argument('command_id')
 @click.option('--path', default='command_graph.json', help='Path to the command graph file.')
 def trace(command_id, path):
@@ -75,6 +63,71 @@ def trace(command_id, path):
         click.echo(" -> ".join(cmd.id for cmd in path_to_root))
     except FileNotFoundError:
         click.echo(f"Error: Command graph file not found at '{path}'")
+
+@graph.group()
+def snapshot():
+    """Commands for managing command graph snapshots."""
+    pass
+
+@snapshot.command()
+@click.option('--name', required=True, help='Name of the snapshot.')
+@click.option('--path', default='command_graph.json', help='Path to the command graph file.')
+def save(name, path):
+    """Saves a snapshot of the command graph."""
+    store = SnapshotStore()
+    graph = CommandGraph()
+    try:
+        graph.load_from_file(path)
+        store.save_snapshot(graph, name)
+        click.echo(f"Snapshot '{name}' saved.")
+    except FileNotFoundError:
+        click.echo(f"Error: Command graph file not found at '{path}'")
+
+@snapshot.command(name="list")
+def list_snapshots():
+    """Lists all available snapshots."""
+    store = SnapshotStore()
+    snapshots = store.list_snapshots()
+    if not snapshots:
+        click.echo("No snapshots found.")
+        return
+    for snap in snapshots:
+        click.echo(snap)
+
+@graph.command()
+@click.option('--from', 'from_snap', required=True, help='The starting snapshot.')
+@click.option('--to', 'to_snap', required=True, help='The ending snapshot.')
+def diff(from_snap, to_snap):
+    """Compares two snapshots and shows the differences."""
+    store = SnapshotStore()
+    try:
+        from_graph = store.load_snapshot(from_snap)
+        to_graph = store.load_snapshot(to_snap)
+        diff_result = diff_graphs(from_graph, to_graph)
+        click.echo(f"Added: {len(diff_result.added)}")
+        for cmd in diff_result.added:
+            click.echo(f"  - {cmd.id} ({cmd.type})")
+        click.echo(f"Removed: {len(diff_result.removed)}")
+        for cmd in diff_result.removed:
+            click.echo(f"  - {cmd.id} ({cmd.type})")
+        click.echo(f"Changed: {len(diff_result.changed)}")
+        for cmd in diff_result.changed:
+            click.echo(f"  - {cmd.id} ({cmd.type}) - Status: {cmd.status}")
+    except FileNotFoundError as e:
+        click.echo(f"Error: Snapshot not found. {e}")
+
+@graph.command()
+@click.option('--to', 'to_snap', required=True, help='The snapshot to travel to.')
+@click.option('--path', default='command_graph.json', help='Path to the command graph file.')
+def time_travel(to_snap, path):
+    """Travels to a specific snapshot."""
+    store = SnapshotStore()
+    try:
+        graph = store.load_snapshot(to_snap)
+        graph.save_to_file(path)
+        click.echo(f"Time traveled to snapshot '{to_snap}'.")
+    except FileNotFoundError:
+        click.echo(f"Error: Snapshot '{to_snap}' not found.")
 
 
 if __name__ == '__main__':
