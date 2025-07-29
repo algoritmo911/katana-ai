@@ -1,0 +1,7 @@
+pyTelegramBotAPI
+openai
+python-dotenv
+pytest
+streamlit
+pandas
+graphviz
