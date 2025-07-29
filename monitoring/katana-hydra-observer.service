@@ -1,0 +1,18 @@
+[Unit]
+Description=Katana Hydra Observer Service
+After=network.target
+
+[Service]
+User=your_user
+# Assumes the repository is cloned in /home/your_user/katana-ai
+# and a virtual environment is set up in /home/your_user/katana-ai/venv
+# These paths should be adjusted to match the actual deployment environment.
+WorkingDirectory=/home/your_user/katana-ai
+ExecStart=/home/your_user/katana-ai/venv/bin/python -m hydra_observer.main
+Restart=always
+RestartSec=5
+StandardOutput=file:/var/log/katana-hydra-observer.log
+StandardError=file:/var/log/katana-hydra-observer.err.log
+
+[Install]
+WantedBy=multi-user.target

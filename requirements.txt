@@ -1,5 +1,9 @@
+pyTelegramBotAPI
+openai
 python-dotenv
 pytest
-flake8
-pre-commit
-black
+streamlit
+pandas
+graphviz
+kafka-python
+psycopg2-binary
