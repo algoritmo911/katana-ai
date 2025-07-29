@@ -5,3 +5,5 @@ pytest
 streamlit
 pandas
 graphviz
+kafka-python
+psycopg2-binary

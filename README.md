@@ -95,3 +95,11 @@ If a message sent to the bot is not recognized as a specific NLP command (like "
 Log files are stored in the `logs/` directory.
 Command files are stored in the `commands/` directory.
 Temporary voice files are stored in `voice_temp/` during processing.
+
+## Monitoring Architecture
+
+The Katana monitoring system is designed to provide real-time insights into the performance and behavior of the Katana ecosystem. It is built on a modern, scalable technology stack:
+
+*   **Message Broker:** [Apache Kafka](https://kafka.apache.org/) is used for reliable and high-throughput streaming of command logs.
+*   **Database:** [TimescaleDB](https://www.timescale.com/) is used for storing and querying time-series data, providing a solid foundation for analytics and visualization.
+*   **Visualization:** [Streamlit](https://streamlit.io/) is used for building the interactive web-based visualizer.
