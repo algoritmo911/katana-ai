@@ -3,13 +3,18 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any
 
+from .schema_registry import SchemaRegistry
+from .migrator import Migrator
+
 class EventStore:
-    def __init__(self, db_path="event_store.db", snapshot_path="snapshots"):
+    def __init__(self, db_path="event_store.db", snapshot_path="snapshots", schema_registry=None, migrator=None):
         self.db_path = db_path
         self.snapshot_path = snapshot_path
         os.makedirs(self.snapshot_path, exist_ok=True)
         self.db = []
         self._load()
+        self.schema_registry = schema_registry or SchemaRegistry()
+        self.migrator = migrator or Migrator(self.schema_registry)
 
     def append(self, event_type: str, aggregate_id: str, payload: Dict[str, Any], version: int = 1):
         event = {
@@ -25,7 +30,7 @@ class EventStore:
     def get_events_for_aggregate(self, aggregate_id: str) -> List[Dict[str, Any]]:
         snapshot, last_version = self._load_snapshot(aggregate_id)
         events = [
-            event
+            self.migrator.migrate(event)
             for event in self.db
             if event["aggregate_id"] == aggregate_id and event["version"] > last_version
         ]
