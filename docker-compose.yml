@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - "~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/"
+      - "~/.docker-conf/rabbitmq/log/:/var/log/rabbitmq"
+    networks:
+      - katana-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  task-manager:
+    build:
+      context: .
+      dockerfile: ./services/task-manager/Dockerfile
+    ports:
+      - "8001:8001"
+    networks:
+      - katana-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  agent-interactor:
+    build:
+      context: .
+      dockerfile: ./services/agent-interactor/Dockerfile
+    networks:
+      - katana-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  metrics-service:
+    build:
+      context: .
+      dockerfile: ./services/metrics-service/Dockerfile
+    ports:
+      - "8002:8002"
+    networks:
+      - katana-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+networks:
+  katana-network:
+    driver: bridge

@@ -8,3 +8,7 @@ fastapi
 uvicorn[standard]
 redis
 PyYAML
+pika
+requests
+pandas
+docker
