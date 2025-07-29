@@ -1,0 +1,2 @@
+[console_scripts]
+katana = katana_cli.cli:main
