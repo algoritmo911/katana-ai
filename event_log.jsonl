@@ -1,0 +1,9 @@
+{"type": "ADD_NODE", "timestamp": "2025-07-29T17:54:50.233337", "payload": {"id": "1", "type": "cmd1", "module": "test", "args": {}, "started_at": "2025-07-29T17:54:50.232367", "finished_at": null, "status": "RUNNING", "parent_id": null, "children_ids": []}}
+{"type": "ADD_NODE", "timestamp": "2025-07-29T17:54:50.233648", "payload": {"id": "2", "type": "cmd2", "module": "test", "args": {}, "started_at": "2025-07-29T17:54:50.232755", "finished_at": null, "status": "RUNNING", "parent_id": "1", "children_ids": []}}
+{"type": "ADD_EDGE", "timestamp": "2025-07-29T17:54:50.233753", "payload": {"parent_id": "1", "child_id": "2"}}
+{"type": "UPDATE_STATUS", "timestamp": "2025-07-29T17:54:50.233859", "payload": {"command_id": "1", "status": "DONE"}}
+{"type": "ADD_NODE", "timestamp": "2025-07-29T17:55:14.617383", "payload": {"id": "1", "type": "cmd1", "module": "test", "args": {}, "started_at": "2025-07-29T17:55:14.616583", "finished_at": null, "status": "RUNNING", "parent_id": null, "children_ids": []}}
+{"type": "ADD_NODE", "timestamp": "2025-07-29T17:55:14.617544", "payload": {"id": "2", "type": "cmd2", "module": "test", "args": {}, "started_at": "2025-07-29T17:55:14.616948", "finished_at": null, "status": "RUNNING", "parent_id": "1", "children_ids": []}}
+{"type": "ADD_EDGE", "timestamp": "2025-07-29T17:55:14.617642", "payload": {"parent_id": "1", "child_id": "2"}}
+{"type": "UPDATE_STATUS", "timestamp": "2025-07-29T17:55:14.617710", "payload": {"command_id": "1", "status": "DONE"}}
+{"type": "ADD_NODE", "timestamp": "2025-07-29T17:55:14.618533", "payload": {"id": "1", "type": "cmd1", "module": "test", "args": {}, "started_at": "2025-07-29T17:55:14.617985", "finished_at": null, "status": "RUNNING", "parent_id": null, "children_ids": []}}

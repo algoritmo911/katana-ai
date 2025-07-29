@@ -129,6 +129,65 @@ def time_travel(to_snap, path):
     except FileNotFoundError:
         click.echo(f"Error: Snapshot '{to_snap}' not found.")
 
+@graph.command()
+@click.option('--steps', default=1, help='Number of steps to undo.')
+def undo(steps):
+    """Undoes the last N changes to the command graph."""
+    from katana.graph.events import EventLog
+    from katana.graph.event_player import EventPlayer
+    event_log = EventLog()
+    events = event_log.read_events()
+    try:
+        graph = EventPlayer.undo(events, steps)
+        graph.save_to_file("command_graph.json")
+        click.echo(f"Undid {steps} step(s).")
+    except ValueError as e:
+        click.echo(f"Error: {e}")
+
+@graph.command()
+@click.option('--from', 'from_snap', help='The snapshot to replay from.')
+def replay(from_snap):
+    """Replays events from a snapshot or from the beginning."""
+    from katana.graph.events import EventLog
+    from katana.graph.event_player import EventPlayer
+    event_log = EventLog()
+    events = event_log.read_events()
+    if from_snap:
+        store = SnapshotStore()
+        try:
+            graph = store.load_snapshot(from_snap)
+            # This is a simplified implementation. A more robust implementation
+            # would need to find the events that happened after the snapshot.
+            click.echo("Replaying from a snapshot is not yet fully implemented.")
+            return
+        except FileNotFoundError:
+            click.echo(f"Error: Snapshot '{from_snap}' not found.")
+            return
+    else:
+        graph = EventPlayer.replay(events)
+    graph.save_to_file("command_graph.json")
+    click.echo("Replayed all events.")
+
+@graph.command()
+@click.argument('event_json')
+def simulate(event_json):
+    """Simulates an event on a copy of the graph and shows the result."""
+    from katana.graph.events import GraphEvent
+    from katana.graph.event_player import EventPlayer
+    graph = CommandGraph()
+    try:
+        graph.load_from_file("command_graph.json")
+        event = GraphEvent.from_json(event_json)
+        # Create a copy of the graph to simulate on
+        import copy
+        sim_graph = copy.deepcopy(graph)
+        EventPlayer.replay([event], sim_graph)
+        sim_graph.visualize()
+    except FileNotFoundError:
+        click.echo("Error: command_graph.json not found.")
+    except Exception as e:
+        click.echo(f"Error simulating event: {e}")
+
 
 if __name__ == '__main__':
     graph()

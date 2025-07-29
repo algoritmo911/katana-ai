@@ -2,15 +2,25 @@ import json
 from rich.tree import Tree
 from rich import print as rprint
 from .command import Command
+from .events import GraphEvent, EventLog
+from datetime import datetime
 
 class CommandGraph:
     """Manages the collection of all commands and their relationships."""
 
-    def __init__(self):
+    def __init__(self, event_log=None):
         self._commands = {}  # Store commands by their ID
+        self.event_log = event_log or EventLog()
 
     def add_command(self, command):
         """Adds a command to the graph and links it to its parent."""
+        self.event_log.log_event(
+            GraphEvent(
+                type="ADD_NODE",
+                timestamp=datetime.now(),
+                payload=command.to_dict(),
+            )
+        )
         if command.id in self._commands:
             # Handle potential ID collision if necessary
             return
@@ -18,6 +28,38 @@ class CommandGraph:
         if command.parent_id and command.parent_id in self._commands:
             parent_command = self._commands[command.parent_id]
             parent_command.add_child(command.id)
+            self.event_log.log_event(
+                GraphEvent(
+                    type="ADD_EDGE",
+                    timestamp=datetime.now(),
+                    payload={"parent_id": command.parent_id, "child_id": command.id},
+                )
+            )
+
+    def remove_command(self, command_id):
+        """Removes a command from the graph."""
+        if command_id in self._commands:
+            del self._commands[command_id]
+            self.event_log.log_event(
+                GraphEvent(
+                    type="REMOVE_NODE",
+                    timestamp=datetime.now(),
+                    payload={"command_id": command_id},
+                )
+            )
+
+    def update_command_status(self, command_id, status):
+        """Updates the status of a command."""
+        command = self.get_command(command_id)
+        if command:
+            command.status = status
+            self.event_log.log_event(
+                GraphEvent(
+                    type="UPDATE_STATUS",
+                    timestamp=datetime.now(),
+                    payload={"command_id": command_id, "status": status},
+                )
+            )
 
     def get_command(self, command_id):
         """Retrieves a command by its ID."""
