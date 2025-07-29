@@ -11,6 +11,8 @@ setup(
         "websockets",
         "pytest-asyncio",
         "PyYAML",
+        "jinja2",
+        "httpx",
     ],
     entry_points={
         "console_scripts": [

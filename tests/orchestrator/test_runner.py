@@ -7,9 +7,11 @@ async def test_run_scenario():
     """
     Test running a scenario.
     """
-    steps = [
-        {"run": "echo 'hello'"},
-        {"wait": 1},
-    ]
+    scenario = {
+        "steps": [
+            {"run": "echo 'hello'"},
+            {"wait": 1},
+        ]
+    }
     context = Context()
-    await run_scenario(steps, context)
+    await run_scenario(scenario, context)
