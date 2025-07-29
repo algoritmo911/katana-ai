@@ -41,11 +41,18 @@ class TestCliGraph(unittest.TestCase):
     def tearDown(self):
         os.remove(self.graph_file)
 
-    def test_show(self):
-        result = self.runner.invoke(graph, ["show", "--path", self.graph_file])
+    def test_show_rich(self):
+        result = self.runner.invoke(graph, ["show", "--path", self.graph_file, "--format", "rich"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("cmd1", result.output)
         self.assertIn("cmd2", result.output)
+
+    def test_show_dot(self):
+        result = self.runner.invoke(graph, ["show", "--path", self.graph_file, "--format", "dot"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("digraph CommandGraph", result.output)
+        self.assertIn('"1" -> "2"', result.output)
+
 
     def test_errors(self):
         result = self.runner.invoke(graph, ["errors", "--path", self.graph_file])

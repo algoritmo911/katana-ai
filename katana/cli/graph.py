@@ -8,12 +8,25 @@ def graph():
 
 @graph.command()
 @click.option('--path', default='command_graph.json', help='Path to the command graph file.')
-def show(path):
+@click.option('--format', type=click.Choice(['rich', 'dot']), default='rich', help='Output format.')
+@click.option('--output', help='Path to the output file.')
+def show(path, format, output):
     """Visualizes the command graph."""
     graph = CommandGraph()
     try:
         graph.load_from_file(path)
-        graph.visualize()
+        if format == 'rich':
+            if output:
+                click.echo("Error: --output is not supported for rich format.")
+                return
+            graph.visualize()
+        elif format == 'dot':
+            dot_data = graph.to_dot()
+            if output:
+                with open(output, "w") as f:
+                    f.write(dot_data)
+            else:
+                click.echo(dot_data)
     except FileNotFoundError:
         click.echo(f"Error: Command graph file not found at '{path}'")
 

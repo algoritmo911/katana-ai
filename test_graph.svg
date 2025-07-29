@@ -1,0 +1,8 @@
+digraph CommandGraph {
+  rankdir="TB";
+  node [shape=box, style="rounded,filled", fillcolor="lightblue"];
+  edge [arrowhead="vee"];
+  "1" [label="ID: 1\nType: cmd1\nModule: test"];
+  "2" [label="ID: 2\nType: cmd2\nModule: test"];
+  "1" -> "2";
+}
