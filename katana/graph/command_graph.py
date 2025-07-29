@@ -62,6 +62,15 @@ class CommandGraph:
                 child_tree = tree.add(f"**{child.type}** ({child.id}) - {child.status}")
                 self._build_tree(child_tree, child)
 
+    def trace_path_to(self, command_id):
+        """Traces the path from a command to its root."""
+        path = []
+        cmd = self.get_command(command_id)
+        while cmd:
+            path.append(cmd)
+            cmd = self.get_command(cmd.parent_id)
+        return path[::-1]
+
     def to_dot(self):
         """Generates a DOT language representation of the command graph."""
         dot_lines = ["digraph CommandGraph {"]
