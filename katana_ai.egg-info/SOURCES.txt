@@ -1,0 +1,8 @@
+README.md
+setup.py
+katana_ai.egg-info/PKG-INFO
+katana_ai.egg-info/SOURCES.txt
+katana_ai.egg-info/dependency_links.txt
+katana_ai.egg-info/entry_points.txt
+katana_ai.egg-info/requires.txt
+katana_ai.egg-info/top_level.txt

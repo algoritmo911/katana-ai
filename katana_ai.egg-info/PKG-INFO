@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: katana-ai
+Version: 0.2
+Requires-Dist: click
+Requires-Dist: rich
+Dynamic: requires-dist
