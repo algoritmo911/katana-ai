@@ -4,6 +4,7 @@ import streamlit as st
 # from katana_agent import KatanaAgent # Example import
 # katana_instance = KatanaAgent() # Example instantiation
 
+
 def get_katana_response(user_input: str, chat_id: str = "streamlit_user") -> str:
     """
     Gets a response from Katana.
@@ -13,8 +14,8 @@ def get_katana_response(user_input: str, chat_id: str = "streamlit_user") -> str
         # Replace with actual call to Katana agent
         # response = katana_instance.get_response(user_input, chat_id=chat_id)
         # For now, we'll simulate a potential error or unimplemented agent
-        if False: # Change to True to simulate Katana agent working
-             response = f"Katana processed: {user_input}"
+        if False:  # Change to True to simulate Katana agent working
+            response = f"Katana processed: {user_input}"
         else:
             # This simulates the Katana agent not being ready or an error occurring
             # In a real scenario, this path would be taken if, e.g., katana_instance.get_response raises an exception
@@ -26,6 +27,7 @@ def get_katana_response(user_input: str, chat_id: str = "streamlit_user") -> str
     except Exception as e:
         # Log the exception in a real application: logger.error(f"Error getting Katana response: {e}")
         return f"Эхо (fallback): {user_input}"
+
 
 # Initialize chat history
 if "chat_history" not in st.session_state:

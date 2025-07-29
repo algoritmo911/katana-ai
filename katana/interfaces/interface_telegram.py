@@ -5,6 +5,7 @@ from katana.message_dispatcher import MessageDispatcher
 
 logger = logging.getLogger(__name__)
 
+
 class TelegramInterface:
     def __init__(self, token, webhook_url, dispatcher: MessageDispatcher):
         self.app = Application.builder().token(token).build()
@@ -16,12 +17,14 @@ class TelegramInterface:
             await self.app.bot.set_webhook(
                 url=self.webhook_url,
                 allowed_updates=TelegramUpdate.ALL_TYPES,
-                drop_pending_updates=True
+                drop_pending_updates=True,
             )
             logger.info(f"Webhook successfully set to {self.webhook_url}")
             return True
         except Exception as e:
-            logger.error(f"Failed to set webhook to {self.webhook_url}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to set webhook to {self.webhook_url}: {e}", exc_info=True
+            )
             return False
 
     async def handle_update(self, data):
@@ -36,4 +39,7 @@ class TelegramInterface:
             if response:
                 await self.app.bot.send_message(chat_id=user_id, text=response)
         elif tg_update.message:
-            await self.app.bot.send_message(chat_id=tg_update.message.chat_id, text="I can currently only process text commands.")
+            await self.app.bot.send_message(
+                chat_id=tg_update.message.chat_id,
+                text="I can currently only process text commands.",
+            )

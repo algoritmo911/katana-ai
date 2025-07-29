@@ -12,6 +12,7 @@ from katana.trader_agent import TraderAgent, TRADER_LOG_FILE, LOG_DIR
 if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
 
+
 class TestTraderAgent(unittest.TestCase):
 
     def setUp(self):
@@ -28,7 +29,7 @@ class TestTraderAgent(unittest.TestCase):
         # Clean up log file after tests
         if os.path.exists(TRADER_LOG_FILE):
             os.remove(TRADER_LOG_FILE)
-            pass # Keep it for inspection if a test fails
+            pass  # Keep it for inspection if a test fails
 
     def test_initialization(self):
         self.assertEqual(self.agent_btc.symbol, "BTC-USD")
@@ -41,13 +42,15 @@ class TestTraderAgent(unittest.TestCase):
         self.assertIsInstance(price_btc, float)
         self.assertTrue(20000.00 <= price_btc <= 70000.00)
 
-        price_eth = self.agent_eth.get_mock_price() # Assuming ETH would have a different range if specified
+        price_eth = (
+            self.agent_eth.get_mock_price()
+        )  # Assuming ETH would have a different range if specified
         self.assertIsInstance(price_eth, float)
         # If TraderAgent had symbol-specific ranges, we'd test that.
         # For now, it uses the same default range.
         self.assertTrue(20000.00 <= price_eth <= 70000.00)
 
-    @patch('katana.trader_agent.trader_logger.info')
+    @patch("katana.trader_agent.trader_logger.info")
     def test_make_decision_logging_calls(self, mock_log_info):
         self.agent_btc.make_decision()
 
@@ -62,11 +65,29 @@ class TestTraderAgent(unittest.TestCase):
 
         # Example of checking specific log messages (order might matter)
         # Call args list: [(('Log message 1',), {}), (('Log message 2',), {})]
-        logged_messages = [call_args[0][0] for call_args in mock_log_info.call_args_list]
+        logged_messages = [
+            call_args[0][0] for call_args in mock_log_info.call_args_list
+        ]
 
-        self.assertTrue(any(f"Mock price for {self.agent_btc.symbol}" in msg for msg in logged_messages))
-        self.assertTrue(any(f"Analyzing market for {self.agent_btc.symbol}" in msg for msg in logged_messages))
-        self.assertTrue(any("Trader agent decision logic not fully implemented. Learning mode active." in msg for msg in logged_messages))
+        self.assertTrue(
+            any(
+                f"Mock price for {self.agent_btc.symbol}" in msg
+                for msg in logged_messages
+            )
+        )
+        self.assertTrue(
+            any(
+                f"Analyzing market for {self.agent_btc.symbol}" in msg
+                for msg in logged_messages
+            )
+        )
+        self.assertTrue(
+            any(
+                "Trader agent decision logic not fully implemented. Learning mode active."
+                in msg
+                for msg in logged_messages
+            )
+        )
 
     def test_log_file_creation_and_content(self):
         # Clear log file before this specific test
@@ -79,13 +100,19 @@ class TestTraderAgent(unittest.TestCase):
 
         self.assertTrue(os.path.exists(TRADER_LOG_FILE))
 
-        with open(TRADER_LOG_FILE, 'r') as f:
+        with open(TRADER_LOG_FILE, "r") as f:
             log_content = f.read()
 
-        self.assertIn(f"TraderAgent initialized for symbol: {agent_test_log.symbol}", log_content)
+        self.assertIn(
+            f"TraderAgent initialized for symbol: {agent_test_log.symbol}", log_content
+        )
         self.assertIn(f"Mock price for {agent_test_log.symbol}", log_content)
         self.assertIn(f"Analyzing market for {agent_test_log.symbol}", log_content)
-        self.assertIn("Trader agent decision logic not fully implemented. Learning mode active.", log_content)
+        self.assertIn(
+            "Trader agent decision logic not fully implemented. Learning mode active.",
+            log_content,
+        )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

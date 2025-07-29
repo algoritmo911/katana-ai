@@ -3,6 +3,7 @@ from katana.bots.base_bot import BaseBot
 
 logger = logging.getLogger(__name__)
 
+
 class PsyBot(BaseBot):
     def __init__(self, bot_name="PsyBot", profile=None):
         super().__init__(bot_name, profile)

@@ -4,11 +4,12 @@ from katana.exchange.coinbase_api import get_spot_price
 
 logger = logging.getLogger(__name__)
 
+
 class KatanaBot(BaseBot):
     def __init__(self, bot_name="KatanaBot", profile=None):
         super().__init__(bot_name, profile)
 
-    def handle_command(self, command_string: str):
+    async def handle_message(self, command_string: str):
         logger.info(f"Bot '{self.name}' received command: {command_string}")
         parts = command_string.strip().lower().split()
         if not parts:
@@ -36,6 +37,7 @@ class KatanaBot(BaseBot):
             response_message = f"Unknown command '{command}'."
 
         return response_message
+
 
 # The __main__ block is removed as the bot will be run by the FastAPI application (main.py)
 # For testing, you would now run main.py and interact via Telegram or API endpoints.

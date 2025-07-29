@@ -1,17 +1,23 @@
 import logging
 from katana.message_dispatcher import MessageDispatcher
+from katana.agent_router.router import AgentRouter
 
 logger = logging.getLogger(__name__)
 
+
 class SignalHub:
-    def __init__(self):
-        self.dispatcher = MessageDispatcher()
+    def __init__(self, router: AgentRouter):
+        self.dispatcher = MessageDispatcher(router)
 
     async def route_signal(self, source, user_id, message, criticality="low"):
-        logger.info(f"Signal received from {source} for user {user_id} with criticality {criticality}")
+        logger.info(
+            f"Signal received from {source} for user {user_id} with criticality {criticality}"
+        )
 
         if criticality == "high":
-            self.notify_operator(f"High criticality signal from {source} for user {user_id}: {message}")
+            self.notify_operator(
+                f"High criticality signal from {source} for user {user_id}: {message}"
+            )
 
         return await self.dispatcher.dispatch(source, user_id, message)
 

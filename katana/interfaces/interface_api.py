@@ -3,6 +3,7 @@ from katana.message_dispatcher import MessageDispatcher
 
 logger = logging.getLogger(__name__)
 
+
 class ApiInterface:
     def __init__(self, dispatcher: MessageDispatcher):
         self.dispatcher = dispatcher

@@ -2,6 +2,7 @@ import unittest
 import json
 from katana.bots.psy_bot_template import PsyBot
 
+
 class PsyBotTestSuite(unittest.TestCase):
 
     def test_psy_bot_creation(self):
@@ -15,10 +16,7 @@ class PsyBotTestSuite(unittest.TestCase):
         self.assertIn("You said 'I'm feeling sad.'", response)
 
     def test_psy_bot_profile_loading(self):
-        profile = {
-            "name": "Dr. Feelgood",
-            "initial_mood": "happy"
-        }
+        profile = {"name": "Dr. Feelgood", "initial_mood": "happy"}
         with open("test_profile.json", "w") as f:
             json.dump(profile, f)
 
@@ -33,5 +31,6 @@ class PsyBotTestSuite(unittest.TestCase):
         self.assertEqual(bot2.name, "Bot2")
         self.assertEqual(bot1.profile, bot2.profile)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

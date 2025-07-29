@@ -3,6 +3,7 @@ import json
 
 logger = logging.getLogger(__name__)
 
+
 class BaseBot:
     def __init__(self, bot_name="BaseBot", profile=None):
         self.name = bot_name
@@ -10,7 +11,7 @@ class BaseBot:
         self.memory = {}  # For storing conversation history, etc.
 
     def load_profile(self, profile_path):
-        with open(profile_path, 'r') as f:
+        with open(profile_path, "r") as f:
             self.profile = json.load(f)
         self.name = self.profile.get("name", self.name)
         logger.info(f"Bot {self.name} loaded profile from {profile_path}")

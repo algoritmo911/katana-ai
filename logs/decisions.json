@@ -1,0 +1,11 @@
+[
+    {
+        "timestamp": "2025-07-29T18:28:00.803373+00:00",
+        "symbol": "BTC-USD",
+        "price": 117551.225,
+        "decision_type": "observe",
+        "confidence": 0.5,
+        "reason": "Initial observation in learning mode.",
+        "mode": "learning"
+    }
+]
