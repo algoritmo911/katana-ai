@@ -52,8 +52,28 @@ A Telegram bot that can understand text and voice commands.
     -   The bot will respond with personalized greetings and include usage statistics.
     -   If a command isn't understood, the bot will provide a polite fallback message.
 
+### Personalization Features
+
+-   **Command History**: The bot now saves your command history.
+-   **Command Recommendations**:
+    -   Send the `/recommendations` command to the bot to get a list of your most frequently used commands.
+
+## CLI Usage
+
+A command-line interface is available for managing user data.
+
+-   **View User Preferences**:
+    ```bash
+    python katana_cli.py user-prefs <user_id>
+    ```
+-   **Get Command Recommendations**:
+    ```bash
+    python katana_cli.py user-recs <user_id> [--top-n <number>]
+    ```
+
 ## Logging
 
 Log files are stored in the `logs/` directory.
 Command files are stored in the `commands/` directory.
 Temporary voice files are stored in `voice_temp/` during processing.
+User data is stored in the `user_data/` directory.

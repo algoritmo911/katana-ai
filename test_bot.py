@@ -78,6 +78,12 @@ class TestBot(unittest.TestCase):
         self.run_katana_command_patcher = patch('bot.run_katana_command')
         self.mock_run_katana_command = self.run_katana_command_patcher.start()
 
+        # Patch get_user_profile
+        self.get_user_profile_patcher = patch('bot.get_user_profile')
+        self.mock_get_user_profile = self.get_user_profile_patcher.start()
+        self.mock_user_profile = MagicMock()
+        self.mock_get_user_profile.return_value = self.mock_user_profile
+
         # Unpatch bot.handle_text_message for integration tests of this function
         # We will call it directly in some tests.
         self.handle_text_message_patcher.stop() # Stop the initial patch
@@ -87,6 +93,7 @@ class TestBot(unittest.TestCase):
 
     def tearDown(self):
         # Stop patchers
+        self.get_user_profile_patcher.stop()
         self.bot_patcher.stop()
         self.mock_datetime_patcher.stop()
         self.mock_log_event_patcher.stop()
@@ -110,12 +117,13 @@ class TestBot(unittest.TestCase):
         bot.COMMAND_FILE_DIR = self.original_command_file_dir
 
 
-    def _create_mock_message(self, text_payload, username="testuser", first_name="Test"):
+    def _create_mock_message(self, text_payload, user_id=123, username="testuser", first_name="Test"):
         mock_message = MagicMock(spec=telebot.types.Message)
         mock_message.chat = MagicMock(spec=telebot.types.Chat)
         mock_message.chat.id = 12345
         mock_message.text = text_payload # For direct text, not JSON
         mock_message.from_user = MagicMock(spec=telebot.types.User)
+        mock_message.from_user.id = user_id
         mock_message.from_user.username = username
         mock_message.from_user.first_name = first_name
         mock_message.from_user.last_name = "User"
@@ -123,7 +131,7 @@ class TestBot(unittest.TestCase):
         mock_message.message_id = 789
         return mock_message
 
-    def _create_mock_json_message(self, json_payload_dict, username="testuser", first_name="Test"):
+    def _create_mock_json_message(self, json_payload_dict, user_id=123, username="testuser", first_name="Test"):
         mock_message = self._create_mock_message("", username, first_name) # Base mock
         mock_message.text = json.dumps(json_payload_dict) # Set text to JSON string
         return mock_message
@@ -494,7 +502,7 @@ class TestBot(unittest.TestCase):
 
     # --- Tests for handle_voice_message ---
     # These tests will use the class-level mock for get_text_from_voice
-    def _create_mock_voice_message(self, username="voice_user", first_name="Voicey"):
+    def _create_mock_voice_message(self, user_id=98765, username="voice_user", first_name="Voicey"):
         mock_message = MagicMock(spec=telebot.types.Message)
         mock_message.chat = MagicMock(spec=telebot.types.Chat)
         mock_message.chat.id = 67890
@@ -504,7 +512,7 @@ class TestBot(unittest.TestCase):
         mock_message.message_id = 123
         mock_message.date = 1678886400
         mock_message.from_user = MagicMock(spec=telebot.types.User)
-        mock_message.from_user.id = 98765
+        mock_message.from_user.id = user_id
         mock_message.from_user.username = username
         mock_message.from_user.first_name = first_name
         return mock_message
@@ -598,6 +606,33 @@ class TestBot(unittest.TestCase):
         mock_handle_text.assert_called_once() # Check that normal processing (up to handle_text_message call) occurred
         mock_os_remove_custom.assert_called_once_with(expected_temp_path)
         self.mock_log_local_bot_event.assert_any_call(f"Error deleting temporary voice file {expected_temp_path}: Delete failed")
+
+    # --- Tests for User Profile ---
+    def test_handle_text_message_adds_to_history(self):
+        mock_message = self._create_mock_message("test command")
+        self.mock_interpret.return_value = None
+        bot.handle_text_message(mock_message)
+        self.mock_get_user_profile.assert_called_once_with(mock_message.from_user.id)
+        self.mock_user_profile.add_command_to_history.assert_called_once_with("test command")
+        self.mock_user_profile.save.assert_called_once()
+
+    def test_handle_recommendations_with_results(self):
+        mock_message = self._create_mock_message("/recommendations")
+        self.mock_user_profile.get_command_recommendations.return_value = ["ls -l", "df -h"]
+        bot.handle_recommendations(mock_message)
+        self.mock_get_user_profile.assert_called_once_with(mock_message.from_user.id)
+        self.mock_user_profile.get_command_recommendations.assert_called_once()
+        expected_response = "Вот несколько команд, которые вы часто используете:\n1. `ls -l`\n2. `df -h`\n"
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_response, parse_mode="Markdown")
+
+    def test_handle_recommendations_no_results(self):
+        mock_message = self._create_mock_message("/recommendations")
+        self.mock_user_profile.get_command_recommendations.return_value = []
+        bot.handle_recommendations(mock_message)
+        self.mock_get_user_profile.assert_called_once_with(mock_message.from_user.id)
+        self.mock_user_profile.get_command_recommendations.assert_called_once()
+        expected_response = "У меня пока нет рекомендаций для вас. Попробуйте использовать несколько команд, и я смогу вам что-нибудь предложить."
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_response)
 
 
 if __name__ == '__main__':

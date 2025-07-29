@@ -7,6 +7,7 @@ import subprocess # Added for run_katana_command
 from nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
+from user_profile import get_user_profile # Added for user personalization
 
 # Load environment variables from .env file
 load_dotenv()
@@ -124,16 +125,41 @@ def handle_mind_clearing(command_data, chat_id):
     # bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
 
 # This will be the new text handler
+@bot.message_handler(commands=['recommendations'])
+def handle_recommendations(message):
+    """Handles the /recommendations command."""
+    user_id = message.from_user.id
+    user_profile = get_user_profile(user_id)
+    recommendations = user_profile.get_command_recommendations()
+
+    if not recommendations:
+        bot.reply_to(message, "У меня пока нет рекомендаций для вас. Попробуйте использовать несколько команд, и я смогу вам что-нибудь предложить.")
+        return
+
+    response = "Вот несколько команд, которые вы часто используете:\n"
+    for i, command in enumerate(recommendations, 1):
+        response += f"{i}. `{command}`\n"
+
+    bot.reply_to(message, response, parse_mode="Markdown")
+
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def handle_text_message(message):
     """Handles incoming text messages, attempting NLP interpretation first."""
     chat_id = message.chat.id
+    user_id = message.from_user.id
     text = message.text
     username = get_username(message)
     time_greeting = get_time_of_day_greeting()
 
+    # Get user profile
+    user_profile = get_user_profile(user_id)
+
     log_local_bot_event(f"Received text message from {username} ({chat_id}): {text}")
     increment_command_count() # Increment for any processed message
+
+    # Add command to user's history and save profile
+    user_profile.add_command_to_history(text)
+    user_profile.save()
 
     # Attempt to interpret the text as a natural language command
     nlp_command_or_response = interpret(text)
@@ -293,7 +319,11 @@ VOICE_FILE_DIR.mkdir(parents=True, exist_ok=True)
 def handle_voice_message(message):
     """Handles incoming voice messages."""
     chat_id = message.chat.id
+    user_id = message.from_user.id
     log_local_bot_event(f"Received voice message from {chat_id}. File ID: {message.voice.file_id}")
+
+    # Get user profile
+    user_profile = get_user_profile(user_id)
 
     if not OPENAI_API_KEY:
         bot.reply_to(message, "⚠️ Распознавание голоса не настроено на сервере.")
@@ -315,6 +345,11 @@ def handle_voice_message(message):
 
         if transcribed_text:
             log_local_bot_event(f"Voice from {chat_id} transcribed to: '{transcribed_text}'")
+
+            # Add command to user's history and save profile
+            user_profile.add_command_to_history(transcribed_text)
+            user_profile.save()
+
             # Create a new message object that looks like a text message
             # This allows reusing the handle_text_message logic
             # Some attributes of message might not be perfectly replicated, but core ones for handle_text_message should be.

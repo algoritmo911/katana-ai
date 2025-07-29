@@ -14,3 +14,7 @@
 <MagicMock name='datetime.utcnow().isoformat()' id='140657658211712'> | [NLU] "расскажи анекдот" → "get_joke"
 <MagicMock name='datetime.utcnow().isoformat()' id='140657658787600'> | [NLU] "покажи место на диске" → "df -h"
 <MagicMock name='datetime.utcnow().isoformat()' id='140657658401408'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140265049284608'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140265048060416'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140265048374256'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140265050149456'> | [NLU] "какая погода" → "get_weather"
