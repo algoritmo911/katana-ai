@@ -2,23 +2,33 @@ import requests
 import time
 import subprocess
 import pytest
+import uuid
+import os
 
 @pytest.fixture(scope="function")
 def docker_compose():
+    task_queue_name = str(uuid.uuid4())
+    result_queue_name = str(uuid.uuid4())
+
+    env = os.environ.copy()
+    env["TASK_QUEUE_NAME"] = task_queue_name
+    env["RESULT_QUEUE_NAME"] = result_queue_name
+
     try:
         print("Starting docker-compose...")
-        subprocess.run(["docker", "compose", "up", "-d"], check=True)
+        subprocess.run(["docker", "compose", "up", "-d"], check=True, env=env)
         # Give the services time to start up
         time.sleep(10)
-        yield
+        yield task_queue_name, result_queue_name
     finally:
         print("Stopping docker-compose...")
-        subprocess.run(["docker", "compose", "down"], check=True)
+        subprocess.run(["docker", "compose", "down", "-v", "--remove-orphans"], check=True, env=env)
 
 def test_add_and_get_tasks(docker_compose):
+    task_queue_name, result_queue_name = docker_compose
     # Add tasks to the task manager
     tasks = ["task1", "task2", "task3"]
-    response = requests.post("http://localhost:8001/tasks", json=tasks)
+    response = requests.post(f"http://localhost:8001/tasks?queue_name={task_queue_name}", json=tasks)
     assert response.status_code == 200
     assert response.json() == {"message": "Tasks added successfully"}
 
@@ -26,7 +36,7 @@ def test_add_and_get_tasks(docker_compose):
     time.sleep(5)
 
     # Get metrics from the metrics service
-    response = requests.get("http://localhost:8002/metrics")
+    response = requests.get(f"http://localhost:8002/metrics?queue_name={task_queue_name}")
     assert response.status_code == 200
     metrics = response.json()
     assert len(metrics) == 3
@@ -38,16 +48,17 @@ def test_add_and_get_tasks(docker_compose):
     assert metrics[2]["success"] == True
 
 def test_add_failing_task(docker_compose):
+    task_queue_name, result_queue_name = docker_compose
     # Add a failing task
     tasks = ["fail task"]
-    response = requests.post("http://localhost:8001/tasks", json=tasks)
+    response = requests.post(f"http://localhost:8001/tasks?queue_name={task_queue_name}", json=tasks)
     assert response.status_code == 200
 
     # Wait for the agent interactor to process the task
     time.sleep(5)
 
     # Get metrics from the metrics service
-    response = requests.get("http://localhost:8002/metrics")
+    response = requests.get(f"http://localhost:8002/metrics?queue_name={task_queue_name}")
     assert response.status_code == 200
     metrics = response.json()
     assert len(metrics) == 1

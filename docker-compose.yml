@@ -35,6 +35,9 @@ services:
       dockerfile: ./services/agent-interactor/Dockerfile
     networks:
       - katana-network
+    environment:
+      - TASK_QUEUE_NAME=${TASK_QUEUE_NAME}
+      - RESULT_QUEUE_NAME=${RESULT_QUEUE_NAME}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -47,6 +50,8 @@ services:
       - "8002:8002"
     networks:
       - katana-network
+    environment:
+      - RESULT_QUEUE_NAME=${RESULT_QUEUE_NAME}
     depends_on:
       rabbitmq:
         condition: service_healthy
