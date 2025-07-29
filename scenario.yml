@@ -1,0 +1,5 @@
+name: Daily Agent Routine
+steps:
+  - run: "scripts/init_user_context.py"
+  - wait: 2
+  - run: "scripts/collect_logs.py"

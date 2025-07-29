@@ -10,6 +10,7 @@ setup(
         "rich",
         "websockets",
         "pytest-asyncio",
+        "PyYAML",
     ],
     entry_points={
         "console_scripts": [
