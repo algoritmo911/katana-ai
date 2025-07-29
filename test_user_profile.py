@@ -3,14 +3,16 @@ import os
 import json
 from pathlib import Path
 import shutil
-from user_profile import UserProfile, get_user_profile
+import sys
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from core.user_profile import UserProfile, get_user_profile
 
 class TestUserProfile(unittest.TestCase):
 
     def setUp(self):
         self.test_user_data_dir = Path("test_user_data_temp_dir")
         self.test_user_data_dir.mkdir(parents=True, exist_ok=True)
-        self.original_user_data_dir = 'user_profile.USER_DATA_DIR'
+        self.original_user_data_dir = 'core.user_profile.USER_DATA_DIR'
         self.user_data_dir_patcher = unittest.mock.patch(self.original_user_data_dir, self.test_user_data_dir)
         self.user_data_dir_patcher.start()
 

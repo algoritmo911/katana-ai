@@ -7,7 +7,7 @@ import subprocess # Added for run_katana_command
 from nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
-from user_profile import get_user_profile # Added for user personalization
+from core.user_profile import get_user_profile # Added for user personalization
 
 # Load environment variables from .env file
 load_dotenv()

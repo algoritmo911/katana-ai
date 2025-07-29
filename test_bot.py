@@ -15,6 +15,9 @@ class TestBot(unittest.TestCase):
         self.test_commands_dir = Path("test_commands_temp_dir") # Using a more unique name
         self.test_commands_dir.mkdir(parents=True, exist_ok=True)
 
+        self.test_user_data_dir = Path("test_user_data_temp_dir")
+        self.test_user_data_dir.mkdir(parents=True, exist_ok=True)
+
         # Store original and set to test
         self.original_command_file_dir = bot.COMMAND_FILE_DIR
         bot.COMMAND_FILE_DIR = self.test_commands_dir
@@ -84,6 +87,10 @@ class TestBot(unittest.TestCase):
         self.mock_user_profile = MagicMock()
         self.mock_get_user_profile.return_value = self.mock_user_profile
 
+        # Patch user_profile USER_DATA_DIR
+        self.user_data_dir_patcher = patch('core.user_profile.USER_DATA_DIR', self.test_user_data_dir)
+        self.user_data_dir_patcher.start()
+
         # Unpatch bot.handle_text_message for integration tests of this function
         # We will call it directly in some tests.
         self.handle_text_message_patcher.stop() # Stop the initial patch
@@ -93,6 +100,7 @@ class TestBot(unittest.TestCase):
 
     def tearDown(self):
         # Stop patchers
+        self.user_data_dir_patcher.stop()
         self.get_user_profile_patcher.stop()
         self.bot_patcher.stop()
         self.mock_datetime_patcher.stop()
@@ -132,7 +140,7 @@ class TestBot(unittest.TestCase):
         return mock_message
 
     def _create_mock_json_message(self, json_payload_dict, user_id=123, username="testuser", first_name="Test"):
-        mock_message = self._create_mock_message("", username, first_name) # Base mock
+        mock_message = self._create_mock_message("", user_id=user_id, username=username, first_name=first_name) # Base mock
         mock_message.text = json.dumps(json_payload_dict) # Set text to JSON string
         return mock_message
 
