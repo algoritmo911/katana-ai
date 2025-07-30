@@ -13,6 +13,9 @@ from katana.katana_agent import KatanaAgent # Import KatanaAgent
 # Load environment variables from .env file
 load_dotenv()
 
+from katana.logger import setup_logging
+setup_logging()
+
 # TODO: Get API token from environment variable or secrets manager
 # Using a format-valid dummy token for testing purposes if no env var is set.
 API_TOKEN = os.environ.get('TELEGRAM_API_TOKEN', '12345:dummytoken')
@@ -129,30 +132,25 @@ async def handle_mind_clearing(command_data, chat_id):
     log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
     # await bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
 
-# --- Slash Command Stub Handler ---
+# --- Slash Command Handler ---
+from katana.commands.slash_commands import SLASH_COMMANDS
+
 async def handle_slash_command(chat_id: int, command: str, args_str: str, original_message: telebot.types.Message):
     """
-    Handles slash commands by logging them and sending an acknowledgment.
-    This is a stub for backend processing.
+    Handles slash commands by looking them up in the SLASH_COMMANDS dictionary
+    and calling the corresponding handler.
     """
     log_local_bot_event(f"Handling slash command: '{command}' with args: '{args_str}' for chat_id {chat_id}")
 
-    # Placeholder for actual backend processing logic
-    # For example, for /sync:
-    # if command == "/sync":
-    #     # Call some backend_sync_function(args_str)
-    #     response_text = f"Command {command} is being processed with args: {args_str}"
-    # else:
-    #     response_text = f"Unknown command: {command}"
-
-    response_text = f"✅ Command `{command}` received with arguments: `{args_str}`. (Stub)"
-
-    try:
-        await bot.reply_to(original_message, response_text, parse_mode="Markdown")
-    except Exception as e:
-        log_local_bot_event(f"Error replying to slash command for chat_id {chat_id}: {e}")
-        # Fallback if reply_to fails
-        await bot.send_message(chat_id, response_text, parse_mode="Markdown")
+    handler = SLASH_COMMANDS.get(command)
+    if handler:
+        try:
+            await handler(chat_id, args_str, bot, original_message)
+        except Exception as e:
+            log_local_bot_event(f"Error handling slash command '{command}': {e}")
+            await bot.reply_to(original_message, f"An error occurred while processing the command: {e}")
+    else:
+        await bot.reply_to(original_message, f"Unknown command: {command}")
 
 # --- Unified Message Processing ---
 async def process_user_message(chat_id: int, text: str, original_message: telebot.types.Message):
