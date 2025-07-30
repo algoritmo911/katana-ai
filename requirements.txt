@@ -1,3 +1,7 @@
 pyTelegramBotAPI
 openai
 python-dotenv
+fastapi
+uvicorn
+pytest
+httpx

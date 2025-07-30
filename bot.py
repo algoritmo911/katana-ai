@@ -8,6 +8,7 @@ from nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
 from core.user_profile import get_user_profile # Added for user personalization
+from katana.monitoring import increment_command_count, get_stats
 
 # Load environment variables from .env file
 load_dotenv()
@@ -37,17 +38,10 @@ def log_to_file(message, filename=TELEGRAM_LOG_FILE):
     with open(filename, 'a', encoding='utf-8') as f:
         f.write(f"{datetime.utcnow().isoformat()} | {message}\n")
 
-# --- Bot Statistics (Placeholder) ---
-# In a real application, this would be stored in a database or persistent storage.
-BOT_STATS = {"commands_processed": 0}
-
-def increment_command_count():
-    """Increments the processed command counter."""
-    BOT_STATS["commands_processed"] += 1
-
 def get_bot_stats_message():
     """Returns a string with current bot statistics."""
-    return f"Я уже обработал {BOT_STATS['commands_processed']} команд."
+    stats = get_stats()
+    return f"Я уже обработал {stats['commands_received']} команд."
 
 
 def log_local_bot_event(message):
@@ -155,7 +149,7 @@ def handle_text_message(message):
     user_profile = get_user_profile(user_id)
 
     log_local_bot_event(f"Received text message from {username} ({chat_id}): {text}")
-    increment_command_count() # Increment for any processed message
+    increment_command_count(text) # Increment for any processed message
 
     # Add command to user's history and save profile
     user_profile.add_command_to_history(text)
@@ -345,6 +339,7 @@ def handle_voice_message(message):
 
         if transcribed_text:
             log_local_bot_event(f"Voice from {chat_id} transcribed to: '{transcribed_text}'")
+            increment_command_count(transcribed_text) # Increment for any processed message
 
             # Add command to user's history and save profile
             user_profile.add_command_to_history(transcribed_text)
@@ -394,6 +389,18 @@ def handle_voice_message(message):
 
 
 if __name__ == '__main__':
+    import threading
+    import uvicorn
+    from katana.api import app as fastapi_app
+
+    def run_fastapi():
+        uvicorn.run(fastapi_app, host="0.0.0.0", port=8000)
+
+    log_local_bot_event("Starting FastAPI server in a new thread...")
+    fastapi_thread = threading.Thread(target=run_fastapi)
+    fastapi_thread.daemon = True
+    fastapi_thread.start()
+
     log_local_bot_event("Bot starting...")
     bot.polling()
     log_local_bot_event("Bot stopped.")

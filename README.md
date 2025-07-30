@@ -77,3 +77,16 @@ Log files are stored in the `logs/` directory.
 Command files are stored in the `commands/` directory.
 Temporary voice files are stored in `voice_temp/` during processing.
 User data is stored in the `user_data/` directory.
+
+## Observability
+
+The bot exposes two endpoints for monitoring:
+
+*   **/api/katana/health**: Returns the health status and uptime of the bot.
+*   **/api/katana/stats**: Returns a JSON object with various statistics, including:
+    *   `uptime`: The uptime of the bot.
+    *   `commands_received`: The number of commands received by the bot.
+    *   `last_command_ts`: The timestamp of the last command received.
+    *   `dry_run`: Whether the bot is in dry-run mode.
+    *   `build_version`: The build version of the bot.
+    *   `last_command_echo`: The last command received by the bot.
