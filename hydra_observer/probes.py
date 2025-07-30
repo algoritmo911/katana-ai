@@ -1,9 +1,14 @@
 import logging
 import psutil
 import time
+from hydra_observer.reactor.reaction_core import reaction_core
+from hydra_observer.reactor.handlers import handle_high_cpu
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Register reactions
+reaction_core.register("high_cpu", handle_high_cpu)
 
 def get_system_metrics():
     """Gathers system metrics like CPU, memory, and disk usage."""
@@ -24,6 +29,11 @@ def run_probes(interval=60):
         try:
             metrics = get_system_metrics()
             logging.info(f"System Metrics: {metrics}")
+
+            # Trigger a reaction if CPU usage is high
+            if metrics["cpu_usage_percent"] > 90:
+                reaction_core.trigger("high_cpu", {"cpu_percent": metrics["cpu_usage_percent"]})
+
         except Exception as e:
             logging.error(f"Error gathering system metrics: {e}")
         time.sleep(interval)
