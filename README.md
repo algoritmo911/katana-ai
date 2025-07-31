@@ -1,5 +1,38 @@
 # katana-ai
 
+## Katana Terminal Agent
+
+This repository now includes the **Katana Terminal Agent**, a powerful command-line interface (CLI) for macOS and Linux that allows you to interact with an AI assistant directly in your terminal.
+
+### Features
+
+- **Interactive CLI**: A persistent session to run commands.
+- **Shell Command Execution**: Run safe shell commands like `ls`, `pwd`, `df`, etc.
+- **AI-Powered Responses**: Ask questions and get answers from an OpenAI-powered LLM.
+- **Dangerous Command Protection**: A built-in safety mechanism prevents the execution of destructive commands like `rm -rf` or `sudo`.
+
+### How to Run
+
+1.  **Set up your environment variables.** The agent requires an `OPENAI_API_KEY`. You can set it directly or use a tool like `doppler`. Create a `.env` file in the root directory:
+    ```
+    OPENAI_API_KEY=your_key_here
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3.  **Run the agent:**
+    The recommended way to run the agent is using `doppler` to inject the environment variables:
+    ```bash
+    doppler run -- python -m katana_terminal.cli
+    ```
+    Alternatively, if you have set your environment variables manually, you can run:
+    ```bash
+    python -m katana_terminal.cli
+    ```
+
 ## Autosuggest Agent
 
 This project includes a smart autosuggest agent that provides command suggestions to the user in a Telegram bot. The agent is designed to be extensible, with support for different suggestion modes (static, semantic, and LLM-based).
