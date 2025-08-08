@@ -261,24 +261,41 @@ def handle_message_impl(message):
             # katana_states[chat_id_str].append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced
             memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
             return
-        else: # Другие JSON команды (сохранение файла)
-            logger.info(f"Command type '{command_type}' not specifically handled, proceeding with default save.")
-            timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')
-            command_file_name = f"{timestamp_str}_{chat_id_str}.json" # Corrected
-            module_name = command_data.get('module', 'telegram_general')
-            module_command_dir = COMMAND_FILE_DIR / f"telegram_mod_{module_name}" if module_name != 'telegram_general' else COMMAND_FILE_DIR / 'telegram_general'
-            module_command_dir.mkdir(parents=True, exist_ok=True)
-            command_file_path = module_command_dir / command_file_name
+        else: # Другие JSON команды (отправка в очередь)
+            logger.info(f"Command type '{command_type}' not specifically handled, proceeding to queue task.")
 
-            with open(command_file_path, "w", encoding="utf-8") as f:
-                json.dump(command_data, f, ensure_ascii=False, indent=2)
+            # Получаем имя очереди из переменных окружения
+            task_queue_name = os.getenv('REDIS_TASK_QUEUE_NAME', 'katana:task_queue')
 
-            bot_response_text = f"✅ Команда принята и сохранена как `{command_file_path}`."
-            bot.reply_to(message, bot_response_text)
-            logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}") # Corrected
-            # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced
-            memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
-            logger.info(f"Saved command from {chat_id_str} to {command_file_path}") # Corrected
+            # Сериализуем команду в JSON строку
+            task_json_string = json.dumps(command_data, ensure_ascii=False)
+
+            try:
+                # Получаем доступ к Redis клиенту из memory_manager
+                redis_client = memory_manager.get_redis_client()
+                if not redis_client:
+                    raise ConnectionError("Redis client is not available in MemoryManager.")
+
+                # Отправляем задачу в очередь Redis
+                redis_client.rpush(task_queue_name, task_json_string)
+
+                logger.info(f"Queued command from chat_id {chat_id_str} to Redis queue '{task_queue_name}'.")
+
+                bot_response_text = f"✅ Команда '{command_type}' принята и поставлена в очередь на выполнение."
+                bot.reply_to(message, bot_response_text)
+                logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}")
+
+                # Сохраняем ответ в историю
+                memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+
+            except Exception as e:
+                error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
+                logger.error(f"[ErrorID: {error_id}] Failed to queue command for chat_id {chat_id_str}: {e}", exc_info=True)
+                bot_response_text = f"😕 Не удалось поставить команду в очередь. (Код ошибки: {error_id})"
+                bot.reply_to(message, bot_response_text)
+                # Сохраняем ответ об ошибке в историю
+                memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
+
             return
     else:
         # Это не JSON-команда или невалидная JSON-команда, значит, обычное текстовое сообщение

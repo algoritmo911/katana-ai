@@ -47,6 +47,10 @@ class MemoryManager:
             logger.warning(f"Chat history TTL is {self.ttl_seconds} seconds. Disabling TTL.")
             self.ttl_seconds = None # None means no TTL for redis client
 
+    def get_redis_client(self) -> Optional[redis.Redis]:
+        """Returns the raw Redis client instance."""
+        return self.redis_client
+
     def _get_chat_key(self, chat_id: str) -> str:
         """Generates the Redis key for a given chat_id."""
         return f"chat_history:{chat_id}"

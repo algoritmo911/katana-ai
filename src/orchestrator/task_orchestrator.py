@@ -1,6 +1,7 @@
 import time
 import json
 import os
+import redis
 from typing import List, Any, NamedTuple, Dict
 
 # Forward declaration for JuliusAgent
@@ -14,14 +15,40 @@ class TaskResult(NamedTuple):
     task_content: str
 
 class TaskOrchestrator:
-    def __init__(self, agent: JuliusAgent, batch_size: int = 3, max_batch: int = 10, metrics_log_file: str = "orchestrator_log.json"):
+    def __init__(self,
+                 agent: JuliusAgent,
+                 redis_host: str,
+                 redis_port: int,
+                 redis_db: int,
+                 redis_password: str = None,
+                 task_queue_name: str = "katana:task_queue",
+                 batch_size: int = 3,
+                 max_batch: int = 10,
+                 metrics_log_file: str = "orchestrator_log.json"):
         self.agent = agent
         self.batch_size = batch_size
         self.min_batch_size = 1
         self.max_batch = max_batch
-        self.task_queue: List[str] = []
-        self.metrics_history: List[Dict[str, Any]] = [] # Renamed from self.metrics to avoid confusion with a single metric entry
+        self.metrics_history: List[Dict[str, Any]] = []
         self.metrics_log_file = metrics_log_file
+        self.task_queue_name = task_queue_name
+
+        print(f"Connecting to Redis at {redis_host}:{redis_port}...")
+        try:
+            self.redis_client = redis.Redis(
+                host=redis_host,
+                port=redis_port,
+                db=redis_db,
+                password=redis_password,
+                decode_responses=False # We'll decode manually after popping
+            )
+            # Check connection
+            self.redis_client.ping()
+            print("✅ Successfully connected to Redis.")
+        except redis.exceptions.ConnectionError as e:
+            print(f"❌ Failed to connect to Redis: {e}")
+            raise
+
         self._initialize_metrics_log_file()
 
     def _initialize_metrics_log_file(self):
@@ -40,10 +67,6 @@ class TaskOrchestrator:
                 with open(self.metrics_log_file, 'w', encoding='utf-8') as f:
                     json.dump([], f)
 
-
-    def add_tasks(self, tasks: List[str]) -> None:
-        """Добавить список задач в очередь."""
-        self.task_queue.extend(tasks)
 
     def _log_metric_to_file(self, metric_entry: Dict[str, Any]):
         """Appends a single metric entry to the JSON log file."""
@@ -71,16 +94,28 @@ class TaskOrchestrator:
 
 
     async def run_round(self) -> None:
-        """Взять batch_size задач, отправить Julius и собрать результат."""
-        if not self.task_queue:
-            print("Task queue is empty. No round to run.")
+        """Взять batch_size задач из Redis, отправить Julius и собрать результат."""
+        current_queue_size = self.redis_client.llen(self.task_queue_name)
+        if current_queue_size == 0:
+            # This is expected when idle, so no print statement is needed.
             return
 
-        actual_batch_size = min(self.batch_size, len(self.task_queue))
-        batch_tasks = [self.task_queue.pop(0) for _ in range(actual_batch_size)]
+        actual_batch_size = min(self.batch_size, current_queue_size)
+
+        # Use a pipeline to atomically get a batch of tasks and trim the list.
+        # This is an efficient way to dequeue multiple items.
+        pipe = self.redis_client.pipeline()
+        pipe.lrange(self.task_queue_name, 0, actual_batch_size - 1)
+        pipe.ltrim(self.task_queue_name, actual_batch_size, -1)
+        # The result of the lrange command is the first item in the pipeline's result
+        batch_tasks_bytes = pipe.execute()[0]
+
+        batch_tasks = [task.decode('utf-8') for task in batch_tasks_bytes]
 
         if not batch_tasks:
-            print("No tasks to process in this batch.")
+            # This can happen in a race condition if another process clears the queue
+            # between the llen check and the pipeline execution.
+            print("No tasks to process in this batch (race condition).")
             return
 
         start_time = time.time()
@@ -118,7 +153,7 @@ class TaskOrchestrator:
         """Возвращает текущий статус и историю последних 10 раундов из памяти."""
         return {
             "current_batch_size": self.batch_size,
-            "task_queue_length": len(self.task_queue),
+            "task_queue_length": self.redis_client.llen(self.task_queue_name),
             "total_metrics_rounds": len(self.metrics_history),
             "last_10_rounds_metrics": self.metrics_history[-10:]
         }

@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from typing import Dict, Any
+from dotenv import load_dotenv
 
 from fastapi import FastAPI
 import uvicorn
@@ -9,16 +10,23 @@ import uvicorn
 from src.orchestrator.task_orchestrator import TaskOrchestrator
 from src.agents.julius_agent import JuliusAgent
 
-TASKS_FILE = "tasks.json"
-ROUND_INTERVAL_SECONDS = 30
-ORCHESTRATOR_LOG_FILE = "orchestrator_log.json" # Centralize log file name
+# Load environment variables from .env file
+load_dotenv()
+
+# --- Configuration ---
+ROUND_INTERVAL_SECONDS = 5 # Check for new tasks more frequently
+ORCHESTRATOR_LOG_FILE = "orchestrator_log.json"
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
+REDIS_DB = int(os.getenv('REDIS_DB', '0'))
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
+TASK_QUEUE_NAME = os.getenv('REDIS_TASK_QUEUE_NAME', 'katana:task_queue')
+
 
 # --- FastAPI App Setup ---
-app = FastAPI(title="Julius Task Orchestrator API")
+app = FastAPI(title="Katana Task Orchestrator API")
 
 # This will be populated when the main application starts
-# Not ideal for global state, but simple for this example.
-# A better approach for larger apps might involve dependency injection or app state.
 orchestrator_instance: TaskOrchestrator = None
 
 
@@ -26,32 +34,11 @@ orchestrator_instance: TaskOrchestrator = None
 async def get_orchestrator_status():
     """
     Provides the current status of the TaskOrchestrator,
-    including current batch size, task queue length, and metrics for the last 10 rounds.
+    including current batch size, task queue length from Redis, and metrics for the last 10 rounds.
     """
     if orchestrator_instance is None:
         return {"error": "Orchestrator not initialized"}
     return orchestrator_instance.get_status()
-
-# --- Task Loading ---
-def load_tasks_from_json(file_path: str) -> list[str]:
-    """Loads a list of tasks from a JSON file."""
-    if not os.path.exists(file_path):
-        print(f"Warning: Tasks file not found at {file_path}. Starting with an empty task queue.")
-        return []
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if isinstance(data, list) and all(isinstance(item, str) for item in data):
-                return data
-            else:
-                print(f"Warning: Tasks file {file_path} does not contain a list of strings. Starting with an empty task queue.")
-                return []
-    except json.JSONDecodeError:
-        print(f"Warning: Error decoding JSON from {file_path}. Starting with an empty task queue.")
-        return []
-    except Exception as e:
-        print(f"Warning: An unexpected error occurred while loading tasks: {e}. Starting with an empty task queue.")
-        return []
 
 # --- Orchestrator Loop ---
 async def run_orchestrator_loop(orchestrator: TaskOrchestrator):
@@ -60,33 +47,25 @@ async def run_orchestrator_loop(orchestrator: TaskOrchestrator):
     orchestrator_instance = orchestrator # Make instance available to FastAPI endpoint
 
     print("Initializing Julius Task Orchestration System...")
-    # 3. Load initial tasks
-    initial_tasks = load_tasks_from_json(TASKS_FILE)
-    if initial_tasks:
-        orchestrator.add_tasks(initial_tasks)
-        print(f"Loaded {len(initial_tasks)} tasks into the orchestrator.")
-    else:
-        print("No initial tasks loaded. Add tasks to tasks.json or use an API if available.")
+    # No longer loading tasks from JSON file. Orchestrator will pull from Redis.
+    print(f"Orchestrator is now monitoring Redis queue '{TASK_QUEUE_NAME}' for tasks.")
 
     try:
         round_number = 1
         while True:
-            if not orchestrator.task_queue:
-                print(f"No tasks in queue. Waiting for {ROUND_INTERVAL_SECONDS} seconds or new tasks...")
-                await asyncio.sleep(ROUND_INTERVAL_SECONDS)
-                continue
-
-            print(f"\n--- Starting Orchestrator Round {round_number} ---")
+            # The run_round method now handles the empty queue case internally.
+            # We can just call it in a loop.
+            # print(f"\n--- Starting Orchestrator Round {round_number} ---") # Too noisy
             await orchestrator.run_round()
-            print(f"--- Finished Orchestrator Round {round_number} ---")
+            # print(f"--- Finished Orchestrator Round {round_number} ---") # Too noisy
 
             round_number += 1
-            print(f"Waiting {ROUND_INTERVAL_SECONDS} seconds for the next round...")
+            # Wait for the next round.
             await asyncio.sleep(ROUND_INTERVAL_SECONDS)
 
     except asyncio.CancelledError:
         print("\nOrchestrator loop cancelled.")
-    except KeyboardInterrupt: # Should be caught by main, but good to have robustness
+    except KeyboardInterrupt:
         print("\nOrchestrator loop interrupted by KeyboardInterrupt.")
     finally:
         print("Orchestrator loop stopped.")
@@ -97,17 +76,22 @@ async def main_async_app():
     # 1. Initialize Agent
     julius_agent = JuliusAgent()
 
-    # 2. Initialize TaskOrchestrator
-    # Pass the log file name defined globally
-    local_orchestrator = TaskOrchestrator(
-        agent=julius_agent,
-        batch_size=3,
-        max_batch=10,
-        metrics_log_file=ORCHESTRATOR_LOG_FILE
-    )
+    # 2. Initialize TaskOrchestrator with Redis configuration
+    try:
+        local_orchestrator = TaskOrchestrator(
+            agent=julius_agent,
+            redis_host=REDIS_HOST,
+            redis_port=REDIS_PORT,
+            redis_db=REDIS_DB,
+            redis_password=REDIS_PASSWORD,
+            task_queue_name=TASK_QUEUE_NAME,
+            metrics_log_file=ORCHESTRATOR_LOG_FILE
+        )
+    except Exception as e:
+        print(f"❌ Failed to initialize TaskOrchestrator. Please check your Redis connection and settings. Error: {e}")
+        return # Exit if orchestrator can't be created
 
     # Configure Uvicorn server
-    # Note: Uvicorn's `run` is blocking, so we use `Server.serve()` for async context
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
     server = uvicorn.Server(config)
 
@@ -116,11 +100,9 @@ async def main_async_app():
     fastapi_task = asyncio.create_task(server.serve())
 
     print("FastAPI server starting on http://0.0.0.0:8000")
-    print("Orchestrator starting its loop.")
+    print(f"Orchestrator loop starting, checking for tasks every {ROUND_INTERVAL_SECONDS} seconds.")
 
     try:
-        # await orchestrator_task # If we await only one, the other might not shutdown gracefully on KeyboardInterrupt
-        # await fastapi_task
         done, pending = await asyncio.wait(
             [orchestrator_task, fastapi_task],
             return_when=asyncio.FIRST_COMPLETED,
@@ -128,13 +110,15 @@ async def main_async_app():
 
         for task in pending:
             task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True) # Ensure cancellations are processed
+        await asyncio.gather(*pending, return_exceptions=True)
 
     except KeyboardInterrupt:
         print("\nShutting down application (main_async_app)...")
-        # Cancel tasks explicitly on KeyboardInterrupt
         orchestrator_task.cancel()
-        fastapi_task.cancel() # Uvicorn server might need more graceful shutdown
+        # Uvicorn's server.serve() doesn't always exit gracefully on task cancellation alone.
+        # Calling server.shutdown() is more explicit if available, but cancellation is the asyncio way.
+        server.should_exit = True
+        fastapi_task.cancel()
         await asyncio.gather(orchestrator_task, fastapi_task, return_exceptions=True)
     finally:
         print("Application shutdown complete.")
