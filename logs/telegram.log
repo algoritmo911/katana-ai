@@ -22,3 +22,248 @@
 <MagicMock name='datetime.utcnow().isoformat()' id='140029274237232'> | [NLU] "расскажи анекдот" → "get_joke"
 <MagicMock name='datetime.utcnow().isoformat()' id='140029275222672'> | [NLU] "покажи место на диске" → "df -h"
 <MagicMock name='datetime.utcnow().isoformat()' id='140029275188416'> | [NLU] "какая погода" → "get_weather"
+2025-07-29T17:58:23.093658 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "test", "module": "", "args": {}, "id": "1"}
+2025-07-29T17:58:23.094926 | [BOT_EVENT] No NLP command interpreted from '{"type": "test", "module": "", "args": {}, "id": "1"}'. Attempting JSON parse.
+2025-07-29T17:58:23.493561 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "", "module": "test_module", "args": {}, "id": "1"}
+2025-07-29T17:58:23.494722 | [BOT_EVENT] No NLP command interpreted from '{"type": "", "module": "test_module", "args": {}, "id": "1"}'. Attempting JSON parse.
+2025-07-29T17:58:23.659573 | [BOT_EVENT] OpenAI API key not configured. Cannot process voice.
+2025-07-29T17:58:23.948562 | [BOT_EVENT] Received text message from @testuser (12345): test command
+2025-07-29T17:58:23.949445 | [BOT_EVENT] No NLP command interpreted from 'test command'. Attempting JSON parse.
+2025-07-29T17:58:24.342189 | [BOT_EVENT] Received voice message from 67890. File ID: test_voice_file_id
+2025-07-29T17:58:24.733829 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "test_type", "module": "test_module", "args": "not_a_dict", "id": "test_id"}
+2025-07-29T17:58:24.734669 | [BOT_EVENT] No NLP command interpreted from '{"type": "test_type", "module": "test_module", "args": "not_a_dict", "id": "test_id"}'. Attempting JSON parse.
+2025-07-29T17:58:24.859282 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "test_type", "module": "test_module", "args": {}, "id": [1, 2, 3]}
+2025-07-29T17:58:24.860802 | [BOT_EVENT] No NLP command interpreted from '{"type": "test_type", "module": "test_module", "args": {}, "id": [1, 2, 3]}'. Attempting JSON parse.
+2025-07-29T17:58:25.059215 | [BOT_EVENT] Received text message from @testuser (12345): not a valid json
+2025-07-29T17:58:25.060829 | [BOT_EVENT] No NLP command interpreted from 'not a valid json'. Attempting JSON parse.
+2025-07-29T17:58:25.250790 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "test_type", "module": "", "args": {}, "id": "fail_log_id"}
+2025-07-29T17:58:25.252515 | [BOT_EVENT] No NLP command interpreted from '{"type": "test_type", "module": "", "args": {}, "id": "fail_log_id"}'. Attempting JSON parse.
+2025-07-29T17:58:25.381181 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "test_type", "args": {}, "id": "test_id"}
+2025-07-29T17:58:25.382614 | [BOT_EVENT] No NLP command interpreted from '{"type": "test_type", "args": {}, "id": "test_id"}'. Attempting JSON parse.
+2025-07-29T17:58:25.511545 | [BOT_EVENT] Received text message from @testuser (12345): {"module": "test_module", "args": {}, "id": "test_id"}
+2025-07-29T17:58:25.513228 | [BOT_EVENT] No NLP command interpreted from '{"module": "test_module", "args": {}, "id": "test_id"}'. Attempting JSON parse.
+2025-07-29T17:58:25.645508 | [BOT_EVENT] Received text message from @testuser (12345): привет бот
+2025-07-29T17:58:25.647308 | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+2025-07-29T17:58:25.785693 | [BOT_EVENT] Received text message from @testuser (12345): расскажи анекдот
+2025-07-29T17:58:25.788037 | [NLU] "расскажи анекдот" → "get_joke"
+2025-07-29T17:58:25.962873 | [BOT_EVENT] Received text message from @testuser (12345): покажи место на диске
+2025-07-29T17:58:25.964311 | [NLU] "покажи место на диске" → "df -h"
+2025-07-29T17:58:25.964396 | [BOT_EVENT] Running katana command: df -h
+2025-07-29T17:58:25.996251 | [BOT_EVENT] Command output: Filesystem               Size  Used Avail Use% Mounted on
+/dev/vdb                 9.8G  100M  9.2G   2% /rom/overlay
+overlayfs:/overlay/root  9.8G  100M  9.2G   2% /
+tmpfs                    3.9G     0  3.9G   0% /dev/shm
+tmpfs                    1.6G  300K  1.6G   1% /run
+tmpfs                    5.0M     0  5.0M   0% /run/lock
+tmpfs                    1.0M  4.0K 1020K   1% /run/credentials/@system
+tmpfs                    3.9G  224K  3.9G   1% /var/lib/systemd
+tmpfs                    796M  8.0K  796M   1% /run/user/1001
+2025-07-29T17:58:26.125765 | [BOT_EVENT] Received text message from @testuser (12345): какая погода
+2025-07-29T17:58:26.127618 | [NLU] "какая погода" → "get_weather"
+2025-07-29T17:58:26.256027 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
+2025-07-29T17:58:26.257493 | [BOT_EVENT] No NLP command interpreted from '{"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}'. Attempting JSON parse.
+2025-07-29T17:58:26.257645 | [BOT_EVENT] Successfully validated command from 12345: {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
+2025-07-29T17:58:26.257715 | [BOT_EVENT] handle_log_event called for chat_id 12345 with data: {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
+2025-07-29T17:58:26.257851 | [BOT_EVENT] Successfully processed 'log_event' for chat_id 12345. Args: {"message": "hello"}
+2025-07-29T17:58:26.390139 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}
+2025-07-29T17:58:26.391052 | [BOT_EVENT] No NLP command interpreted from '{"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}'. Attempting JSON parse.
+2025-07-29T17:58:26.391209 | [BOT_EVENT] Successfully validated command from 12345: {"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}
+2025-07-29T17:58:26.391271 | [BOT_EVENT] handle_mind_clearing called for chat_id 12345 with data: {"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}
+2025-07-29T17:58:26.391319 | [BOT_EVENT] Successfully processed 'mind_clearing' for chat_id 12345. Args: {"duration": "10m"}
+2025-07-29T17:58:26.518202 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "unknown_type", "module": "custom_module", "args": {}, "id": "custom003"}
+2025-07-29T17:58:26.519936 | [BOT_EVENT] No NLP command interpreted from '{"type": "unknown_type", "module": "custom_module", "args": {}, "id": "custom003"}'. Attempting JSON parse.
+2025-07-29T17:58:26.520071 | [BOT_EVENT] Successfully validated command from 12345: {"type": "unknown_type", "module": "custom_module", "args": {}, "id": "custom003"}
+2025-07-29T17:58:26.520129 | [BOT_EVENT] Command type 'unknown_type' not specifically handled, proceeding with default save. Full command data: {"type": "unknown_type", "module": "custom_module", "args": {}, "id": "custom003"}
+2025-07-29T17:58:26.520177 | [BOT_EVENT] Attempting to save command from 12345. Full command data: {"type": "unknown_type", "module": "custom_module", "args": {}, "id": "custom003"}
+2025-07-29T17:58:26.650312 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "test_type", "module": "test_module", "args": {}, "id": "test_id"}
+2025-07-29T17:58:26.652001 | [BOT_EVENT] No NLP command interpreted from '{"type": "test_type", "module": "test_module", "args": {}, "id": "test_id"}'. Attempting JSON parse.
+2025-07-29T17:58:26.652290 | [BOT_EVENT] Successfully validated command from 12345: {"type": "test_type", "module": "test_module", "args": {}, "id": "test_id"}
+2025-07-29T17:58:26.652362 | [BOT_EVENT] Command type 'test_type' not specifically handled, proceeding with default save. Full command data: {"type": "test_type", "module": "test_module", "args": {}, "id": "test_id"}
+2025-07-29T17:58:26.652425 | [BOT_EVENT] Attempting to save command from 12345. Full command data: {"type": "test_type", "module": "test_module", "args": {}, "id": "test_id"}
+2025-07-29T17:58:26.786500 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "test_empty_args", "module": "test_mod_empty_args", "args": {}, "id": "empty_args_id"}
+2025-07-29T17:58:26.788168 | [BOT_EVENT] No NLP command interpreted from '{"type": "test_empty_args", "module": "test_mod_empty_args", "args": {}, "id": "empty_args_id"}'. Attempting JSON parse.
+2025-07-29T17:58:26.788284 | [BOT_EVENT] Successfully validated command from 12345: {"type": "test_empty_args", "module": "test_mod_empty_args", "args": {}, "id": "empty_args_id"}
+2025-07-29T17:58:26.788338 | [BOT_EVENT] Command type 'test_empty_args' not specifically handled, proceeding with default save. Full command data: {"type": "test_empty_args", "module": "test_mod_empty_args", "args": {}, "id": "empty_args_id"}
+2025-07-29T17:58:26.788387 | [BOT_EVENT] Attempting to save command from 12345. Full command data: {"type": "test_empty_args", "module": "test_mod_empty_args", "args": {}, "id": "empty_args_id"}
+2025-07-29T17:58:26.920675 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "test_type_int_id", "module": "test_module_int_id", "args": {}, "id": 123}
+2025-07-29T17:58:26.922219 | [BOT_EVENT] No NLP command interpreted from '{"type": "test_type_int_id", "module": "test_module_int_id", "args": {}, "id": 123}'. Attempting JSON parse.
+2025-07-29T17:58:26.922493 | [BOT_EVENT] Successfully validated command from 12345: {"type": "test_type_int_id", "module": "test_module_int_id", "args": {}, "id": 123}
+2025-07-29T17:58:26.922562 | [BOT_EVENT] Command type 'test_type_int_id' not specifically handled, proceeding with default save. Full command data: {"type": "test_type_int_id", "module": "test_module_int_id", "args": {}, "id": 123}
+2025-07-29T17:58:26.922622 | [BOT_EVENT] Attempting to save command from 12345. Full command data: {"type": "test_type_int_id", "module": "test_module_int_id", "args": {}, "id": 123}
+2025-07-29T17:58:27.054752 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "test_simple_args", "module": "test_mod_simple_args", "args": {"key": "value"}, "id": "simple_args_id"}
+2025-07-29T17:58:27.056332 | [BOT_EVENT] No NLP command interpreted from '{"type": "test_simple_args", "module": "test_mod_simple_args", "args": {"key": "value"}, "id": "simple_args_id"}'. Attempting JSON parse.
+2025-07-29T17:58:27.056492 | [BOT_EVENT] Successfully validated command from 12345: {"type": "test_simple_args", "module": "test_mod_simple_args", "args": {"key": "value"}, "id": "simple_args_id"}
+2025-07-29T17:58:27.056554 | [BOT_EVENT] Command type 'test_simple_args' not specifically handled, proceeding with default save. Full command data: {"type": "test_simple_args", "module": "test_mod_simple_args", "args": {"key": "value"}, "id": "simple_args_id"}
+2025-07-29T17:58:27.056605 | [BOT_EVENT] Attempting to save command from 12345. Full command data: {"type": "test_simple_args", "module": "test_mod_simple_args", "args": {"key": "value"}, "id": "simple_args_id"}
+2025-07-29T17:58:27.187306 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "test", "module": "   ", "args": {}, "id": "1"}
+2025-07-29T17:58:27.188790 | [BOT_EVENT] No NLP command interpreted from '{"type": "test", "module": "   ", "args": {}, "id": "1"}'. Attempting JSON parse.
+2025-07-29T17:58:27.317136 | [BOT_EVENT] Received text message from @testuser (12345): {"type": "   ", "module": "test_module", "args": {}, "id": "1"}
+2025-07-29T17:58:27.318641 | [BOT_EVENT] No NLP command interpreted from '{"type": "   ", "module": "test_module", "args": {}, "id": "1"}'. Attempting JSON parse.
+<MagicMock name='datetime.utcnow().isoformat()' id='140699417673216'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140699418674336'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140699415664384'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140699417204960'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140220078460128'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140220068086032'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140220078866800'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140220078541424'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140221918061360'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140221917379184'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140221907217216'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140221907611968'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140058752993424'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140058751556768'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140058752692016'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140058753092256'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140547622127952'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140547623574208'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140547621745968'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140547623529040'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140387345220720'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140387343785120'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140387345641648'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140387345320656'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139935476122880'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139935477631696'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139935475902192'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139935476222768'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139854138017792'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139854139530112'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139854137716432'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139854138426960'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140442255892480'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140442267762656'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140442256902576'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140442255527328'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139775721103792'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139775741022416'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139775741807504'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139775732138352'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139779747799184'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139779768657360'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139779768273376'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139779748056384'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139924690510400'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139924701411472'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139924690070768'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139924689423632'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139932118769760'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139932139289200'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139932138572256'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139932118994048'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139665276772496'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139665297050704'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139665296575712'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139665277406384'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139674193814032'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139674214011472'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139674214305280'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139674194300176'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139765652627984'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139765672837040'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139765673069696'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139765653360224'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140213779554784'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140213791096176'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140213790756352'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140213779484016'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140236969458864'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140236967708192'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140236968589024'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140236967564912'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140338528936416'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140338540547440'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140338529724624'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140338528505248'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140619285504240'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140619296659824'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140619296770864'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140619285138608'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139835751112848'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139835762821984'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139835763116272'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139835751467872'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139807592423856'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139807604109392'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139807593549504'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139807592598896'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139776904160384'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139776913737920'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139776914589936'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139776893160576'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139676643418352'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139676664371424'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139676664564384'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139676643396784'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140117390156256'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140117401599872'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140117401471744'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140117390462368'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139664375963792'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139664376733648'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139664387640688'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139664376253760'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140298419888224'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140298419306960'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140298409544880'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140298399026448'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140020512579776'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140020524500848'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140020512623696'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140020512525632'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140702549610176'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140702559767680'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140702549790640'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140702548053408'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140424715755568'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140424726457392'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140424726826784'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140424715128224'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139820156641712'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139820157722240'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139820168580560'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139820156915008'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139872286367984'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139872306635568'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139872306990256'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139872286821744'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139921513472480'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139921514903168'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139921514843552'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139921513336416'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140152631144144'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140152608687936'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140152619851296'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140152608643008'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140352161751280'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140352181345968'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140352172231088'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140352160861552'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140650518978992'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140650539078704'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140650529050256'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140650518875840'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140464825377056'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140464836300288'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140464836448080'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140464825912832'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140161121067152'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140161131283136'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140161140853024'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140161121520816'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='140054926205072'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='140054937928480'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='140054938373392'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='140054926527856'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139734954354560'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139734944299392'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139734944729568'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139734933277680'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139690200457456'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139690212259072'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139690201255808'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139690200157648'> | [NLU] "какая погода" → "get_weather"
+<MagicMock name='datetime.utcnow().isoformat()' id='139910297179856'> | [NLU] "привет бот" → "Привет! Как я могу помочь?"
+<MagicMock name='datetime.utcnow().isoformat()' id='139910297619920'> | [NLU] "расскажи анекдот" → "get_joke"
+<MagicMock name='datetime.utcnow().isoformat()' id='139910307462512'> | [NLU] "покажи место на диске" → "df -h"
+<MagicMock name='datetime.utcnow().isoformat()' id='139910308597968'> | [NLU] "какая погода" → "get_weather"

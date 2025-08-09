@@ -4,9 +4,13 @@ import json
 from pathlib import Path
 import shutil # For robust directory removal
 
-# Assuming bot.py is in the same directory or accessible in PYTHONPATH
-import bot
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from katana import bot
 import telebot # Import telebot here
+from katana.core.user_profile import UserProfile
+from katana.adapters.local_file_adapter import LocalFileAdapter
 
 class TestBot(unittest.TestCase):
 
@@ -25,22 +29,22 @@ class TestBot(unittest.TestCase):
         # Mock the bot object and its methods
         self.mock_bot_instance = MagicMock()
         # Patch the bot instance within the 'bot' module
-        self.bot_patcher = patch('bot.bot', self.mock_bot_instance)
+        self.bot_patcher = patch('katana.bot.bot', self.mock_bot_instance)
         self.mock_bot_module_instance = self.bot_patcher.start()
 
         # Mock datetime to control timestamps in filenames and time-based greetings
-        self.mock_datetime_patcher = patch('bot.datetime')
+        self.mock_datetime_patcher = patch('katana.bot.datetime')
         self.mock_datetime = self.mock_datetime_patcher.start()
         self.mock_datetime.utcnow.return_value.strftime.return_value = "YYYYMMDD_HHMMSS_ffffff"
         # Ensure datetime.now().hour returns an int for get_time_of_day_greeting
         self.mock_datetime.now.return_value.hour = 14 # Afternoon by default for tests
 
         # Patch log_local_bot_event
-        self.mock_log_event_patcher = patch('bot.log_local_bot_event')
+        self.mock_log_event_patcher = patch('katana.bot.log_local_bot_event')
         self.mock_log_local_bot_event = self.mock_log_event_patcher.start()
 
         # Patch for OPENAI_API_KEY
-        self.openai_api_key_patcher = patch('bot.OPENAI_API_KEY', 'test_openai_key')
+        self.openai_api_key_patcher = patch('katana.bot.OPENAI_API_KEY', 'test_openai_key')
         self.mock_openai_api_key = self.openai_api_key_patcher.start()
 
         # Patch for openai.Audio.transcribe
@@ -48,11 +52,11 @@ class TestBot(unittest.TestCase):
         self.mock_openai_transcribe = self.openai_transcribe_patcher.start()
 
         # Patch for bot.get_text_from_voice
-        self.get_text_from_voice_patcher = patch('bot.get_text_from_voice')
+        self.get_text_from_voice_patcher = patch('katana.bot.get_text_from_voice')
         self.mock_get_text_from_voice = self.get_text_from_voice_patcher.start()
 
         # Patch for bot.handle_text_message
-        self.handle_text_message_patcher = patch('bot.handle_text_message')
+        self.handle_text_message_patcher = patch('katana.bot.handle_text_message')
         self.mock_handle_text_message = self.handle_text_message_patcher.start()
 
         # Patch for os.remove
@@ -67,29 +71,23 @@ class TestBot(unittest.TestCase):
         # Temporary directory for voice files
         self.test_voice_file_dir = Path("test_voice_temp_dir")
         self.test_voice_file_dir.mkdir(parents=True, exist_ok=True)
-        self.voice_file_dir_patcher = patch('bot.VOICE_FILE_DIR', self.test_voice_file_dir)
+        self.voice_file_dir_patcher = patch('katana.bot.VOICE_FILE_DIR', self.test_voice_file_dir)
         self.voice_file_dir_patcher.start()
 
         # Reset BOT_STATS before each test
         bot.BOT_STATS["commands_processed"] = 0
 
         # Patch interpret to control NLP results
-        self.interpret_patcher = patch('bot.interpret')
+        self.interpret_patcher = patch('katana.bot.interpret')
         self.mock_interpret = self.interpret_patcher.start()
 
         # Patch run_katana_command
-        self.run_katana_command_patcher = patch('bot.run_katana_command')
+        self.run_katana_command_patcher = patch('katana.bot.run_katana_command')
         self.mock_run_katana_command = self.run_katana_command_patcher.start()
 
-        # Patch get_user_profile
-        self.get_user_profile_patcher = patch('bot.get_user_profile')
-        self.mock_get_user_profile = self.get_user_profile_patcher.start()
-        self.mock_user_profile = MagicMock()
-        self.mock_get_user_profile.return_value = self.mock_user_profile
+        self.local_storage_patcher = patch('katana.bot.LocalFileAdapter')
+        self.mock_local_storage = self.local_storage_patcher.start()
 
-        # Patch user_profile USER_DATA_DIR
-        self.user_data_dir_patcher = patch('core.user_profile.USER_DATA_DIR', self.test_user_data_dir)
-        self.user_data_dir_patcher.start()
 
         # Unpatch bot.handle_text_message for integration tests of this function
         # We will call it directly in some tests.
@@ -100,8 +98,6 @@ class TestBot(unittest.TestCase):
 
     def tearDown(self):
         # Stop patchers
-        self.user_data_dir_patcher.stop()
-        self.get_user_profile_patcher.stop()
         self.bot_patcher.stop()
         self.mock_datetime_patcher.stop()
         self.mock_log_event_patcher.stop()
@@ -114,6 +110,7 @@ class TestBot(unittest.TestCase):
         self.voice_file_dir_patcher.stop()
         self.interpret_patcher.stop()
         self.run_katana_command_patcher.stop()
+        self.local_storage_patcher.stop()
 
 
         # Clean up: remove dummy directory and its contents
@@ -148,7 +145,8 @@ class TestBot(unittest.TestCase):
     # --- Test Command Validation (for JSON messages) ---
     # Note: handle_message was refactored into handle_text_message.
     # JSON processing is now a fallback within handle_text_message.
-    def test_valid_json_command_gets_saved(self):
+    @patch('telebot.apihelper._make_request')
+    def test_valid_json_command_gets_saved(self, mock_make_request):
         command = {"type": "test_type", "module": "test_module", "args": {}, "id": "test_id"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None # Ensure NLP does not pick it up
@@ -183,9 +181,10 @@ class TestBot(unittest.TestCase):
         self.assertTrue(found_log, "Expected log for successful validation with full command data was not found.")
 
 
-    @patch('bot.get_time_of_day_greeting', return_value="Добрый день")
-    @patch('bot.get_username', return_value="testuser")
-    def test_invalid_json_format_fallback_message(self, mock_get_username, mock_get_time_greeting):
+    @patch('telebot.apihelper._make_request')
+    @patch('katana.bot.get_time_of_day_greeting', return_value="Добрый день")
+    @patch('katana.bot.get_username', return_value="testuser")
+    def test_invalid_json_format_fallback_message(self, mock_get_username, mock_get_time_greeting, mock_make_request):
         mock_message = self._create_mock_message("not a valid json")
         self.mock_interpret.return_value = None
 
@@ -198,14 +197,16 @@ class TestBot(unittest.TestCase):
         self.assertTrue(args[1].startswith(expected_reply_start))
         self.assertIn("Я уже обработал 1 команд.", args[1]) # Check bot stats
 
-    def test_missing_type_field_json(self):
+    @patch('telebot.apihelper._make_request')
+    def test_missing_type_field_json(self, mock_make_request):
         command = {"module": "test_module", "args": {}, "id": "test_id"} # type is missing
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
         bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Missing required field 'type'.")
 
-    def test_empty_string_type_json(self):
+    @patch('telebot.apihelper._make_request')
+    def test_empty_string_type_json(self, mock_make_request):
         command = {"type": "", "module": "test_module", "args": {}, "id": "1"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
@@ -214,42 +215,48 @@ class TestBot(unittest.TestCase):
 
     # ... (keep other JSON validation tests, ensuring self.mock_interpret.return_value = None and calling bot.handle_text_message)
 
-    def test_whitespace_string_type_json(self):
+    @patch('telebot.apihelper._make_request')
+    def test_whitespace_string_type_json(self, mock_make_request):
         command = {"type": "   ", "module": "test_module", "args": {}, "id": "1"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
         bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'type' must be a non-empty string. Got value '   '.")
 
-    def test_missing_module_field_json(self):
+    @patch('telebot.apihelper._make_request')
+    def test_missing_module_field_json(self, mock_make_request):
         command = {"type": "test_type", "args": {}, "id": "test_id"} # module is missing
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
         bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Missing required field 'module'.")
 
-    def test_empty_string_module_json(self):
+    @patch('telebot.apihelper._make_request')
+    def test_empty_string_module_json(self, mock_make_request):
         command = {"type": "test", "module": "", "args": {}, "id": "1"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
         bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'module' must be a non-empty string. Got value ''.")
 
-    def test_whitespace_string_module_json(self):
+    @patch('telebot.apihelper._make_request')
+    def test_whitespace_string_module_json(self, mock_make_request):
         command = {"type": "test", "module": "   ", "args": {}, "id": "1"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
         bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'module' must be a non-empty string. Got value '   '.")
 
-    def test_invalid_args_type_json(self):
+    @patch('telebot.apihelper._make_request')
+    def test_invalid_args_type_json(self, mock_make_request):
         command = {"type": "test_type", "module": "test_module", "args": "not_a_dict", "id": "test_id"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
         bot.handle_text_message(mock_message)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'args' must be type dict. Got value 'not_a_dict' of type str.")
 
-    def test_invalid_id_type_json(self):
+    @patch('telebot.apihelper._make_request')
+    def test_invalid_id_type_json(self, mock_make_request):
         command = {"type": "test_type", "module": "test_module", "args": {}, "id": [1,2,3]} # id is a list
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
@@ -258,7 +265,8 @@ class TestBot(unittest.TestCase):
 
 
     # --- ID field type tests (JSON) ---
-    def test_valid_json_command_with_int_id(self):
+    @patch('telebot.apihelper._make_request')
+    def test_valid_json_command_with_int_id(self, mock_make_request):
         command = {"type": "test_type_int_id", "module": "test_module_int_id", "args": {}, "id": 123}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
@@ -286,7 +294,8 @@ class TestBot(unittest.TestCase):
         self.assertTrue(found_log, "Expected log for successful validation with full command data (int id) was not found.")
 
     # --- Args field tests (JSON) ---
-    def test_valid_json_command_with_empty_args(self):
+    @patch('telebot.apihelper._make_request')
+    def test_valid_json_command_with_empty_args(self, mock_make_request):
         command = {"type": "test_empty_args", "module": "test_mod_empty_args", "args": {}, "id": "empty_args_id"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
@@ -299,7 +308,8 @@ class TestBot(unittest.TestCase):
         self.assertTrue(expected_file_path.exists())
         self.mock_bot_module_instance.reply_to.assert_called_once()
 
-    def test_valid_json_command_with_simple_args(self):
+    @patch('telebot.apihelper._make_request')
+    def test_valid_json_command_with_simple_args(self, mock_make_request):
         command = {"type": "test_simple_args", "module": "test_mod_simple_args", "args": {"key": "value"}, "id": "simple_args_id"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
@@ -314,8 +324,9 @@ class TestBot(unittest.TestCase):
 
 
     # --- Test Command Routing (JSON) ---
-    @patch('bot.handle_log_event')
-    def test_routing_log_event_json(self, mock_handle_log_event_func):
+    @patch('telebot.apihelper._make_request')
+    @patch('katana.bot.handle_log_event')
+    def test_routing_log_event_json(self, mock_handle_log_event_func, mock_make_request):
         command = {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
@@ -325,8 +336,9 @@ class TestBot(unittest.TestCase):
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
 
 
-    @patch('bot.handle_mind_clearing')
-    def test_routing_mind_clearing_json(self, mock_handle_mind_clearing_func):
+    @patch('telebot.apihelper._make_request')
+    @patch('katana.bot.handle_mind_clearing')
+    def test_routing_mind_clearing_json(self, mock_handle_mind_clearing_func, mock_make_request):
         command = {"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
@@ -336,7 +348,8 @@ class TestBot(unittest.TestCase):
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'mind_clearing' processed (placeholder).")
 
 
-    def test_unknown_json_command_type_saves_normally(self):
+    @patch('telebot.apihelper._make_request')
+    def test_unknown_json_command_type_saves_normally(self, mock_make_request):
         command = {"type": "unknown_type", "module": "custom_module", "args": {}, "id": "custom003"}
         mock_message = self._create_mock_json_message(command)
         self.mock_interpret.return_value = None
@@ -347,7 +360,8 @@ class TestBot(unittest.TestCase):
         # ... (rest of the assertions for file saving and reply)
 
     # --- Logging Verification Tests (JSON) ---
-    def test_json_validation_failure_logs_details(self):
+    @patch('telebot.apihelper._make_request')
+    def test_json_validation_failure_logs_details(self, mock_make_request):
         command = {"type": "test_type", "module": "", "args": {}, "id": "fail_log_id"} # Empty module
         original_command_text = json.dumps(command)
         mock_message = self._create_mock_json_message(command)
@@ -357,10 +371,11 @@ class TestBot(unittest.TestCase):
 
 
     # --- Tests for NLP command handling in handle_text_message ---
-    @patch('bot.get_time_of_day_greeting', return_value="Добрый день")
-    @patch('bot.get_username', return_value="nlp_user")
-    @patch('bot.get_bot_stats_message', return_value="Статистика: обработано 1 команд.")
-    def test_nlp_greeting_command(self, mock_stats, mock_username, mock_greeting):
+    @patch('telebot.apihelper._make_request')
+    @patch('katana.bot.get_time_of_day_greeting', return_value="Добрый день")
+    @patch('katana.bot.get_username', return_value="nlp_user")
+    @patch('katana.bot.get_bot_stats_message', return_value="Статистика: обработано 1 команд.")
+    def test_nlp_greeting_command(self, mock_stats, mock_username, mock_greeting, mock_make_request):
         mock_message = self._create_mock_message("привет бот")
         self.mock_interpret.return_value = "Привет! Как я могу помочь?" # From nlp_mapper.COMMAND_ACTIONS["greet"]
 
@@ -374,10 +389,11 @@ class TestBot(unittest.TestCase):
         )
         self.assertEqual(bot.BOT_STATS["commands_processed"], 1)
 
-    @patch('bot.get_time_of_day_greeting', return_value="Добрый вечер")
-    @patch('bot.get_username', return_value="user1")
-    @patch('bot.get_bot_stats_message', return_value="Статистика: 2 команды.")
-    def test_nlp_shell_command(self, mock_stats, mock_username, mock_greeting):
+    @patch('telebot.apihelper._make_request')
+    @patch('katana.bot.get_time_of_day_greeting', return_value="Добрый вечер")
+    @patch('katana.bot.get_username', return_value="user1")
+    @patch('katana.bot.get_bot_stats_message', return_value="Статистика: 2 команды.")
+    def test_nlp_shell_command(self, mock_stats, mock_username, mock_greeting, mock_make_request):
         mock_message = self._create_mock_message("покажи место на диске")
         self.mock_interpret.return_value = "df -h" # From nlp_mapper
         self.mock_run_katana_command.return_value = "Filesystem Size Used Avail Use% Mounted on\n/dev/sda1 10G 5G 5G 50% /"
@@ -398,10 +414,11 @@ class TestBot(unittest.TestCase):
         self.assertEqual(bot.BOT_STATS["commands_processed"], 1)
 
 
-    @patch('bot.get_time_of_day_greeting', return_value="Доброе утро")
-    @patch('bot.get_username', return_value="api_user")
-    @patch('bot.get_bot_stats_message', return_value="N=3")
-    def test_nlp_weather_api_command(self, mock_stats, mock_username, mock_greeting):
+    @patch('telebot.apihelper._make_request')
+    @patch('katana.bot.get_time_of_day_greeting', return_value="Доброе утро")
+    @patch('katana.bot.get_username', return_value="api_user")
+    @patch('katana.bot.get_bot_stats_message', return_value="N=3")
+    def test_nlp_weather_api_command(self, mock_stats, mock_username, mock_greeting, mock_make_request):
         mock_message = self._create_mock_message("какая погода")
         self.mock_interpret.return_value = "get_weather"
 
@@ -416,10 +433,11 @@ class TestBot(unittest.TestCase):
         )
         self.assertEqual(bot.BOT_STATS["commands_processed"], 1)
 
-    @patch('bot.get_time_of_day_greeting', return_value="Добрый день")
-    @patch('bot.get_username', return_value="joker")
-    @patch('bot.get_bot_stats_message', return_value="Processed: 4")
-    def test_nlp_joke_api_command(self, mock_stats, mock_username, mock_greeting):
+    @patch('telebot.apihelper._make_request')
+    @patch('katana.bot.get_time_of_day_greeting', return_value="Добрый день")
+    @patch('katana.bot.get_username', return_value="joker")
+    @patch('katana.bot.get_bot_stats_message', return_value="Processed: 4")
+    def test_nlp_joke_api_command(self, mock_stats, mock_username, mock_greeting, mock_make_request):
         mock_message = self._create_mock_message("расскажи анекдот")
         self.mock_interpret.return_value = "get_joke"
 
@@ -487,7 +505,7 @@ class TestBot(unittest.TestCase):
         self._run_get_text_from_voice_test(actual_test, mock_open_file)
 
 
-    @patch('bot.OPENAI_API_KEY', None)
+    @patch('katana.bot.OPENAI_API_KEY', None)
     def test_get_text_from_voice_no_api_key_actual(self):
         def actual_test():
             result = bot.get_text_from_voice("dummy_path.ogg")
@@ -502,7 +520,7 @@ class TestBot(unittest.TestCase):
     @patch('builtins.open', side_effect=IOError("File not found"))
     def test_get_text_from_voice_file_open_error_actual(self, mock_open_file):
         def actual_test(mock_open):
-            with patch('bot.OPENAI_API_KEY', 'fake_key_for_this_test'): # Ensure key is set for this path
+            with patch('katana.bot.OPENAI_API_KEY', 'fake_key_for_this_test'): # Ensure key is set for this path
                 result = bot.get_text_from_voice("dummy_path.ogg")
                 self.assertIsNone(result)
                 self.mock_log_local_bot_event.assert_any_call("Unexpected error during voice transcription: File not found")
@@ -525,12 +543,13 @@ class TestBot(unittest.TestCase):
         mock_message.from_user.first_name = first_name
         return mock_message
 
+    @patch('telebot.apihelper._make_request')
     @patch('builtins.open', new_callable=unittest.mock.mock_open)
-    @patch('bot.handle_text_message') # Mock handle_text_message for this specific test
-    @patch('bot.get_time_of_day_greeting', return_value="Добрый день")
-    @patch('bot.get_username', return_value="voice_user")
-    @patch('bot.get_bot_stats_message', return_value="Статистика: 5")
-    def test_handle_voice_message_success(self, mock_stats, mock_username, mock_greeting, mock_handle_text, mock_open_file):
+    @patch('katana.bot.handle_text_message') # Mock handle_text_message for this specific test
+    @patch('katana.bot.get_time_of_day_greeting', return_value="Добрый день")
+    @patch('katana.bot.get_username', return_value="voice_user")
+    @patch('katana.bot.get_bot_stats_message', return_value="Статистика: 5")
+    def test_handle_voice_message_success(self, mock_stats, mock_username, mock_greeting, mock_handle_text, mock_open_file, mock_make_request):
         mock_voice_msg = self._create_mock_voice_message()
         self.mock_bot_module_instance.get_file.return_value.file_path = "voice/file.oga"
         self.mock_bot_module_instance.download_file.return_value = b"dummy voice data"
@@ -550,12 +569,13 @@ class TestBot(unittest.TestCase):
         self.mock_os_remove.assert_called_once_with(expected_temp_path)
 
 
+    @patch('telebot.apihelper._make_request')
     @patch('builtins.open', new_callable=unittest.mock.mock_open)
-    @patch('bot.handle_text_message') # Mock to prevent actual call
-    @patch('bot.get_time_of_day_greeting', return_value="Добрый вечер")
-    @patch('bot.get_username', return_value="voice_user_fail")
-    @patch('bot.get_bot_stats_message', return_value="Статистика: 6")
-    def test_handle_voice_message_transcription_fails(self, mock_stats, mock_username, mock_greeting, mock_handle_text, mock_open_file):
+    @patch('katana.bot.handle_text_message') # Mock to prevent actual call
+    @patch('katana.bot.get_time_of_day_greeting', return_value="Добрый вечер")
+    @patch('katana.bot.get_username', return_value="voice_user_fail")
+    @patch('katana.bot.get_bot_stats_message', return_value="Статистика: 6")
+    def test_handle_voice_message_transcription_fails(self, mock_stats, mock_username, mock_greeting, mock_handle_text, mock_open_file, mock_make_request):
         mock_voice_msg = self._create_mock_voice_message(username="voice_user_fail")
         self.mock_bot_module_instance.get_file.return_value.file_path = "voice/file.oga"
         self.mock_bot_module_instance.download_file.return_value = b"dummy voice data"
@@ -571,9 +591,10 @@ class TestBot(unittest.TestCase):
         self.mock_os_remove.assert_called_once_with(expected_temp_path)
 
 
-    @patch('bot.OPENAI_API_KEY', None)
-    @patch('bot.handle_text_message') # Mock to prevent call
-    def test_handle_voice_message_no_openai_key(self, mock_handle_text):
+    @patch('telebot.apihelper._make_request')
+    @patch('katana.bot.OPENAI_API_KEY', None)
+    @patch('katana.bot.handle_text_message') # Mock to prevent call
+    def test_handle_voice_message_no_openai_key(self, mock_handle_text, mock_make_request):
         mock_voice_msg = self._create_mock_voice_message()
         bot.handle_voice_message(mock_voice_msg)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_voice_msg, "⚠️ Распознавание голоса не настроено на сервере.")
@@ -582,12 +603,13 @@ class TestBot(unittest.TestCase):
         mock_handle_text.assert_not_called()
 
 
+    @patch('telebot.apihelper._make_request')
     @patch('builtins.open', new_callable=unittest.mock.mock_open)
-    @patch('bot.handle_text_message') # Mock to prevent call
-    @patch('bot.get_time_of_day_greeting', return_value="Добрый день")
-    @patch('bot.get_username', return_value="error_user")
-    @patch('bot.get_bot_stats_message', return_value="Статистика: 7")
-    def test_handle_voice_message_download_exception(self, mock_stats, mock_username, mock_greeting, mock_handle_text, mock_open_file):
+    @patch('katana.bot.handle_text_message') # Mock to prevent call
+    @patch('katana.bot.get_time_of_day_greeting', return_value="Добрый день")
+    @patch('katana.bot.get_username', return_value="error_user")
+    @patch('katana.bot.get_bot_stats_message', return_value="Статистика: 7")
+    def test_handle_voice_message_download_exception(self, mock_stats, mock_username, mock_greeting, mock_handle_text, mock_open_file, mock_make_request):
         mock_voice_msg = self._create_mock_voice_message(username="error_user")
         self.mock_bot_module_instance.get_file.side_effect = Exception("Download error")
 
@@ -599,10 +621,11 @@ class TestBot(unittest.TestCase):
         self.mock_os_remove.assert_not_called()
 
 
+    @patch('telebot.apihelper._make_request')
     @patch('builtins.open', new_callable=unittest.mock.mock_open)
     @patch('os.remove', side_effect=OSError("Delete failed"))
-    @patch('bot.handle_text_message') # Mock to prevent call
-    def test_handle_voice_message_cleanup_exception(self, mock_handle_text, mock_os_remove_custom, mock_open_file):
+    @patch('katana.bot.handle_text_message') # Mock to prevent call
+    def test_handle_voice_message_cleanup_exception(self, mock_handle_text, mock_os_remove_custom, mock_open_file, mock_make_request):
         mock_voice_msg = self._create_mock_voice_message()
         self.mock_bot_module_instance.get_file.return_value.file_path = "voice/file.oga"
         self.mock_bot_module_instance.download_file.return_value = b"dummy voice data"
@@ -616,31 +639,32 @@ class TestBot(unittest.TestCase):
         self.mock_log_local_bot_event.assert_any_call(f"Error deleting temporary voice file {expected_temp_path}: Delete failed")
 
     # --- Tests for User Profile ---
-    def test_handle_text_message_adds_to_history(self):
+    @patch('telebot.apihelper._make_request')
+    def test_handle_text_message_adds_to_history(self, mock_make_request):
         mock_message = self._create_mock_message("test command")
         self.mock_interpret.return_value = None
-        bot.handle_text_message(mock_message)
-        self.mock_get_user_profile.assert_called_once_with(mock_message.from_user.id)
-        self.mock_user_profile.add_command_to_history.assert_called_once_with("test command")
-        self.mock_user_profile.save.assert_called_once()
+        with patch('katana.bot.LocalFileAdapter') as mock_adapter:
+            bot.handle_text_message(mock_message)
+            mock_adapter.return_value.save.assert_called_once()
 
-    def test_handle_recommendations_with_results(self):
-        mock_message = self._create_mock_message("/recommendations")
-        self.mock_user_profile.get_command_recommendations.return_value = ["ls -l", "df -h"]
-        bot.handle_recommendations(mock_message)
-        self.mock_get_user_profile.assert_called_once_with(mock_message.from_user.id)
-        self.mock_user_profile.get_command_recommendations.assert_called_once()
-        expected_response = "Вот несколько команд, которые вы часто используете:\n1. `ls -l`\n2. `df -h`\n"
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_response, parse_mode="Markdown")
 
-    def test_handle_recommendations_no_results(self):
+    @patch('telebot.apihelper._make_request')
+    def test_handle_recommendations_with_results(self, mock_make_request):
         mock_message = self._create_mock_message("/recommendations")
-        self.mock_user_profile.get_command_recommendations.return_value = []
-        bot.handle_recommendations(mock_message)
-        self.mock_get_user_profile.assert_called_once_with(mock_message.from_user.id)
-        self.mock_user_profile.get_command_recommendations.assert_called_once()
-        expected_response = "У меня пока нет рекомендаций для вас. Попробуйте использовать несколько команд, и я смогу вам что-нибудь предложить."
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_response)
+        with patch('katana.bot.LocalFileAdapter') as mock_adapter:
+            mock_adapter.return_value.load.return_value = {"user_id": 123, "command_history": [{"command": "ls -l", "timestamp": "now"}]}
+            bot.handle_recommendations(mock_message)
+            expected_response = "Вот несколько команд, которые вы часто используете:\n1. `ls -l`\n"
+            self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_response, parse_mode="Markdown")
+
+    @patch('telebot.apihelper._make_request')
+    def test_handle_recommendations_no_results(self, mock_make_request):
+        mock_message = self._create_mock_message("/recommendations")
+        with patch('katana.bot.LocalFileAdapter') as mock_adapter:
+            mock_adapter.return_value.load.return_value = None
+            bot.handle_recommendations(mock_message)
+            expected_response = "У меня пока нет рекомендаций для вас. Попробуйте использовать несколько команд, и я смогу вам что-нибудь предложить."
+            self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, expected_response)
 
 
 if __name__ == '__main__':

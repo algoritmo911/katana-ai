@@ -2,25 +2,28 @@ import argparse
 import json
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-from core.user_profile import get_user_profile
-from core.sync_engine import push_profile_to_cloud, pull_profile_from_cloud, get_sync_status
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+from katana.core.user_profile import UserProfile
+from katana.core.sync_engine import SyncEngine
+from katana.adapters.local_file_adapter import LocalFileAdapter
+from katana.adapters.mock_cloud_adapter import MockCloudAdapter
+
+def get_user_profile(user_id: int) -> UserProfile:
+    """Gets a user profile instance."""
+    local_storage = LocalFileAdapter()
+    profile_data = local_storage.load(user_id)
+    if profile_data:
+        return UserProfile(**profile_data)
+    return UserProfile(user_id=user_id)
 
 def view_user_prefs(args):
     """Prints the user's preferences."""
     user_profile = get_user_profile(args.user_id)
-    if not user_profile.profile_path.exists():
-        print(f"No profile found for user ID: {args.user_id}")
-        return
-    print(json.dumps(user_profile.data.get('preferences', {}), indent=4))
+    print(json.dumps(user_profile.preferences, indent=4))
 
 def get_user_recs(args):
     """Prints command recommendations for the user."""
     user_profile = get_user_profile(args.user_id)
-    if not user_profile.profile_path.exists():
-        print(f"No profile found for user ID: {args.user_id}")
-        return
-
     recommendations = user_profile.get_command_recommendations(top_n=args.top_n)
 
     if not recommendations:
@@ -34,33 +37,33 @@ def get_user_recs(args):
 def show_profile(args):
     """Shows the user's full profile."""
     user_profile = get_user_profile(args.user_id)
-    if not user_profile.profile_path.exists():
-        print(f"No profile found for user ID: {args.user_id}")
-        return
     if args.json:
-        print(json.dumps(user_profile.data, indent=4))
+        print(json.dumps(user_profile.__dict__, indent=4))
     else:
-        print(user_profile.data)
+        print(user_profile)
 
 def sync_push(args):
     """Pushes the user profile to the cloud."""
+    sync_engine = SyncEngine(LocalFileAdapter(), MockCloudAdapter())
     try:
-        push_profile_to_cloud(args.user_id)
+        sync_engine.push(args.user_id)
         print(f"Profile for user {args.user_id} pushed successfully.")
     except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}")
 
 def sync_pull(args):
     """Pulls the user profile from the cloud."""
+    sync_engine = SyncEngine(LocalFileAdapter(), MockCloudAdapter())
     try:
-        pull_profile_from_cloud(args.user_id)
+        sync_engine.pull(args.user_id)
         print(f"Profile for user {args.user_id} pulled successfully.")
     except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}")
 
 def sync_status(args):
     """Checks the sync status of the user profile."""
-    status = get_sync_status(args.user_id)
+    sync_engine = SyncEngine(LocalFileAdapter(), MockCloudAdapter())
+    status = sync_engine.get_sync_status(args.user_id)
     print(f"Sync status for user {args.user_id}: {status}")
 
 def main():

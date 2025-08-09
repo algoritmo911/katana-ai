@@ -1,6 +1,9 @@
 import pytest
 import os
-from nlp_mapper import interpret, basic_interpret, llm_interpret, get_interpreter
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from katana.nlp_mapper import interpret, basic_interpret, llm_interpret, get_interpreter
 from unittest.mock import patch
 
 # Tests for the 'interpret' function (which is dynamically chosen by get_interpreter)

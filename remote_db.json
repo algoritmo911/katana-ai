@@ -1,0 +1,17 @@
+{
+    "456": {
+        "test": "data"
+    },
+    "789": {
+        "user_id": 789,
+        "command_history": [],
+        "preferences": {},
+        "last_seen": null
+    },
+    "123": {
+        "user_id": 123,
+        "data": {
+            "test": "data"
+        }
+    }
+}

@@ -4,10 +4,11 @@ import os
 from pathlib import Path
 from datetime import datetime
 import subprocess # Added for run_katana_command
-from nlp_mapper import interpret # Added for NLP
+from katana.nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
-from core.user_profile import get_user_profile # Added for user personalization
+from katana.core.user_profile import UserProfile # Added for user personalization
+from katana.adapters.local_file_adapter import LocalFileAdapter
 
 # Load environment variables from .env file
 load_dotenv()
@@ -129,7 +130,15 @@ def handle_mind_clearing(command_data, chat_id):
 def handle_recommendations(message):
     """Handles the /recommendations command."""
     user_id = message.from_user.id
-    user_profile = get_user_profile(user_id)
+    local_storage = LocalFileAdapter()
+    profile_data = local_storage.load(user_id)
+    if profile_data:
+        # The user_id from the message should take precedence.
+        profile_data.pop('user_id', None)
+        user_profile = UserProfile(user_id=user_id, **profile_data)
+    else:
+        user_profile = UserProfile(user_id=user_id)
+
     recommendations = user_profile.get_command_recommendations()
 
     if not recommendations:
@@ -152,14 +161,20 @@ def handle_text_message(message):
     time_greeting = get_time_of_day_greeting()
 
     # Get user profile
-    user_profile = get_user_profile(user_id)
+    local_storage = LocalFileAdapter()
+    profile_data = local_storage.load(user_id)
+    if profile_data:
+        user_profile = UserProfile(user_id=user_id, **profile_data)
+    else:
+        user_profile = UserProfile(user_id=user_id)
+
 
     log_local_bot_event(f"Received text message from {username} ({chat_id}): {text}")
     increment_command_count() # Increment for any processed message
 
     # Add command to user's history and save profile
     user_profile.add_command_to_history(text)
-    user_profile.save()
+    local_storage.save(user_id, user_profile.__dict__)
 
     # Attempt to interpret the text as a natural language command
     nlp_command_or_response = interpret(text)
@@ -323,7 +338,14 @@ def handle_voice_message(message):
     log_local_bot_event(f"Received voice message from {chat_id}. File ID: {message.voice.file_id}")
 
     # Get user profile
-    user_profile = get_user_profile(user_id)
+    local_storage = LocalFileAdapter()
+    profile_data = local_storage.load(user_id)
+    if profile_data:
+        # The user_id from the message should take precedence.
+        profile_data.pop('user_id', None)
+        user_profile = UserProfile(user_id=user_id, **profile_data)
+    else:
+        user_profile = UserProfile(user_id=user_id)
 
     if not OPENAI_API_KEY:
         bot.reply_to(message, "⚠️ Распознавание голоса не настроено на сервере.")
@@ -348,7 +370,7 @@ def handle_voice_message(message):
 
             # Add command to user's history and save profile
             user_profile.add_command_to_history(transcribed_text)
-            user_profile.save()
+            local_storage.save(user_id, user_profile.__dict__)
 
             # Create a new message object that looks like a text message
             # This allows reusing the handle_text_message logic

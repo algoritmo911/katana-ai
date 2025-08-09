@@ -1,0 +1,9 @@
+{
+    "user_id": 456,
+    "command_history": [
+        {
+            "command": "remote command",
+            "timestamp": "now"
+        }
+    ]
+}
