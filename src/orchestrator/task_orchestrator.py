@@ -4,11 +4,7 @@ import os
 from typing import List, Any, NamedTuple, Dict
 from src.memory.memory import Memory
 from src.agents.sync_agent import SyncAgent
-
-# Forward declaration for JuliusAgent
-class JuliusAgent:
-    async def process_tasks(self, tasks: List[str]) -> List['TaskResult']:
-        raise NotImplementedError
+from src.agents.katana_agent import KatanaAgent
 
 class TaskResult(NamedTuple):
     success: bool
@@ -16,7 +12,7 @@ class TaskResult(NamedTuple):
     task_content: str
 
 class TaskOrchestrator:
-    def __init__(self, agent: JuliusAgent, memory: Memory, sync_agent: SyncAgent, batch_size: int = 3, max_batch: int = 10, metrics_log_file: str = "orchestrator_log.json"):
+    def __init__(self, agent: 'KatanaAgent', memory: Memory, sync_agent: SyncAgent, batch_size: int = 3, max_batch: int = 10, metrics_log_file: str = "orchestrator_log.json"):
         self.agent = agent
         self.memory = memory
         self.sync_agent = sync_agent

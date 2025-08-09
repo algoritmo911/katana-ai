@@ -3,25 +3,37 @@ import json
 import os
 from typing import Dict, Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import uvicorn
+from pydantic import BaseModel
 
 from src.orchestrator.task_orchestrator import TaskOrchestrator
-from src.agents.julius_agent import JuliusAgent
+from src.agents.katana_agent import KatanaAgent
+from src.memory.memory import Memory
+from src.agents.sync_agent import SyncAgent
 
 TASKS_FILE = "tasks.json"
 ROUND_INTERVAL_SECONDS = 30
 ORCHESTRATOR_LOG_FILE = "orchestrator_log.json" # Centralize log file name
 
 # --- FastAPI App Setup ---
-app = FastAPI(title="Julius Task Orchestrator API")
+app = FastAPI(title="Katana Task Orchestrator API")
 
 # This will be populated when the main application starts
 # Not ideal for global state, but simple for this example.
 # A better approach for larger apps might involve dependency injection or app state.
 orchestrator_instance: TaskOrchestrator = None
+katana_agent_instance: KatanaAgent = None
 
+# --- Pydantic Models for API ---
+class ChatMessage(BaseModel):
+    chat_id: str
+    message: str
 
+class ChatResponse(BaseModel):
+    response: str
+
+# --- API Endpoints ---
 @app.get("/orchestrator/status", response_model=Dict[str, Any])
 async def get_orchestrator_status():
     """
@@ -31,6 +43,27 @@ async def get_orchestrator_status():
     if orchestrator_instance is None:
         return {"error": "Orchestrator not initialized"}
     return orchestrator_instance.get_status()
+
+@app.post("/agent/chat", response_model=ChatResponse)
+async def chat_with_agent(message: ChatMessage):
+    """
+    Handles an interactive chat message with the Katana agent.
+    This is the primary endpoint for n8n integration.
+    """
+    if katana_agent_instance is None:
+        raise HTTPException(status_code=503, detail="Katana Agent not initialized")
+
+    try:
+        response_text = await katana_agent_instance.process_chat_message(
+            chat_id=message.chat_id,
+            user_message=message.message
+        )
+        return ChatResponse(response=response_text)
+    except Exception as e:
+        # Log the exception details for debugging
+        print(f"Error during chat processing: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred while processing the message.")
+
 
 # --- Task Loading ---
 def load_tasks_from_json(file_path: str) -> list[str]:
@@ -59,7 +92,7 @@ async def run_orchestrator_loop(orchestrator: TaskOrchestrator):
     global orchestrator_instance
     orchestrator_instance = orchestrator # Make instance available to FastAPI endpoint
 
-    print("Initializing Julius Task Orchestration System...")
+    print("Initializing Katana Task Orchestration System...")
     # 3. Load initial tasks
     initial_tasks = load_tasks_from_json(TASKS_FILE)
     if initial_tasks:
@@ -94,13 +127,19 @@ async def run_orchestrator_loop(orchestrator: TaskOrchestrator):
 
 # --- Main Application Setup ---
 async def main_async_app():
-    # 1. Initialize Agent
-    julius_agent = JuliusAgent()
+    global katana_agent_instance
+    # 1. Initialize Agent and dependencies
+    katana_agent = KatanaAgent()
+    katana_agent_instance = katana_agent # Make agent instance available to API endpoints
+    memory = Memory()
+    sync_agent = SyncAgent(remote_path="/tmp/katana-remote-memory") # Placeholder
 
     # 2. Initialize TaskOrchestrator
     # Pass the log file name defined globally
     local_orchestrator = TaskOrchestrator(
-        agent=julius_agent,
+        agent=katana_agent,
+        memory=memory,
+        sync_agent=sync_agent,
         batch_size=3,
         max_batch=10,
         metrics_log_file=ORCHESTRATOR_LOG_FILE

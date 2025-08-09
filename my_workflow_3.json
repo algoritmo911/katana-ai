@@ -1,0 +1,114 @@
+{
+  "name": "Katana Agent Chat",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "chat_id",
+              "value": "n8n-user-123"
+            },
+            {
+              "name": "message",
+              "value": "Hello, Katana! This is a test from n8n."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Set Chat Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/agent/chat",
+        "options": {},
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{$node[\"Set Chat Message\"].json[\"chat_id\"]}}"
+            },
+            {
+              "name": "message",
+              "value": "={{$node[\"Set Chat Message\"].json[\"message\"]}}"
+            }
+          ]
+        }
+      },
+      "name": "Talk to Katana",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "note": "={{$json.response}}"
+      },
+      "name": "Display Response",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set Chat Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Chat Message": {
+      "main": [
+        [
+          {
+            "node": "Talk to Katana",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Talk to Katana": {
+      "main": [
+        [
+          {
+            "node": "Display Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "id": "1"
+}

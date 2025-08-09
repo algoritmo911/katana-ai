@@ -318,6 +318,10 @@ A basic CI workflow is set up using GitHub Actions. You can find the configurati
         *   **Lints**: Runs `flake8` to check for code style issues and potential errors.
         *   **Tests**: Runs `pytest` to execute automated tests. (Assumes tests are located in standard pytest-discoverable locations like `bot/tests/`).
 
+## Multi-Repository Architecture
+
+This project is designed to work as the core of a larger system, integrating logic from multiple repositories. For more details on how to integrate external modules (such as `Sapiens Coin` or `sapiens_notes_private`), please see the guide in [`src/modules/README.md`](src/modules/README.md).
+
 ### Extending CI/CD
 
 This is a foundational CI setup. You can extend it by:
