@@ -1,0 +1,37 @@
+{
+  "name": "Start Button Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "1",
+      "name": "Пуск — старт пайплайна",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { message: \"Пайплайн запущен\", time: new Date().toISOString() }}];"
+      },
+      "id": "2",
+      "name": "Log Start",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Пуск — старт пайплайна": {
+      "main": [
+        [
+          {
+            "node": "Log Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
