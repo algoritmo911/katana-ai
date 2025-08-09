@@ -1,0 +1,851 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "f45f7e53-ce75-4499-a159-69c320a939d9",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "6ed50111-9b95-44be-8e88-e23ffaf4610d",
+      "credentials": {
+        "telegramApi": {
+          "id": "HatmTi14ZGSaZx5k",
+          "name": "Билл"
+        }
+      },
+      "notes": "https://4d4c7c73bde8.ngrok-free.app/webhook/имя_твоего_триггера\n"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.message.voice.file_id }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Voice"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8c844924-b2ed-48b0-935c-c66a8fd0c778",
+                    "leftValue": "={{ $json.message.text }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2126aa2e-b0ec-44bd-b04e-c19609355c70",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        208,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.voice.file_id }}"
+      },
+      "id": "29d6890a-f586-4f8a-b8dd-47b9a49d5950",
+      "name": "Download File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        464,
+        48
+      ],
+      "webhookId": "44f2baa4-d47e-46e0-948b-d4bdd74e9d8b",
+      "credentials": {
+        "telegramApi": {
+          "id": "HatmTi14ZGSaZx5k",
+          "name": "Билл"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "id": "f60b70a5-da65-46c4-87c6-c4792371011d",
+      "name": "Transcribe",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [
+        608,
+        48
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NVTO9nedqmqRgH9P",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-ada-002",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        800
+      ],
+      "id": "02e887b5-625e-4988-99e5-3a61525dcffa",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "NVTO9nedqmqRgH9P",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "chat_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $('Set Final Text').item.json.sessionId }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Set Final Text').item.json.user_id }}"
+            },
+            {
+              "fieldId": "username",
+              "fieldValue": "={{ $('Set Final Text').item.json.username }}"
+            },
+            {
+              "fieldId": "first_name",
+              "fieldValue": "={{ $('Set Final Text').item.json.first_name }}"
+            },
+            {
+              "fieldId": "role",
+              "fieldValue": "user"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('Set Final Text').item.json.text }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ JSON.stringify($('Set Final Text').item.json.update || $('Set Final Text').item.json) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        624,
+        288
+      ],
+      "id": "94f46fad-16a2-40d3-aabd-3e161d5394d8",
+      "name": "Save User Message",
+      "credentials": {
+        "supabaseApi": {
+          "id": "b95yW1FV8NuENfQk",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Set Final Text').item.json.text }}",
+        "options": {
+          "systemMessage": "You exist to help people implement automations and use AI solutions in life and business. Your job is to uncover the user's problem or question and provide a clear answer using your memory.\n\nIMPORTANT:\n\nYou don’t make things up. You use your knowledge base (via the DATA_TOOL) to retrieve relevant info and insights.\n\nConversation Flow:\n\nMake sure the person has entered the chat with a specific goal or a desire to learn something new.\n\nUnderstand their current situation. If they have a business, ask about its stage, challenges, or questions.\nExample: “Describe what’s going on in your project.”\n\nUnderstand their goal (if they have one) and what’s blocking it.\nExample: “What are you struggling with? What do you think is holding you back?”\n\nConfirm that you can help. Use the knowledge base to find relevant answers or insights that could move them forward.\n\nOffer a clear plan. Suggest actionable solutions that directly match their request. Explain what can be done and how.\n\nAlways end with a question or call to action, so the dialogue doesn’t hit a dead end.\n\nTone & Style:\n\nTalk in a way that even a kid or grandparent can understand. AI is a tough topic for many, so avoid heavy jargon.\n\nUse real-life examples and analogies to explain complex tools and ideas.\n\nStick to the structured conversation flow.\n\nResponse Format:\n\nYou're chatting in Telegram. Send replies in Markdown format optimized for messaging.\n\nMake the text easy and pleasant to read. Use formatting to guide attention.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        912,
+        208
+      ],
+      "id": "a88a3334-ee30-4e87-868d-edc9a0185a86",
+      "name": "ИНФО АГЕНТ",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1024,
+        416
+      ],
+      "id": "2174671f-7dd6-49d1-8bf9-15228a0394a3",
+      "name": "ВРЕМЕННАЯ ПАМЯТЬ 1",
+      "credentials": {
+        "postgres": {
+          "id": "TvuvZ1Mm9CLMMFpo",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4-1106-preview",
+          "mode": "list",
+          "cachedResultName": "gpt-4-1106-preview"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        912,
+        416
+      ],
+      "id": "5268645a-b86d-416c-9b57-12ef750f7da6",
+      "name": "МОЗГ 1",
+      "credentials": {
+        "openAiApi": {
+          "id": "NVTO9nedqmqRgH9P",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "other",
+        "operation": "sendChatAction",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+      },
+      "id": "66df6c15-e58b-47cb-8c82-cd3e562c3c1a",
+      "name": "Send Typing Action",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        992,
+        32
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "HatmTi14ZGSaZx5k",
+          "name": "Билл"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fe7ecc99-e1e8-4a5e-bdd6-6fce9757b234",
+              "name": "text",
+              "value": "={{ $json.text || $json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "8386c97a-d1b9-4000-9e17-86c2158e91af",
+              "name": "sessionId",
+              "value": "={{ 'user_' + $('Switch').item.json.message.from.id }}",
+              "type": "string"
+            },
+            {
+              "id": "877d9358-6785-4299-be83-7c78fd41924f",
+              "name": "user_id",
+              "value": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+              "type": "string"
+            },
+            {
+              "id": "c58ae87e-c307-4af6-945f-bb8350aafc3d",
+              "name": "username",
+              "value": "={{ $('Telegram Trigger').item.json.message.from.username }}",
+              "type": "string"
+            },
+            {
+              "id": "a44439db-9b02-4093-9cc9-19af6c9e1a3c",
+              "name": "first_name",
+              "value": "={{ $('Telegram Trigger').item.json.message.from.first_name }}",
+              "type": "string"
+            },
+            {
+              "id": "d65b621c-b717-408d-b88c-20690ebb9b90",
+              "name": "update",
+              "value": "={{ $('Telegram Trigger').item.json }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "af4dca84-3e10-46c4-b7e2-9837e3819547",
+      "name": "Set Final Text",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4-1106-preview",
+          "mode": "list",
+          "cachedResultName": "gpt-4-1106-preview"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        544
+      ],
+      "id": "c612bac0-eabc-4c3d-a2cf-4ea02eabdc24",
+      "name": "4o-mini",
+      "credentials": {
+        "openAiApi": {
+          "id": "NVTO9nedqmqRgH9P",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ab7bbaf1-157d-47f3-bf1b-3734910e0e37",
+      "name": "Response1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1504,
+        80
+      ],
+      "webhookId": "ac2c424d-f210-4300-8535-22b21bb1905f",
+      "credentials": {
+        "telegramApi": {
+          "id": "HatmTi14ZGSaZx5k",
+          "name": "Билл"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "chat_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $('Set Final Text').item.json.sessionId }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Set Final Text').item.json.user_id }}"
+            },
+            {
+              "fieldId": "username",
+              "fieldValue": "={{ $('Set Final Text').item.json.username }}"
+            },
+            {
+              "fieldId": "role",
+              "fieldValue": "assistant"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('ИНФО АГЕНТ').item.json.output }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ JSON.stringify($('Set Final Text').item.json.update || $('Set Final Text').item.json) }}"
+            },
+            {
+              "fieldId": "first_name",
+              "fieldValue": "={{ $('Set Final Text').item.json.first_name }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        96
+      ],
+      "id": "48b3b140-3d99-4100-9213-29f13f64d184",
+      "name": "Save Bot Message1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "b95yW1FV8NuENfQk",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableName": {
+          "__rl": true,
+          "value": "documents",
+          "mode": "list",
+          "cachedResultName": "documents"
+        },
+        "options": {
+          "queryName": "match_documents"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        688
+      ],
+      "id": "037fe8f7-889b-42fd-b48d-64e827c00746",
+      "name": "DATA BASE1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "b95yW1FV8NuENfQk",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "documents",
+        "description": "Provide a detailed and fact-based answer. Use the database as long-term memory, which contains real examples of how AI solutions have been implemented in businesses. Include evaluations, results, and future forecasts where available. Always mention specific project or company names if they are present in the data. Do not generalize — stick to concrete cases.",
+        "topK": "=30"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        416
+      ],
+      "id": "5cf4fda9-36df-4439-93e0-4567e2906769",
+      "name": "DATA_TOOL1"
+    },
+    {
+      "parameters": {
+        "fields": {
+          "field": [
+            {
+              "name": "document_text",
+              "type": "string",
+              "required": true,
+              "typeOptions": {
+                "multiline": true
+              },
+              "displayName": "Document Text"
+            },
+            {
+              "name": "document_metadata",
+              "type": "json",
+              "displayName": "Document Metadata (JSON)",
+              "default": "{}"
+            }
+          ]
+        }
+      },
+      "id": "e8a1b5a6-12c3-4d4e-a5f6-789012345678",
+      "name": "Add Document to Knowledge Base",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-ada-002",
+        "document": "={{ $('Add Document to Knowledge Base').item.json.document_text }}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-5678-90ab-cdef-1234567890ab",
+      "name": "Create Document Embedding",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        250,
+        600
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NVTO9nedqmqRgH9P",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "documents",
+        "operation": "insert",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('Add Document to Knowledge Base').item.json.document_text }}"
+            },
+            {
+              "fieldId": "embedding",
+              "fieldValue": "={{ $('Create Document Embedding').item.json.embedding }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ $('Add Document to Knowledge Base').item.json.document_metadata }}"
+            }
+          ]
+        }
+      },
+      "id": "b0a1b2c3-d4e5-f678-9012-34567890abcd",
+      "name": "Save Document to DB",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        500,
+        600
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "b95yW1FV8NuENfQk",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "d9e0f1a2-b3c4-d5e6-f789-0123456789ab",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "error_logs",
+        "operation": "insert",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "error_message",
+              "fieldValue": "={{ $json.error.message }}"
+            },
+            {
+              "fieldId": "node_name",
+              "fieldValue": "={{ $json.execution.node.name }}"
+            },
+            {
+              "fieldId": "node_type",
+              "fieldValue": "={{ $json.execution.node.type }}"
+            },
+            {
+              "fieldId": "execution_id",
+              "fieldValue": "={{ $json.execution.id }}"
+            },
+            {
+              "fieldId": "workflow_id",
+              "fieldValue": "={{ $json.workflow.id }}"
+            },
+            {
+              "fieldId": "error_data",
+              "fieldValue": "={{ JSON.stringify($json) }}"
+            }
+          ]
+        }
+      },
+      "id": "a9b8c7d6-e5f4-a3b2-c1d0-fedcba987654",
+      "name": "Log Error to DB",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        250,
+        800
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "b95yW1FV8NuENfQk",
+          "name": "Supabase account 2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Final Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Transcribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe": {
+      "main": [
+        [
+          {
+            "node": "Set Final Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "DATA BASE1",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save User Message": {
+      "main": [
+        [
+          {
+            "node": "ИНФО АГЕНТ",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Typing Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ИНФО АГЕНТ": {
+      "main": [
+        [
+          {
+            "node": "Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ВРЕМЕННАЯ ПАМЯТЬ 1": {
+      "ai_memory": [
+        [
+          {
+            "node": "ИНФО АГЕНТ",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "МОЗГ 1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "ИНФО АГЕНТ",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Final Text": {
+      "main": [
+        [
+          {
+            "node": "Save User Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4o-mini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "DATA_TOOL1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Response1": {
+      "main": [
+        [
+          {
+            "node": "Save Bot Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DATA BASE1": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "DATA_TOOL1",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DATA_TOOL1": {
+      "ai_tool": [
+        [
+          {
+            "node": "ИНФО АГЕНТ",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Document to Knowledge Base": {
+      "main": [
+        [
+          {
+            "node": "Create Document Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Document Embedding": {
+      "main": [
+        [
+          {
+            "node": "Save Document to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Log Error to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Response1": [
+      {
+        "name": "First item",
+        "code": 1
+      },
+      {
+        "name": "Second item",
+        "code": 2
+      }
+    ]
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cf6f3ef869a6929e9b8d53fad0ed8cbab02717d47ba36d8bb1bc1bfa217faceb"
+  }
+}
