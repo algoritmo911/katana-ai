@@ -1,28 +1,29 @@
 import asyncio
-import json
 import os
 from typing import Dict, Any
 
 from fastapi import FastAPI
 import uvicorn
 
-from src.orchestrator.task_orchestrator import TaskOrchestrator
-from src.agents.julius_agent import JuliusAgent
+# --- Core Katana Components ---
+from src.orchestrator.task_orchestrator import TaskOrchestrator, KatanaTaskProcessor
+from src.dao.dao_task_handler import fetch_tasks_from_colony
+from src.prometheus.self_healer import analyze_logs_and_generate_tasks
+from src.memory.memory_manager import MemoryManager
 
-TASKS_FILE = "tasks.json"
-ROUND_INTERVAL_SECONDS = 30
-ORCHESTRATOR_LOG_FILE = "orchestrator_log.json" # Centralize log file name
+# --- Configuration ---
+ROUND_INTERVAL_SECONDS = 15
+ORCHESTRATOR_LOG_FILE = "orchestrator_log.json"
+
+# --- Global Instances (for simplicity in this example) ---
+# In a larger app, use dependency injection or app state.
+orchestrator_instance: TaskOrchestrator = None
+memory_manager_instance: MemoryManager = None
 
 # --- FastAPI App Setup ---
-app = FastAPI(title="Julius Task Orchestrator API")
+app = FastAPI(title="Katana Autonomous Engine API")
 
-# This will be populated when the main application starts
-# Not ideal for global state, but simple for this example.
-# A better approach for larger apps might involve dependency injection or app state.
-orchestrator_instance: TaskOrchestrator = None
-
-
-@app.get("/orchestrator/status", response_model=Dict[str, Any])
+@app.get("/status", response_model=Dict[str, Any])
 async def get_orchestrator_status():
     """
     Provides the current status of the TaskOrchestrator,
@@ -32,113 +33,110 @@ async def get_orchestrator_status():
         return {"error": "Orchestrator not initialized"}
     return orchestrator_instance.get_status()
 
-# --- Task Loading ---
-def load_tasks_from_json(file_path: str) -> list[str]:
-    """Loads a list of tasks from a JSON file."""
-    if not os.path.exists(file_path):
-        print(f"Warning: Tasks file not found at {file_path}. Starting with an empty task queue.")
-        return []
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if isinstance(data, list) and all(isinstance(item, str) for item in data):
-                return data
-            else:
-                print(f"Warning: Tasks file {file_path} does not contain a list of strings. Starting with an empty task queue.")
-                return []
-    except json.JSONDecodeError:
-        print(f"Warning: Error decoding JSON from {file_path}. Starting with an empty task queue.")
-        return []
-    except Exception as e:
-        print(f"Warning: An unexpected error occurred while loading tasks: {e}. Starting with an empty task queue.")
-        return []
+# --- Main Autonomous Loop ---
+async def run_autonomous_loop(orchestrator: TaskOrchestrator, memory: MemoryManager):
+    """The main autonomous loop for the Katana engine."""
+    global orchestrator_instance, memory_manager_instance
+    orchestrator_instance = orchestrator
+    memory_manager_instance = memory
 
-# --- Orchestrator Loop ---
-async def run_orchestrator_loop(orchestrator: TaskOrchestrator):
-    """The main loop for the task orchestrator."""
-    global orchestrator_instance
-    orchestrator_instance = orchestrator # Make instance available to FastAPI endpoint
+    print("Initializing Katana Autonomous Engine...")
 
-    print("Initializing Julius Task Orchestration System...")
-    # 3. Load initial tasks
-    initial_tasks = load_tasks_from_json(TASKS_FILE)
-    if initial_tasks:
-        orchestrator.add_tasks(initial_tasks)
-        print(f"Loaded {len(initial_tasks)} tasks into the orchestrator.")
-    else:
-        print("No initial tasks loaded. Add tasks to tasks.json or use an API if available.")
+    # Example chat_id for DAO to pull context from. In a real multi-user
+    # system, this would be managed dynamically.
+    EXAMPLE_CHAT_ID = "user_main_session"
 
     try:
         round_number = 1
         while True:
-            if not orchestrator.task_queue:
-                print(f"No tasks in queue. Waiting for {ROUND_INTERVAL_SECONDS} seconds or new tasks...")
-                await asyncio.sleep(ROUND_INTERVAL_SECONDS)
-                continue
+            print(f"\n--- Starting Katana Autonomous Round {round_number} ---")
 
-            print(f"\n--- Starting Orchestrator Round {round_number} ---")
-            await orchestrator.run_round()
-            print(f"--- Finished Orchestrator Round {round_number} ---")
+            # 1. Observe (Prometheus): Analyze performance and generate self-healing tasks.
+            print("[Loop] Analyzing logs for self-healing opportunities...")
+            healing_tasks = analyze_logs_and_generate_tasks(ORCHESTRATOR_LOG_FILE)
+            if healing_tasks:
+                print(f"[Loop] Prometheus generated {len(healing_tasks)} healing task(s).")
+                orchestrator.add_tasks(healing_tasks)
 
+            # 2. Orient (DAO): Generate tasks based on goals, knowledge, and memory.
+            print("[Loop] Consulting DAO for new tasks...")
+            # Pass memory manager and chat_id to get context-aware tasks.
+            dao_tasks = fetch_tasks_from_colony(memory_manager=memory, chat_id=EXAMPLE_CHAT_ID)
+            if dao_tasks:
+                print(f"[Loop] DAO generated {len(dao_tasks)} task(s).")
+                orchestrator.add_tasks(dao_tasks)
+
+            # 3. Act (Orchestrator): Execute a round of tasks if the queue is not empty.
+            if orchestrator.task_queue:
+                print(f"[Loop] Task queue has {len(orchestrator.task_queue)} task(s). Running orchestrator round.")
+                await orchestrator.run_round()
+            else:
+                print("[Loop] Task queue is empty. No action taken this round.")
+
+            print(f"--- Finished Katana Autonomous Round {round_number} ---")
             round_number += 1
             print(f"Waiting {ROUND_INTERVAL_SECONDS} seconds for the next round...")
             await asyncio.sleep(ROUND_INTERVAL_SECONDS)
 
     except asyncio.CancelledError:
-        print("\nOrchestrator loop cancelled.")
-    except KeyboardInterrupt: # Should be caught by main, but good to have robustness
-        print("\nOrchestrator loop interrupted by KeyboardInterrupt.")
+        print("\nAutonomous loop cancelled.")
     finally:
-        print("Orchestrator loop stopped.")
+        print("Autonomous loop stopped.")
 
 
 # --- Main Application Setup ---
 async def main_async_app():
-    # 1. Initialize Agent
-    julius_agent = JuliusAgent()
+    # 1. Initialize Core Components
+    print("Instantiating Katana components...")
+    task_processor = KatanaTaskProcessor()
 
-    # 2. Initialize TaskOrchestrator
-    # Pass the log file name defined globally
+    # Initialize MemoryManager (requires Redis to be running)
+    try:
+        memory = MemoryManager()
+        if not memory.redis_client:
+            print("CRITICAL: Could not connect to Redis. Memory-related functions will fail.")
+    except Exception as e:
+        print(f"CRITICAL: Failed to initialize MemoryManager: {e}. Exiting.")
+        return
+
     local_orchestrator = TaskOrchestrator(
-        agent=julius_agent,
+        agent=task_processor,
         batch_size=3,
         max_batch=10,
         metrics_log_file=ORCHESTRATOR_LOG_FILE
     )
 
-    # Configure Uvicorn server
-    # Note: Uvicorn's `run` is blocking, so we use `Server.serve()` for async context
+    # 2. Configure Uvicorn server for the API
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
     server = uvicorn.Server(config)
 
-    # Run orchestrator loop and FastAPI server concurrently
-    orchestrator_task = asyncio.create_task(run_orchestrator_loop(local_orchestrator))
-    fastapi_task = asyncio.create_task(server.serve())
+    # 3. Run autonomous loop and FastAPI server concurrently
+    loop_task = asyncio.create_task(run_autonomous_loop(local_orchestrator, memory))
+    server_task = asyncio.create_task(server.serve())
 
-    print("FastAPI server starting on http://0.0.0.0:8000")
-    print("Orchestrator starting its loop.")
+    print("Katana Engine starting...")
+    print("API server running on http://0.0.0.0:8000/status")
 
     try:
-        # await orchestrator_task # If we await only one, the other might not shutdown gracefully on KeyboardInterrupt
-        # await fastapi_task
         done, pending = await asyncio.wait(
-            [orchestrator_task, fastapi_task],
+            [loop_task, server_task],
             return_when=asyncio.FIRST_COMPLETED,
         )
-
         for task in pending:
             task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True) # Ensure cancellations are processed
-
+        await asyncio.gather(*pending, return_exceptions=True)
     except KeyboardInterrupt:
-        print("\nShutting down application (main_async_app)...")
-        # Cancel tasks explicitly on KeyboardInterrupt
-        orchestrator_task.cancel()
-        fastapi_task.cancel() # Uvicorn server might need more graceful shutdown
-        await asyncio.gather(orchestrator_task, fastapi_task, return_exceptions=True)
+        print("\nShutting down application...")
+        loop_task.cancel()
+        server_task.cancel()
+        await asyncio.gather(loop_task, server_task, return_exceptions=True)
     finally:
         print("Application shutdown complete.")
 
-
 if __name__ == "__main__":
+    # To run this, you need redis-server running in the background.
+    # You also need to have run `pip install -r requirements.txt` which should include
+    # fastapi, uvicorn, and redis.
+    # Note: If requirements.txt is missing these, they need to be added.
+    # For now, we assume they are present.
     asyncio.run(main_async_app())

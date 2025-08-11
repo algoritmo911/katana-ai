@@ -7,6 +7,7 @@ from typing import List, Any, NamedTuple, Dict
 # Assuming src is in PYTHONPATH for these imports
 from src.connectors import core_connector
 from src.telemetry.command_telemetry import log_command_event, configure_telemetry_logging as configure_task_telemetry
+from src.agents.n8n_agent import N8nAgent
 
 # Configure telemetry for the orchestrator module if not already done by bot
 # This ensures telemetry is active if orchestrator is used standalone.
@@ -60,6 +61,19 @@ class KatanaTaskProcessor(JuliusAgent):
                     else:
                         results.append(TaskResult(False, f"Core call failed: {core_details.get('error', '')}", task_data))
                         log_command_event(event_type=f"katana_task_{task_type}_failed", command_id=task_id, details=core_details, success=False)
+
+                elif task_type == "n8n_workflow_generation":
+                    try:
+                        agent = N8nAgent()
+                        task_description = task_data.get("description", "No description provided.")
+                        workflow_json = agent.create_workflow(task_description)
+                        # For now, the result detail will be the JSON itself
+                        results.append(TaskResult(True, workflow_json, task_data))
+                        log_command_event(event_type=f"katana_task_{task_type}_completed", command_id=task_id, details={"workflow_name": "E-commerce Order Processing"}, success=True)
+                    except Exception as agent_e:
+                        error_msg = f"N8nAgent failed: {agent_e}"
+                        results.append(TaskResult(False, error_msg, task_data))
+                        log_command_event(event_type=f"katana_task_{task_type}_failed", command_id=task_id, details={"error": str(agent_e)}, success=False)
 
                 elif task_type == "text_generation": # From dao_task_handler mock
                     # This would be where an NLP model is invoked for the task if not handled by Telegram bot directly
@@ -124,7 +138,7 @@ class TaskOrchestrator:
                     json.dump([], f)
 
 
-    def add_tasks(self, tasks: List[str]) -> None:
+    def add_tasks(self, tasks: List[Dict[str, Any]]) -> None:
         """Добавить список задач в очередь."""
         self.task_queue.extend(tasks)
 
