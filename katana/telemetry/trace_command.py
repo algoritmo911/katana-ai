@@ -3,24 +3,24 @@ import time
 import logging
 from typing import Any, Callable, List, Optional
 # Ensure this import path is correct based on your project structure.
-# It might be katana.memory.supabase_client if memory is a direct submodule of katana.
-from katana.memory.supabase_client import SupabaseMemoryClient
+# It might be katana.memory.core if memory is a direct submodule of katana.
+from katana.memory.core import MemoryCore
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
 
 # Global Supabase client instance to avoid reinitialization on every call
-# This assumes SupabaseMemoryClient is cheap to instantiate if not fully initialized,
+# This assumes MemoryCore is cheap to instantiate if not fully initialized,
 # or that it handles its own singleton/connection pooling if necessary.
-# If SupabaseMemoryClient manages a persistent connection, this might need adjustment
+# If MemoryCore manages a persistent connection, this might need adjustment
 # for long-running applications or specific framework integrations.
-supabase_memory_client_instance: Optional[SupabaseMemoryClient] = None
+supabase_memory_client_instance: Optional[MemoryCore] = None
 
-def get_supabase_memory_client() -> Optional[SupabaseMemoryClient]:
-    """Initializes and returns a global SupabaseMemoryClient instance."""
+def get_supabase_memory_client() -> Optional[MemoryCore]:
+    """Initializes and returns a global MemoryCore instance."""
     global supabase_memory_client_instance
     if supabase_memory_client_instance is None:
-        supabase_memory_client_instance = SupabaseMemoryClient()
+        supabase_memory_client_instance = MemoryCore()
     return supabase_memory_client_instance
 
 def trace_command(
@@ -94,7 +94,7 @@ def trace_command(
                         if not success and error_message:
                              final_output_data = {"error": error_message}
 
-                        client.store_log(
+                        client.add_dialogue(
                             user_id=str(user_id), # Ensure user_id is a string
                             command_name=command_name,
                             input_data=input_data,
