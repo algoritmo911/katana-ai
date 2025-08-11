@@ -1,179 +1,135 @@
 # bot/nlp/parser.py
 import re
+from .nlp_processor import NLPProcessor, NLPError
 
-# Простой список известных городов (можно расширить или использовать внешнюю библиотеку)
-KNOWN_CITIES = ["москва", "питер", "санкт-петербург", "новосибирск", "екатеринбург", "казань", "нижний новгород", "челябинск", "омск", "самара", "ростов-на-дону", "уфа", "красноярск", "пермь", "воронеж", "волгоград", "лондон"] # Добавил Лондон для теста
+import functools
+
+_nlp_processor_instance = None
+
+@functools.lru_cache(maxsize=1)
+def get_nlp_processor():
+    """
+    Инициализирует и возвращает синглтон-экземпляр NLPProcessor.
+    """
+    global _nlp_processor_instance
+    if _nlp_processor_instance:
+        return _nlp_processor_instance
+
+    try:
+        _nlp_processor_instance = NLPProcessor()
+        return _nlp_processor_instance
+    except ValueError as e:
+        print(f"КРИТИЧЕСКАЯ ОШИБКА: Не удалось инициализировать NLPProcessor. {e}")
+        return None
 
 def analyze_text(text, current_context):
     """
-    Анализирует текст пользователя, определяет намерения и извлекает сущности.
-    Это базовая реализация с использованием ключевых слов и регулярных выражений.
+    Анализирует текст пользователя, используя NLPProcessor для семантического анализа,
+    и дополняет его существующей логикой для обратной совместимости.
     """
-    text_lower = text.lower()
-    intents = []
+    nlp_processor = get_nlp_processor()
+    if not nlp_processor:
+        # Возвращаем структуру ошибки, если процессор не был инициализирован
+        return {
+            "text": text,
+            "intents": [{"name": "fallback_general", "confidence": 1.0}],
+            "entities": {},
+            "active_frames": [],
+            "fallback_type": "general",
+            "error": "NLP processor is not available."
+        }
+
+    try:
+        # 1. Получаем семантический анализ от NLPProcessor
+        nlp_data = nlp_processor.process_text(text)
+    except NLPError as e:
+        print(f"ОШИБКА NLP: {e}")
+        # В случае ошибки NLP, возвращаем fallback
+        return {
+            "text": text,
+            "intents": [{"name": "fallback_general", "confidence": 1.0}],
+            "entities": {},
+            "active_frames": [],
+            "fallback_type": "general",
+            "error": str(e)
+        }
+
+    # 2. Адаптируем полученные данные к старой структуре
+
+    # Намерение (intent)
+    # nlp_data['intent'] - это строка, а нам нужен список словарей
+    intent_name = nlp_data.get("intent", "fallback_general")
+    # Простое сопоставление, в будущем можно сделать более сложным
+    # Например, если intent от OpenAI "weather_inquiry", а у нас он называется "get_weather"
+    if "погод" in intent_name.lower() or "weather" in intent_name.lower():
+         intent_name = "get_weather"
+
+    intents = [{"name": intent_name, "confidence": 1.0}] # Уверенность 1.0, т.к. это от GPT
+
+    # Сущности (entities)
+    # nlp_data['entities'] - это список словарей, а нам нужен словарь вида {"тип": "значение"}
     entities = {}
+    for entity in nlp_data.get("entities", []):
+        entity_type = entity.get("type", "").lower()
+        # Простое сопоставление типов. LOC -> city
+        if entity_type == "loc":
+            entities["city"] = entity.get("text")
+        else:
+            entities[entity_type] = entity.get("text")
 
-    # --- Распознавание намерений (очень упрощенно) ---
-    if "погод" in text_lower or "прогноз" in text_lower:
-        intents.append({"name": "get_weather", "confidence": 0.9})
-    if "анекдот" in text_lower or "шутк" in text_lower or "рассмеши" in text_lower:
-        intents.append({"name": "tell_joke", "confidence": 0.9})
-    if "факт" in text_lower or "знаешь ли ты" in text_lower:
-        intents.append({"name": "get_fact", "confidence": 0.8})
-    if any(greet in text_lower for greet in ["привет", "здравствуй", "добрый день", "доброе утро", "добрый вечер"]):
-        intents.append({"name": "greeting", "confidence": 0.95})
-    if any(bye in text_lower for bye in ["пока", "до свидания", "всего доброго"]):
-        intents.append({"name": "goodbye", "confidence": 0.95})
-    if "который час" in text_lower or "сколько времени" in text_lower:
-        intents.append({"name": "get_time", "confidence": 0.9})
+    # Добавляем остальные данные из nlp_data в корневой объект для сохранения в БД
+    result = {
+        "text": text,
+        "intents": intents,
+        "entities": entities,
+        "active_frames": [],
+        "fallback_type": None,
+        "metadata": { # Вкладываем сырые данные от NLP сюда
+            "keywords": nlp_data.get("keywords", []),
+            "sentiment": nlp_data.get("sentiment", "neutral"),
+            "raw_intent": nlp_data.get("intent"),
+            "raw_entities": nlp_data.get("entities", [])
+        }
+    }
 
+    # 3. Интегрируем старую логику для обратной совместимости (погода)
+    is_get_weather_intent = any(intent["name"] == "get_weather" for intent in result["intents"])
 
-    # --- Извлечение сущностей (улучшенное) ---
-    # Города (для погоды)
-    # Ищем явное указание города с предлогами или известные города без предлогов.
-    city_pattern_preposition = r"(?:в|во|городе)\s+([А-Яа-яЁёГорода-]+)"
-    city_matches_preposition = re.finditer(city_pattern_preposition, text, re.IGNORECASE)
-
-    found_cities = []
-    for match in city_matches_preposition:
-        city_name = match.group(1)
-        if city_name: # city_name.lower() in KNOWN_CITIES: # Можно добавить проверку на известный город, если нужно строже
-            found_cities.append(city_name.capitalize())
-            break # Берем первый найденный с предлогом
-
-    if not found_cities:
-        # Если с предлогом не нашли, ищем просто известные города в тексте
-        # (это может дать ложные срабатывания на словах типа "привет", если "Привет" есть в KNOWN_CITIES, но наш список городов специфичнее)
-        # Составляем паттерн для поиска любого из известных городов как отдельного слова
-        # Добавим \b для границ слова, чтобы "Москвариум" не стал "Москва"
-        known_cities_pattern = r"\b(" + "|".join(re.escape(city) for city in KNOWN_CITIES) + r")\b"
-        city_matches_known = re.finditer(known_cities_pattern, text, re.IGNORECASE)
-        for match in city_matches_known:
-            city_name = match.group(1)
-            if city_name:
-                found_cities.append(city_name.capitalize())
-                break # Берем первый найденный известный город
-
-
-    if found_cities:
-        entities["city"] = found_cities[0]
-
-    # --- Логика контекста и уточнения ---
-    is_get_weather_intent = any(intent["name"] == "get_weather" for intent in intents)
-
-    if is_get_weather_intent and not entities.get("city"):
-        # Если спрашивают погоду, но город не указан, проверяем контекст
-        # Убрал проверку current_context.get("last_recognized_intent") == "get_weather", т.к. это может быть не всегда так,
-        # если пользователь ответил на другой вопрос перед этим, но город в контексте остался.
+    if is_get_weather_intent and not result["entities"].get("city"):
         if current_context.get("entities", {}).get("city"):
-            entities["city"] = current_context["entities"]["city"]
+            result["entities"]["city"] = current_context["entities"]["city"]
         else:
             # Запрос на уточнение города
-            # Удаляем get_weather, если город не ясен, и добавляем clarify_city
-            intents = [i for i in intents if i["name"] != "get_weather"]
-            # Добавляем clarify_city_for_weather только если его еще нет (чтобы не дублировать)
-            if not any(i["name"] == "clarify_city_for_weather" for i in intents):
-                intents.append({"name": "clarify_city_for_weather", "confidence": 0.95})
+            result["intents"] = [{"name": "clarify_city_for_weather", "confidence": 0.95}]
 
-    # Если текущий контекст ожидает уточнения города (т.е. предыдущий распознанный интент был clarify_city_for_weather),
-    # и пользователь что-то ответил, и мы смогли извлечь город из этого ответа.
     elif current_context.get("last_recognized_intent") == "clarify_city_for_weather":
-        if entities.get("city"): # Если в новом сообщении мы нашли город
-            # Восстанавливаем намерение узнать погоду
-            # Удаляем clarify_city_for_weather, если он был, и добавляем get_weather
-            intents = [i for i in intents if i["name"] != "clarify_city_for_weather"]
-            if not any(i["name"] == "get_weather" for i in intents): # Не дублировать
-                intents.append({"name": "get_weather", "confidence": 0.85})
-        else: # Город все еще не ясен после попытки уточнения
-            intents = [i for i in intents if i["name"] != "clarify_city_for_weather"] # Удаляем старое уточнение
-            if not any(i["name"] == "fallback_after_clarification_fail" for i in intents):
-                 intents.append({"name": "fallback_after_clarification_fail", "confidence": 1.0})
+        if result["entities"].get("city"):
+            result["intents"] = [{"name": "get_weather", "confidence": 0.9}]
+        else:
+            result["intents"] = [{"name": "fallback_after_clarification_fail", "confidence": 1.0}]
 
-
-    # --- Тематические фреймы (начальная реализация) ---
+    # --- Тематические фреймы (логика оставлена для совместимости) ---
     active_frames = []
-    # Пример: фрейм для погоды
-    # TODO: Развивать логику фреймов, их активации и обновления на основе контекста
     if is_get_weather_intent or current_context.get("last_recognized_intent") == "clarify_city_for_weather":
         weather_frame = {
             "name": "weather_inquiry_frame",
             "slots": {
-                "city": entities.get("city"),
-                "date": entities.get("date", "today") # Пример, date не извлекается пока
+                "city": result["entities"].get("city"),
+                "date": result["entities"].get("date", "today")
             },
-            "status": "incomplete" # Статус будет обновляться далее или в response_generator
+            "status": "incomplete"
         }
         if weather_frame["slots"]["city"]:
-            weather_frame["status"] = "ready_to_fulfill" # Если есть город, можно пробовать выполнить
-
-        # Если предыдущий интент был уточнение, а теперь есть город, то фрейм 'complete'
-        if current_context.get("last_recognized_intent") == "clarify_city_for_weather" and entities.get("city"):
+            weather_frame["status"] = "ready_to_fulfill"
+        if current_context.get("last_recognized_intent") == "clarify_city_for_weather" and result["entities"].get("city"):
             weather_frame["status"] = "completed_after_clarification"
-
         active_frames.append(weather_frame)
 
-    # --- Логика Fallback (улучшенная) ---
-    fallback_type = None
-    if not intents: # Если вообще никаких интентов не нашлось
-        # Проверяем, есть ли сущности, чтобы предложить уточняющий fallback
-        if entities:
-            intents.append({"name": "fallback_clarification_needed", "confidence": 0.7})
-            fallback_type = "clarification_needed"
-        else:
-            intents.append({"name": "fallback_general", "confidence": 1.0})
-            fallback_type = "general"
+    result["active_frames"] = active_frames
 
-    # Если интенты есть, но это только clarify_city_for_weather и город всё ещё неясен
-    # (это состояние должно было привести к fallback_after_clarification_fail ранее, но как доп. проверка)
-    # Эта логика должна применяться только если clarify_city_for_weather НЕ был только что добавлен
-    # в результате get_weather без города.
-    # Вместо этого, такая проверка уже есть выше в блоке:
-    # elif current_context.get("last_recognized_intent") == "clarify_city_for_weather":
-    #     if entities.get("city"): ...
-    #     else: intents.append({"name": "fallback_after_clarification_fail", ...})
-    # Поэтому этот блок ниже можно упростить или удалить, если он дублирует.
-    # Пока что закомментируем его, чтобы восстановить правильную логику clarify_city_for_weather.
+    # --- Логика Fallback ---
+    # Если основной интент от OpenAI - это нечто неопределенное, можно выставить fallback
+    if result["intents"][0]["name"] == "fallback_general":
+        result["fallback_type"] = "general"
 
-    # is_clarify_only_without_city = len(intents) == 1 and \
-    #                                intents[0]["name"] == "clarify_city_for_weather" and \
-    #                                not entities.get("city") and \
-    #                                current_context.get("last_recognized_intent") == "clarify_city_for_weather" # Добавлено условие на предыдущий контекст
-    # if is_clarify_only_without_city:
-    #     # Переопределяем на fallback_after_clarification_fail если он еще не там
-    #     if not any(i["name"] == "fallback_after_clarification_fail" for i in intents):
-    #         intents = [i for i in intents if i["name"] != "clarify_city_for_weather"]
-    #         intents.append({"name": "fallback_after_clarification_fail", "confidence": 1.0})
-    #         fallback_type = "clarification_failed"
-
-
-    # Сортировка намерений по уверенности (важно для выбора основного намерения)
-    intents.sort(key=lambda x: x["confidence"], reverse=True)
-
-    # Убедимся, что если есть clarify_city_for_weather, то get_weather удален, если город не определен
-    # Эта логика уже есть выше, но можно сделать финальную проверку
-    has_clarify_intent = any(i["name"] == "clarify_city_for_weather" for i in intents)
-    if has_clarify_intent and not entities.get("city"):
-        intents = [i for i in intents if i["name"] != "get_weather"]
-        # Если clarify_city_for_weather остался единственным и без города,
-        # это должно было быть обработано как fallback_after_clarification_fail или clarify_city_for_weather
-        # Логика выше должна это покрывать.
-
-    # Если после всех манипуляций список интентов пуст (маловероятно), добавляем общий fallback
-    if not intents:
-        intents.append({"name": "fallback_general", "confidence": 1.0})
-        if not fallback_type: fallback_type = "general"
-
-    # Если есть интенты, но нет fallback_type, а первый интент - это один из fallback'ов, установим тип
-    if intents and not fallback_type:
-        if intents[0]["name"] == "fallback_general": fallback_type = "general"
-        elif intents[0]["name"] == "fallback_clarification_needed": fallback_type = "clarification_needed"
-        elif intents[0]["name"] == "fallback_after_clarification_fail": fallback_type = "clarification_failed"
-
-
-    return {
-        "text": text,
-        "intents": intents,
-        "entities": entities,
-        "active_frames": active_frames,
-        "fallback_type": fallback_type
-    }
+    return result

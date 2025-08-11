@@ -1,1 +1,4 @@
 pyTelegramBotAPI
+supabase
+openai
+python-dotenv
