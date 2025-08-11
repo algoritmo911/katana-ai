@@ -1,4 +1,3 @@
-import telebot.async_telebot  # Use AsyncTeleBot
 import asyncio  # For asyncio operations
 import json
 import os
@@ -6,8 +5,14 @@ from pathlib import Path
 from datetime import datetime
 import subprocess  # Added for run_katana_command
 from nlp_mapper import interpret  # Added for NLP
+import functools  # For creating partial functions for FSM context
 import openai  # Added for Whisper API
+import telebot
 from dotenv import load_dotenv  # Added for loading .env file
+from telebot.async_telebot import AsyncTeleBot
+
+from katana.fsm.context import FSMContext
+from katana.fsm.manager import fsm_manager
 from katana.katana_agent import KatanaAgent  # Import KatanaAgent
 
 # Load environment variables from .env file
@@ -20,7 +25,7 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 BOT_START_TIME = datetime.utcnow()  # For uptime calculation
 
-bot = telebot.async_telebot.AsyncTeleBot(API_TOKEN)  # Use AsyncTeleBot
+bot = AsyncTeleBot(API_TOKEN)  # Use AsyncTeleBot
 katana_agent_instance = KatanaAgent()  # Instantiate KatanaAgent
 
 if OPENAI_API_KEY:
@@ -297,83 +302,50 @@ async def process_user_message(
         log_local_bot_event(
             f"Successfully validated JSON command from {chat_id}: {json.dumps(command_data)}"
         )
-        command_type = command_data.get("type")
 
-        if command_type == "info":
-            # Just send an info message
-            info_text = command_data.get("args", {}).get("text", "No info provided.")
-            await bot.reply_to(original_message, f"ℹ️ {info_text}")
-            return
-        elif command_type == "exec":
-            # Execute a command
-            exec_command = command_data.get("args", {}).get("command")
-            if exec_command:
-                output = await run_katana_command(exec_command)
-                await bot.reply_to(
-                    original_message,
-                    f"⚙️ Executing: `{exec_command}`\n\n{output}",
-                    parse_mode="Markdown",
-                )
-            else:
-                await bot.reply_to(
-                    original_message,
-                    "⚠️ 'exec' command type requires a 'command' in args.",
-                )
-            return
-        elif command_type == "repeat":
-            # Repeat the last action (simplified)
-            await bot.reply_to(
-                original_message, "🔁 Repeating last action (placeholder)."
-            )
-            # In a real implementation, you'd need to store the last action.
-            return
-        elif command_type == "stop":
-            # Stop the current action (simplified)
-            if chat_id in active_gpt_streams:
-                _, cancel_event, _ = active_gpt_streams[chat_id]
-                cancel_event.set()
-                await bot.reply_to(original_message, "🛑 Stopping current action.")
-            else:
-                await bot.reply_to(original_message, "🤷 No active action to stop.")
-            return
+        # --- FSM-based Command Processing ---
+        # Create a context for the FSM to interact with the bot.
+        # Using functools.partial to pre-fill the 'message' argument for the reply function.
+        reply_func = functools.partial(bot.reply_to, original_message)
 
-        log_local_bot_event(
-            f"Command type '{command_type}' not specifically handled, proceeding with default save. Full command data: {json.dumps(command_data)}"
+        # The context provides the state machine with controlled access to bot functions.
+        context = FSMContext(
+            chat_id=chat_id,
+            reply_func=reply_func,
+            exec_func=run_katana_command,
         )
-        try:
-            loop = asyncio.get_event_loop()
-            timestamp_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
-            command_file_name = f"{timestamp_str}_{chat_id}.json"
-            module_name = command_data.get("module", "telegram_general")
-            module_command_dir_name = (
-                f"telegram_mod_{module_name}"
-                if module_name != "telegram_general"
-                else "telegram_general"
-            )
 
-            def _save_command_file():
-                module_command_dir = COMMAND_FILE_DIR / module_command_dir_name
-                module_command_dir.mkdir(parents=True, exist_ok=True)
-                command_file_path_res = module_command_dir / command_file_name
-                with open(command_file_path_res, "w", encoding="utf-8") as f:
-                    json.dump(command_data, f, ensure_ascii=False, indent=2)
-                return command_file_path_res
-
-            command_file_path = await loop.run_in_executor(None, _save_command_file)
-            await bot.reply_to(
-                original_message,
-                f"✅ Command received and saved as `{command_file_path}`.",
-            )
-            log_local_bot_event(f"Saved command from {chat_id} to {command_file_path}")
-        except Exception as e:
-            log_local_bot_event(f"Error saving command file for chat {chat_id}: {e}")
-            await bot.reply_to(original_message, "⚠️ Error saving command to file.")
+        # Delegate the handling of the command to the FSM manager.
+        # The manager will find the correct FSM for the chat (or create one)
+        # and pass the event to it.
+        await fsm_manager.handle_event(context, command_data)
         return
 
     except json.JSONDecodeError:
-        # Not NLP, not JSON -> Route to KatanaAgent
+        # --- FSM Plain Text Handling ---
+        # If the text is not a JSON command, it might be a text reply for an active FSM state.
+        fsm = fsm_manager.fsms.get(chat_id)
+        # We check if the FSM exists and is NOT in the IdleState.
+        # We need to import IdleState to perform this check.
+        from katana.commands.default_commands import IdleState
+
+        if fsm and not isinstance(fsm.current_state, IdleState):
+            log_local_bot_event(
+                f"FSM for chat {chat_id} is in an active state ({fsm.current_state.__class__.__name__}). Routing text to FSM."
+            )
+            # This is a plain text response for a multi-step command.
+            # Create a context and send the text to the FSM.
+            reply_func = functools.partial(bot.reply_to, original_message)
+            context = FSMContext(
+                chat_id=chat_id, reply_func=reply_func, exec_func=run_katana_command
+            )
+            event = {"type": "text_message", "text": text}
+            await fsm_manager.handle_event(context, event)
+            return  # The FSM has handled the message.
+
+        # Not NLP, not JSON, and FSM is idle -> Route to KatanaAgent
         log_local_bot_event(
-            f"Text from {chat_id} ('{text[:50]}...') is not NLP or JSON. Routing to KatanaAgent."
+            f"Text from {chat_id} ('{text[:50]}...') is not NLP or JSON and FSM is idle. Routing to KatanaAgent."
         )
 
         # Add user's message to history
@@ -734,6 +706,11 @@ if __name__ == "__main__":
             command_katana_impl,
             "Engages or disengages Katana's passive listening mode.",
         )
+        register_command(
+            "cleanup",
+            command_cleanup_impl,
+            "Starts a process to clean up temporary files.",
+        )
         # Example of how to unregister, not typically done at startup unless for specific logic
         # unregister_command("some_old_command")
 
@@ -877,26 +854,33 @@ async def command_reset_impl(message):
     user_id = message.from_user.id
     command_name = "/reset"
     history_cleared_flag = False
+    fsm_reset_flag = False
 
     log_entry_start = f"command='{command_name}' event_type='start' user_id={user_id} chat_id={chat_id}"
     log_command_event(log_entry_start)
-    # log_local_bot_event(f"Executing command: {command_name} for user {user_id}")
 
     try:
+        # Reset conversation history
         if chat_id in chat_histories:
             del chat_histories[chat_id]
-            response_message = (
-                "🧹 Your conversation history with me in this chat has been cleared."
-            )
             history_cleared_flag = True
             log_local_bot_event(f"Cleared conversation history for chat_id {chat_id}.")
+
+        # Reset FSM state
+        if chat_id in fsm_manager.fsms:
+            del fsm_manager.fsms[chat_id]
+            fsm_reset_flag = True
+            log_local_bot_event(f"Reset FSM state for chat_id {chat_id}.")
+
+        # Formulate response
+        if history_cleared_flag and fsm_reset_flag:
+            response_message = "🧹 Conversation history and command state have been cleared."
+        elif history_cleared_flag:
+            response_message = "🧹 Conversation history has been cleared."
+        elif fsm_reset_flag:
+            response_message = "🧹 Command state has been cleared."
         else:
-            response_message = (
-                "🤔 No conversation history found for you in this chat to clear."
-            )
-            log_local_bot_event(
-                f"No conversation history to clear for chat_id {chat_id}."
-            )
+            response_message = "🤔 No history or command state found to clear."
 
         await bot.reply_to(message, response_message)
         status = "success"
@@ -935,3 +919,26 @@ async def command_reset_handler(message):
 @bot.message_handler(commands=["katana"])
 async def command_katana_handler(message):
     await command_katana_impl(message)
+
+
+@trace_command
+async def command_cleanup_impl(message):
+    """Implementation for the /cleanup command."""
+    chat_id = message.chat.id
+    log_local_bot_event(f"Received /cleanup command for chat {chat_id}")
+
+    # This command doesn't execute directly. It starts an FSM flow.
+    # We create a context and dispatch an event to the FSM.
+    reply_func = functools.partial(bot.reply_to, message)
+    context = FSMContext(
+        chat_id=chat_id,
+        reply_func=reply_func,
+        exec_func=run_katana_command,
+    )
+    event = {"type": "slash_command", "command": "cleanup"}
+    await fsm_manager.handle_event(context, event)
+
+
+@bot.message_handler(commands=["cleanup"])
+async def command_cleanup_handler(message):
+    await command_cleanup_impl(message)

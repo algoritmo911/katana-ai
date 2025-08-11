@@ -1,4 +1,4 @@
-pyTelegramBotAPI
-openai
-python-dotenv
-pytest
+pyTelegramBotAPI>=4.28.0
+openai>=1.99.0
+python-dotenv>=1.0.0
+pytest>=8.4.0
