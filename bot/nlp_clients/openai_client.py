@@ -33,46 +33,56 @@ class OpenAIInternalServerError(OpenAIClientError, NLPInternalServerError):
     pass
 
 
+import os
+from openai import OpenAI, RateLimitError, AuthenticationError, APIError, BadRequestError
+
 class OpenAIClient:
     """
-    A basic client for interacting with a simulated OpenAI API.
-    This is primarily a scaffold for future development and for defining error structures.
+    A client for interacting with the OpenAI API.
     """
-    def __init__(self, api_key: str = "dummy_openai_key"):
+    def __init__(self, api_key: str = None):
+        api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise OpenAIAuthenticationError(user_message="OpenAI API key is missing.")
-        self.api_key = api_key
+        self.client = OpenAI(api_key=api_key)
 
-    def generate_text(self, prompt: str, scenario: str = "success"):
+    def generate_text(self, prompt: str, model: str = "gpt-3.5-turbo", max_tokens: int = 500):
         """
-        Simulates generating text using the OpenAI API.
-        Placeholder for actual implementation.
+        Generates text using the OpenAI API.
 
         Args:
             prompt: The input prompt.
-            scenario: A string to simulate different API responses (currently only "success").
+            model: The model to use for generation.
+            max_tokens: The maximum number of tokens to generate.
 
         Returns:
-            A simulated successful response string.
+            The generated text.
 
         Raises:
-            OpenAIAuthenticationError: If scenario is "auth_error" (example).
-            OpenAIAPIError: For other error simulations if implemented.
+            OpenAIAuthenticationError: For authentication failures.
+            OpenAIRateLimitError: For rate limit errors.
+            OpenAIInvalidRequestError: For invalid requests.
+            OpenAIInternalServerError: For OpenAI internal server errors.
+            OpenAIAPIError: For other generic API errors.
         """
-        # Basic simulation, can be expanded like AnthropicClient if needed for detailed tests
-        if scenario == "auth_error": # Example
-            raise OpenAIAuthenticationError(
-                user_message="Authentication failed with OpenAI.",
-                original_error=RuntimeError("Simulated OpenAI auth failure")
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
             )
-        if scenario == "success":
-            return f"OpenAI processed prompt: '{prompt}' successfully."
-
-        # Fallback for undefined scenarios
-        raise OpenAIAPIError(
-            user_message=f"Unknown or unsupported scenario for OpenAI: {scenario}",
-            original_error=ValueError(f"Unknown scenario: {scenario}")
-        )
+            return response.choices[0].message.content.strip()
+        except AuthenticationError as e:
+            raise OpenAIAuthenticationError(user_message="OpenAI authentication failed.", original_error=e)
+        except RateLimitError as e:
+            raise OpenAIRateLimitError(user_message="OpenAI rate limit exceeded.", original_error=e)
+        except BadRequestError as e:
+            raise OpenAIInvalidRequestError(user_message=f"Invalid request to OpenAI: {e}", original_error=e)
+        except APIError as e:
+            # This can be a generic catch-all for other 5xx errors
+            raise OpenAIInternalServerError(user_message=f"OpenAI API returned an error: {e}", original_error=e)
+        except Exception as e:
+            raise OpenAIAPIError(user_message=f"An unexpected error occurred with OpenAI: {e}", original_error=e)
 
 if __name__ == '__main__':
     # Example Usage (for quick testing)

@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch, MagicMock
 from bot.nlp_clients.openai_client import (
     OpenAIClient,
     OpenAIAPIError,
@@ -6,110 +7,90 @@ from bot.nlp_clients.openai_client import (
     OpenAIInvalidRequestError,
     OpenAIInternalServerError,
     OpenAIRateLimitError,
-    OpenAIClientError, # Base for OpenAI specific errors
 )
-from bot.nlp_clients.base_nlp_client import (
-    NLPServiceError,
-    NLPAuthenticationError,
-    NLPRateLimitError,
-    NLPBadRequestError,
-    NLPInternalServerError,
-    NLPAPIError,
-)
+from openai import RateLimitError, AuthenticationError, APIError, BadRequestError
 
-class TestOpenAIClientErrorHandlingScaffolding:
+class TestOpenAIClient:
     """
-    Tests for the error handling scaffolding in the OpenAIClient.
-    Focuses on exception structure and basic instantiation.
+    Tests for the OpenAIClient.
     """
 
-    def test_missing_api_key_raises_authentication_error(self):
-        """
-        Verifies that initializing client without an API key raises OpenAIAuthenticationError.
-        """
-        with pytest.raises(OpenAIAuthenticationError) as excinfo:
-            OpenAIClient(api_key="")
-        assert "OpenAI API key is missing" in excinfo.value.user_message
-        assert excinfo.value.original_error is None
+    @patch("bot.nlp_clients.openai_client.OpenAI")
+    def test_init_with_api_key(self, MockOpenAI):
+        """Tests that the client initializes correctly with an API key."""
+        client = OpenAIClient(api_key="test_key")
+        MockOpenAI.assert_called_with(api_key="test_key")
+        assert client is not None
 
-    def test_generate_text_success_scaffold(self):
-        """
-        Tests the placeholder success scenario for generate_text.
-        """
-        client = OpenAIClient(api_key="fake_key")
-        prompt = "Test prompt"
-        response = client.generate_text(prompt, scenario="success")
-        assert response == f"OpenAI processed prompt: '{prompt}' successfully."
+    def test_init_missing_api_key(self):
+        """Tests that initializing the client without an API key raises an error."""
+        with patch.dict("os.environ", {}, clear=True):
+            with pytest.raises(OpenAIAuthenticationError, match="OpenAI API key is missing"):
+                OpenAIClient()
 
-    def test_generate_text_auth_error_scaffold(self):
-        """
-        Tests the placeholder auth error scenario for generate_text.
-        """
-        client = OpenAIClient(api_key="fake_key")
-        with pytest.raises(OpenAIAuthenticationError) as excinfo:
-            client.generate_text("Test prompt", scenario="auth_error")
-        assert "Authentication failed with OpenAI" in excinfo.value.user_message
-        assert isinstance(excinfo.value.original_error, RuntimeError)
+    @patch("bot.nlp_clients.openai_client.OpenAI")
+    def test_generate_text_success(self, MockOpenAI):
+        """Tests a successful text generation call."""
+        mock_openai_instance = MockOpenAI.return_value
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "  Hello, world!  "
+        mock_openai_instance.chat.completions.create.return_value = mock_response
 
-    def test_generate_text_unknown_scenario_scaffold(self):
-        """
-        Tests the placeholder unknown scenario for generate_text.
-        """
-        client = OpenAIClient(api_key="fake_key")
-        with pytest.raises(OpenAIAPIError) as excinfo:
-            client.generate_text("Test prompt", scenario="some_future_scenario")
-        assert "Unknown or unsupported scenario for OpenAI" in excinfo.value.user_message
-        assert isinstance(excinfo.value.original_error, ValueError)
+        client = OpenAIClient(api_key="test_key")
+        response = client.generate_text("test prompt")
 
+        assert response == "Hello, world!"
+        mock_openai_instance.chat.completions.create.assert_called_with(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": "test prompt"}],
+            max_tokens=500,
+        )
 
-    def test_all_openai_exceptions_have_user_message_and_original_error(self):
-        """
-        Checks that all defined OpenAI exceptions can be instantiated with
-        user_message and original_error and that these attributes are set.
-        """
-        custom_errors = [
-            OpenAIAPIError,
-            OpenAIAuthenticationError,
-            OpenAIInvalidRequestError,
-            OpenAIInternalServerError,
-            OpenAIRateLimitError,
-            OpenAIClientError, # Test the base OpenAI error too
-        ]
-        dummy_original_error = ValueError("Original issue for OpenAI")
-        user_msg = "Test OpenAI user message"
+    @patch("bot.nlp_clients.openai_client.OpenAI")
+    def test_generate_text_authentication_error(self, MockOpenAI):
+        """Tests that an AuthenticationError is correctly handled."""
+        mock_openai_instance = MockOpenAI.return_value
+        mock_openai_instance.chat.completions.create.side_effect = AuthenticationError(
+            message="Invalid API key", response=MagicMock(), body=None
+        )
 
-        for error_cls in custom_errors:
-            # Test with original_error
-            try:
-                raise error_cls(user_message=user_msg, original_error=dummy_original_error)
-            except NLPServiceError as e:
-                assert e.user_message == user_msg, f"{error_cls.__name__} did not set user_message correctly."
-                assert e.original_error is dummy_original_error, f"{error_cls.__name__} did not set original_error correctly."
-                assert isinstance(e, OpenAIClientError) or error_cls is OpenAIClientError
+        with pytest.raises(OpenAIAuthenticationError, match="OpenAI authentication failed."):
+            client = OpenAIClient(api_key="test_key")
+            client.generate_text("test prompt")
 
-            # Test without original_error (should be None)
-            try:
-                raise error_cls(user_message=user_msg)
-            except NLPServiceError as e:
-                assert e.user_message == user_msg, f"{error_cls.__name__} did not set user_message correctly (no original_error)."
-                assert e.original_error is None, f"{error_cls.__name__} did not set original_error to None (no original_error)."
-                assert isinstance(e, OpenAIClientError) or error_cls is OpenAIClientError
+    @patch("bot.nlp_clients.openai_client.OpenAI")
+    def test_generate_text_rate_limit_error(self, MockOpenAI):
+        """Tests that a RateLimitError is correctly handled."""
+        mock_openai_instance = MockOpenAI.return_value
+        mock_openai_instance.chat.completions.create.side_effect = RateLimitError(
+            message="Rate limit exceeded", response=MagicMock(), body=None
+        )
 
-    def test_openai_exception_inheritance(self):
-        """
-        Verifies the inheritance chain for OpenAI exceptions.
-        """
-        assert issubclass(OpenAIAuthenticationError, OpenAIClientError)
-        assert issubclass(OpenAIAuthenticationError, NLPAuthenticationError)
-        assert issubclass(OpenAIRateLimitError, OpenAIClientError)
-        assert issubclass(OpenAIRateLimitError, NLPRateLimitError)
-        assert issubclass(OpenAIInvalidRequestError, OpenAIClientError)
-        assert issubclass(OpenAIInvalidRequestError, NLPBadRequestError)
-        assert issubclass(OpenAIInternalServerError, OpenAIClientError)
-        assert issubclass(OpenAIInternalServerError, NLPInternalServerError)
-        assert issubclass(OpenAIAPIError, OpenAIClientError)
-        assert issubclass(OpenAIAPIError, NLPAPIError)
-        assert issubclass(OpenAIClientError, NLPServiceError)
+        with pytest.raises(OpenAIRateLimitError, match="OpenAI rate limit exceeded."):
+            client = OpenAIClient(api_key="test_key")
+            client.generate_text("test prompt")
 
-# To run these tests:
-# pytest bot/tests/test_openai_client.py
+    @patch("bot.nlp_clients.openai_client.OpenAI")
+    def test_generate_text_bad_request_error(self, MockOpenAI):
+        """Tests that a BadRequestError is correctly handled."""
+        mock_openai_instance = MockOpenAI.return_value
+        mock_openai_instance.chat.completions.create.side_effect = BadRequestError(
+            message="Invalid request", response=MagicMock(), body=None
+        )
+
+        with pytest.raises(OpenAIInvalidRequestError, match="Invalid request to OpenAI"):
+            client = OpenAIClient(api_key="test_key")
+            client.generate_text("test prompt")
+
+    @patch("bot.nlp_clients.openai_client.OpenAI")
+    def test_generate_text_api_error(self, MockOpenAI):
+        """Tests that a generic APIError is correctly handled."""
+        mock_openai_instance = MockOpenAI.return_value
+        # The actual APIError from openai library does not take 'response'
+        mock_openai_instance.chat.completions.create.side_effect = APIError(
+            message="Internal server error", request=MagicMock(), body=None
+        )
+
+        with pytest.raises(OpenAIInternalServerError, match="OpenAI API returned an error"):
+            client = OpenAIClient(api_key="test_key")
+            client.generate_text("test prompt")
