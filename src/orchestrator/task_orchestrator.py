@@ -3,8 +3,10 @@ import json
 import os
 from typing import List, Any, NamedTuple, Dict
 
-# Forward declaration for JuliusAgent
+from typing import List, Any, NamedTuple, Dict
+
 # Assuming src is in PYTHONPATH for these imports
+from src.agents.base_agent import BaseAgent
 from src.connectors import core_connector
 from src.telemetry.command_telemetry import log_command_event, configure_telemetry_logging as configure_task_telemetry
 
@@ -20,16 +22,12 @@ except Exception as e:
     print(f"Error configuring telemetry in task_orchestrator: {e}")
 
 
-class JuliusAgent:
-    async def process_tasks(self, tasks: List[Dict[str, Any]]) -> List['TaskResult']: # Changed to List[Dict]
-        raise NotImplementedError
-
 class TaskResult(NamedTuple):
     success: bool
     details: str
     task_content: Dict[str, Any] # Changed to Dict
 
-class KatanaTaskProcessor(JuliusAgent):
+class KatanaTaskProcessor(BaseAgent):
     """
     Concrete implementation of JuliusAgent for processing Katana tasks.
     """
@@ -98,7 +96,7 @@ class KatanaTaskProcessor(JuliusAgent):
 
 
 class TaskOrchestrator:
-    def __init__(self, agent: JuliusAgent, batch_size: int = 3, max_batch: int = 10, metrics_log_file: str = "orchestrator_log.json"):
+    def __init__(self, agent: BaseAgent, batch_size: int = 3, max_batch: int = 10, metrics_log_file: str = "orchestrator_log.json"):
         self.agent = agent
         self.batch_size = batch_size
         self.min_batch_size = 1
