@@ -67,6 +67,43 @@ You should see log messages in your console indicating that the bot is starting 
 -   Send it a `/start` command or any text message.
 -   Check your console logs. You should see the incoming message logged and the bot's response. The bot should reply to you in Telegram.
 
+## API Endpoints
+
+The Katana application also exposes a REST API for programmatic interaction, built using FastAPI. This API is available when you run `python main.py`.
+
+### n8n Task Webhook
+
+This endpoint is designed to receive tasks from an external service like n8n.
+
+- **Endpoint**: `/n8n/webhook`
+- **Method**: `POST`
+- **Description**: Accepts a list of tasks and adds them to the Task Orchestrator's queue.
+- **Request Body**: A JSON object containing a single key, `tasks`, which is an array of strings.
+
+**Example `curl` command:**
+
+```bash
+curl -X POST "http://localhost:8000/n8n/webhook" \
+-H "Content-Type: application/json" \
+-d '{
+  "tasks": [
+    "Analyze the latest user feedback on the new feature.",
+    "Generate a summary report of the week''s activities.",
+    "Draft a response to the customer inquiry about pricing."
+  ]
+}'
+```
+
+**Success Response:**
+
+- **Status Code**: `202 Accepted`
+- **Body**:
+  ```json
+  {
+    "message": "Successfully queued 3 tasks."
+  }
+  ```
+
 ## Bot Stability Features
 
 The current version of the bot includes several features to improve its stability:

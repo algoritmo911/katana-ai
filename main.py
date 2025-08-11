@@ -1,9 +1,10 @@
 import asyncio
 import json
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import uvicorn
 
 from src.orchestrator.task_orchestrator import TaskOrchestrator
@@ -15,6 +16,11 @@ ORCHESTRATOR_LOG_FILE = "orchestrator_log.json" # Centralize log file name
 
 # --- FastAPI App Setup ---
 app = FastAPI(title="Julius Task Orchestrator API")
+
+# --- Pydantic Models ---
+class N8nWebhookPayload(BaseModel):
+    """Defines the expected payload from the n8n webhook."""
+    tasks: List[str]
 
 # This will be populated when the main application starts
 # Not ideal for global state, but simple for this example.
@@ -31,6 +37,24 @@ async def get_orchestrator_status():
     if orchestrator_instance is None:
         return {"error": "Orchestrator not initialized"}
     return orchestrator_instance.get_status()
+
+
+@app.post("/n8n/webhook", status_code=202)
+async def receive_n8n_tasks(payload: N8nWebhookPayload):
+    """
+    Webhook endpoint to receive a list of tasks from n8n.
+    """
+    if orchestrator_instance is None:
+        raise HTTPException(status_code=503, detail="Orchestrator not available")
+
+    if not payload.tasks:
+        return {"message": "Received empty task list. No action taken."}
+
+    print(f"Received {len(payload.tasks)} tasks from n8n webhook. Adding to queue.")
+    orchestrator_instance.add_tasks(payload.tasks)
+
+    return {"message": f"Successfully queued {len(payload.tasks)} tasks."}
+
 
 # --- Task Loading ---
 def load_tasks_from_json(file_path: str) -> list[str]:
