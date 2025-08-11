@@ -2,6 +2,8 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum, auto
+from typing import Optional, Any
+
 
 class TaskStatus(Enum):
     PENDING = auto()
@@ -9,18 +11,22 @@ class TaskStatus(Enum):
     COMPLETED = auto()
     FAILED = auto()
 
+
 @dataclass(frozen=True, order=True)
 class Task:
-    # Note: order=True makes instances comparable based on the fields in the order they are defined.
-    # We will primarily use priority, scheduled_at, and created_at for ordering in the queue.
-    # The Task object itself won't be directly put into heapq if we need custom sort order there.
+    # Fields without default values must come before fields with default values.
     priority: int = field(compare=False)
     scheduled_at: datetime = field(compare=False)
-    created_at: datetime = field(compare=False, default_factory=lambda: datetime.now(timezone.utc))
-    id: uuid.UUID = field(default_factory=uuid.uuid4, compare=False)
     name: str = field(compare=False)
+
+    # Fields with default values
     payload: dict = field(default_factory=dict, compare=False)
     status: TaskStatus = field(default=TaskStatus.PENDING, compare=False)
+    result: Optional[Any] = field(default=None, compare=False)
+    created_at: datetime = field(
+        compare=False, default_factory=lambda: datetime.now(timezone.utc)
+    )
+    id: uuid.UUID = field(default_factory=uuid.uuid4, compare=False)
 
     def __post_init__(self):
         if not isinstance(self.priority, int):
@@ -32,42 +38,71 @@ class Task:
         if not isinstance(self.scheduled_at, datetime):
             # Ensure scheduled_at is offset-aware, defaulting to UTC if naive.
             if self.scheduled_at.tzinfo is None:
-                object.__setattr__(self, 'scheduled_at', self.scheduled_at.replace(tzinfo=timezone.utc))
+                object.__setattr__(
+                    self, "scheduled_at", self.scheduled_at.replace(tzinfo=timezone.utc)
+                )
         if not isinstance(self.created_at, datetime) or self.created_at.tzinfo is None:
             # Ensure created_at is offset-aware.
-             raise ValueError("created_at must be an offset-aware datetime object.")
+            raise ValueError("created_at must be an offset-aware datetime object.")
 
-    def with_status(self, new_status: TaskStatus) -> 'Task':
+    def with_status(self, new_status: TaskStatus) -> "Task":
         """Returns a new Task instance with the updated status."""
         if not isinstance(new_status, TaskStatus):
             raise TypeError("new_status must be a TaskStatus enum member.")
         return Task(
             priority=self.priority,
             scheduled_at=self.scheduled_at,
-            created_at=self.created_at,
-            id=self.id,
             name=self.name,
             payload=self.payload,
-            status=new_status # The only changed field
+            status=new_status,
+            result=self.result,
+            created_at=self.created_at,
+            id=self.id,
         )
 
-if __name__ == '__main__':
+    def with_result(self, result_data: Any) -> "Task":
+        """Returns a new Task instance with the specified result."""
+        return Task(
+            priority=self.priority,
+            scheduled_at=self.scheduled_at,
+            name=self.name,
+            payload=self.payload,
+            status=self.status,
+            result=result_data,
+            created_at=self.created_at,
+            id=self.id,
+        )
+
+
+if __name__ == "__main__":
     # Example Usage
     now = datetime.now(timezone.utc)
-    task1 = Task(priority=1, scheduled_at=now, name="Test Task 1", payload={"data": "value1"})
+    task1 = Task(
+        priority=1, scheduled_at=now, name="Test Task 1", payload={"data": "value1"}
+    )
     print(task1)
 
     import time
-    time.sleep(0.001) # ensure created_at is different for task2 for sorting demo if needed
 
-    task2 = Task(priority=0, scheduled_at=now, name="Test Task 2 - Higher Priority", payload={"data": "value2"})
+    time.sleep(
+        0.001
+    )  # ensure created_at is different for task2 for sorting demo if needed
+
+    task2 = Task(
+        priority=0,
+        scheduled_at=now,
+        name="Test Task 2 - Higher Priority",
+        payload={"data": "value2"},
+    )
     print(task2)
 
     task3_delayed = Task(
         priority=1,
-        scheduled_at=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc), # A past fixed time
+        scheduled_at=datetime(
+            2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc
+        ),  # A past fixed time
         name="Test Task 3 - Delayed",
-        payload={"data": "value3"}
+        payload={"data": "value3"},
     )
     print(task3_delayed)
 
@@ -76,7 +111,7 @@ if __name__ == '__main__':
     print(f"Task 1 now: {processing_task1}")
 
     try:
-        invalid_task = Task(priority="low", scheduled_at=now, name="Invalid", payload={}) # type: ignore
+        invalid_task = Task(priority="low", scheduled_at=now, name="Invalid", payload={})  # type: ignore
     except TypeError as e:
         print(f"Error creating task: {e}")
 
@@ -117,11 +152,18 @@ if __name__ == '__main__':
     # Test __post_init__ for scheduled_at timezone awareness
     naive_dt = datetime(2025, 1, 1, 0, 0, 0)
     aware_task = Task(priority=1, scheduled_at=naive_dt, name="Awareness Test")
-    print(f"Aware task scheduled_at: {aware_task.scheduled_at}, tzinfo: {aware_task.scheduled_at.tzinfo}")
+    print(
+        f"Aware task scheduled_at: {aware_task.scheduled_at}, tzinfo: {aware_task.scheduled_at.tzinfo}"
+    )
 
     # Test created_at must be aware
     try:
-        Task(priority=0, scheduled_at=datetime.now(timezone.utc), created_at=datetime.now(), name="test")
+        Task(
+            priority=0,
+            scheduled_at=datetime.now(timezone.utc),
+            created_at=datetime.now(),
+            name="test",
+        )
     except ValueError as e:
         print(f"Error with naive created_at: {e}")
 

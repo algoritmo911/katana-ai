@@ -51,6 +51,50 @@ For integrations with external services that require API keys or other secrets (
     -   **DO NOT COMMIT YOUR ACTUAL `secrets.toml` FILE OR YOUR SECRETS TO THE REPOSITORY.**
     -   Currently, only unauthenticated API endpoints (like Coinbase spot prices) are used, so `secrets.toml` is for future-proofing authenticated requests.
 
+## Legion Architecture: Orchestrator and Workers
+
+The Katana AI project now includes a distributed agent architecture named "Legion". This system is designed to handle complex tasks by breaking them down into smaller pieces and distributing them among specialized worker agents.
+
+### Core Components
+
+1.  **Task Queue (`katana/task_queue`)**: The communication backbone of the system. It uses Redis as a message broker to queue tasks. All tasks are represented by a `Task` object and managed by the `TaskQueueService`.
+
+2.  **OrchestratorAgent (`katana/orchestrator_agent.py`)**: The "brain" of the system. When a complex query is received, the orchestrator:
+    -   Decomposes the query into a series of atomic sub-tasks.
+    -   Dispatches these sub-tasks to the task queue.
+    -   Waits for all sub-tasks to be completed by the workers.
+    -   Collects the results.
+    -   Synthesizes the results into a single, coherent final answer.
+
+3.  **Workers (`worker.py`)**: These are standalone, specialized processes that listen for specific types of tasks on the queue. Each worker has a set of "executors" for the tasks it can handle (e.g., `web_search`, `financial_data_api`).
+    -   When a worker picks up a task, it executes the corresponding function.
+    -   Upon completion, it stores the result back into the task object in the broker.
+
+### How to Run the System Locally
+
+To run the full Legion system, you need at least two processes running: the main FastAPI application and one or more worker processes.
+
+**1. Start Redis:**
+The system requires a running Redis instance. Use the provided Docker Compose file to start one easily.
+```bash
+docker compose up -d redis
+```
+
+**2. Start the Main Application:**
+This runs the FastAPI server, which includes the Telegram bot integration and the `OrchestratorAgent`.
+```bash
+# In your activated virtual environment
+uvicorn main:app --reload
+```
+
+**3. Start the Worker(s):**
+In a separate terminal, run the `worker.py` script. You can run multiple instances of this script to scale up the processing power.
+```bash
+# In another terminal, with the virtual environment activated
+PYTHONPATH=. python worker.py
+```
+The worker process will connect to Redis and start listening for jobs dispatched by the Orchestrator.
+
 ## Running Checks and Tests Locally
 
 To ensure your code is clean, formatted, and all tests pass before pushing changes, use the `run_checks.sh` script:

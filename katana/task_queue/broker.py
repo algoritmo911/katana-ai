@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Any
 import uuid
 
 from katana.task_queue.models import Task
+
 
 class AbstractBroker(ABC):
     """
@@ -41,7 +42,7 @@ class AbstractBroker(ABC):
         pass
 
     @abstractmethod
-    async def update_task_status(self, task_id: uuid.UUID, status: "TaskStatus") -> bool: # type: ignore
+    async def update_task_status(self, task_id: uuid.UUID, status: "TaskStatus") -> bool:  # type: ignore
         """
         Updates the status of a task.
         Args:
@@ -67,6 +68,18 @@ class AbstractBroker(ABC):
         pass
 
     @abstractmethod
+    async def complete_task(self, task_id: uuid.UUID, result: Any) -> bool:
+        """
+        Marks a task as COMPLETED and stores its result.
+        Args:
+            task_id: The ID of the task to complete.
+            result: The result payload to store.
+        Returns:
+            True if the task was found and updated, False otherwise.
+        """
+        pass
+
+    @abstractmethod
     async def mark_failed(self, task_id: uuid.UUID) -> bool:
         """
         Marks a task as FAILED.
@@ -84,7 +97,8 @@ class AbstractBroker(ABC):
     # async def get_queue_stats(self) -> dict:
     #     pass
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # This section is for illustrative purposes and won't be run directly in production.
     # It helps confirm the ABC definition.
 
@@ -104,7 +118,7 @@ if __name__ == '__main__':
             print(f"DummyBroker: Get task {task_id}")
             return None
 
-        async def update_task_status(self, task_id: uuid.UUID, status: "TaskStatus") -> bool: # type: ignore
+        async def update_task_status(self, task_id: uuid.UUID, status: "TaskStatus") -> bool:  # type: ignore
             print(f"DummyBroker: Update task {task_id} to {status}")
             return True
 
@@ -125,13 +139,20 @@ if __name__ == '__main__':
             print(f"DummyBroker: Task exists check for {task_id}")
             return False
 
-
     async def main_dummy():
         broker: AbstractBroker = DummyBroker()
         # Example task (requires Task model from models.py)
         from datetime import datetime, timezone
-        from katana.task_queue.models import Task as ActualTask # Renamed to avoid conflict
-        example_task = ActualTask(priority=1, scheduled_at=datetime.now(timezone.utc), name="Example", payload={})
+        from katana.task_queue.models import (
+            Task as ActualTask,
+        )  # Renamed to avoid conflict
+
+        example_task = ActualTask(
+            priority=1,
+            scheduled_at=datetime.now(timezone.utc),
+            name="Example",
+            payload={},
+        )
         await broker.enqueue(example_task)
         await broker.dequeue()
         await broker.mark_complete(example_task.id)
@@ -143,7 +164,7 @@ if __name__ == '__main__':
 import asyncio
 import heapq
 from datetime import datetime, timezone
-from typing import Dict, List, Tuple, Optional # Import Set if using it
+from typing import Dict, List, Tuple, Optional  # Import Set if using it
 import uuid
 
 from katana.task_queue.models import Task, TaskStatus
@@ -154,6 +175,7 @@ from katana.task_queue.models import Task, TaskStatus
 # and avoid issues if Task objects are not directly comparable for heap purposes.
 HeapItem = Tuple[int, datetime, datetime, uuid.UUID]
 
+
 class InMemoryBroker(AbstractBroker):
     """
     In-memory implementation of the AbstractBroker.
@@ -161,10 +183,13 @@ class InMemoryBroker(AbstractBroker):
     This implementation is intended for single-process applications or testing.
     It is thread-safe due to asyncio locks, making it safe for concurrent asyncio tasks.
     """
+
     def __init__(self):
-        self._tasks: Dict[uuid.UUID, Task] = {} # Stores actual Task objects
-        self._queue: List[HeapItem] = [] # Min-heap storing (priority, scheduled_at, created_at, task_id)
-        self._lock = asyncio.Lock() # To ensure atomic operations on shared state
+        self._tasks: Dict[uuid.UUID, Task] = {}  # Stores actual Task objects
+        self._queue: List[HeapItem] = (
+            []
+        )  # Min-heap storing (priority, scheduled_at, created_at, task_id)
+        self._lock = asyncio.Lock()  # To ensure atomic operations on shared state
 
     async def enqueue(self, task: Task) -> None:
         async with self._lock:
@@ -172,7 +197,9 @@ class InMemoryBroker(AbstractBroker):
                 # Or raise an error, or update if allowed. For now, let's prevent duplicates by ID.
                 # This could happen if a UUID4 collision occurs, though highly unlikely.
                 # More likely, it's a bug in task creation/submission logic.
-                print(f"Warning: Task with ID {task.id} already exists. Skipping enqueue.")
+                print(
+                    f"Warning: Task with ID {task.id} already exists. Skipping enqueue."
+                )
                 return
 
             # Ensure the task is in PENDING state before adding
@@ -185,7 +212,12 @@ class InMemoryBroker(AbstractBroker):
                 task_to_store = task
 
             self._tasks[task_to_store.id] = task_to_store
-            heap_item: HeapItem = (task_to_store.priority, task_to_store.scheduled_at, task_to_store.created_at, task_to_store.id)
+            heap_item: HeapItem = (
+                task_to_store.priority,
+                task_to_store.scheduled_at,
+                task_to_store.created_at,
+                task_to_store.id,
+            )
             heapq.heappush(self._queue, heap_item)
             # print(f"Enqueued: {task_to_store.id}, Queue size: {len(self._queue)}, Tasks count: {len(self._tasks)}")
 
@@ -199,7 +231,7 @@ class InMemoryBroker(AbstractBroker):
 
             # Check if the task is due
             if scheduled_at > datetime.now(timezone.utc):
-                return None # Not due yet
+                return None  # Not due yet
 
             # If due, pop it from the heap
             heapq.heappop(self._queue)
@@ -210,7 +242,7 @@ class InMemoryBroker(AbstractBroker):
                 # Or if the task was marked completed/failed and removed from _tasks
                 # For now, if it's not in _tasks, it's effectively gone.
                 # Consider logging this as an error or warning.
-                return None # Task data not found, try next time
+                return None  # Task data not found, try next time
 
             # Transition task to PROCESSING status
             # The service layer is responsible for calling this, but the broker can ensure it.
@@ -241,7 +273,6 @@ class InMemoryBroker(AbstractBroker):
 
             # print(f"Dequeued: {task.id}, Queue size: {len(self._queue)}, Tasks count: {len(self._tasks)}")
             return task
-
 
     async def get_task(self, task_id: uuid.UUID) -> Optional[Task]:
         async with self._lock:
@@ -282,8 +313,18 @@ class InMemoryBroker(AbstractBroker):
             return False
 
     async def mark_complete(self, task_id: uuid.UUID) -> bool:
-        # print(f"InMemoryBroker: Marking task {task_id} as COMPLETED.")
-        return await self.update_task_status(task_id, TaskStatus.COMPLETED)
+        return await self.complete_task(task_id, result=None)
+
+    async def complete_task(self, task_id: uuid.UUID, result: Any) -> bool:
+        async with self._lock:
+            task = self._tasks.get(task_id)
+            if task:
+                updated_task = task.with_status(TaskStatus.COMPLETED).with_result(
+                    result
+                )
+                self._tasks[task_id] = updated_task
+                return True
+            return False
 
     async def mark_failed(self, task_id: uuid.UUID) -> bool:
         # print(f"InMemoryBroker: Marking task {task_id} as FAILED.")
@@ -310,6 +351,7 @@ class InMemoryBroker(AbstractBroker):
                     count += 1
             return count
 
+
 # Example usage (for testing purposes)
 async def _test_in_memory_broker():
     print("Testing InMemoryBroker...")
@@ -317,14 +359,39 @@ async def _test_in_memory_broker():
 
     now = datetime.now(timezone.utc)
 
-    task1 = Task(id=uuid.uuid4(), name="Task 1 (High Prio, Now)", priority=0, scheduled_at=now, payload={"p":1})
-    task2 = Task(id=uuid.uuid4(), name="Task 2 (Med Prio, Now)", priority=5, scheduled_at=now, payload={"p":2})
-    task3_delayed = Task(id=uuid.uuid4(), name="Task 3 (High Prio, Delayed)", priority=0, scheduled_at=now + timedelta(seconds=5), payload={"p":3})
-    task4_later_created = Task(id=uuid.uuid4(), name="Task 4 (High Prio, Now, Later Created)", priority=0, scheduled_at=now, created_at=now + timedelta(microseconds=100), payload={"p":4})
+    task1 = Task(
+        id=uuid.uuid4(),
+        name="Task 1 (High Prio, Now)",
+        priority=0,
+        scheduled_at=now,
+        payload={"p": 1},
+    )
+    task2 = Task(
+        id=uuid.uuid4(),
+        name="Task 2 (Med Prio, Now)",
+        priority=5,
+        scheduled_at=now,
+        payload={"p": 2},
+    )
+    task3_delayed = Task(
+        id=uuid.uuid4(),
+        name="Task 3 (High Prio, Delayed)",
+        priority=0,
+        scheduled_at=now + timedelta(seconds=5),
+        payload={"p": 3},
+    )
+    task4_later_created = Task(
+        id=uuid.uuid4(),
+        name="Task 4 (High Prio, Now, Later Created)",
+        priority=0,
+        scheduled_at=now,
+        created_at=now + timedelta(microseconds=100),
+        payload={"p": 4},
+    )
 
     await broker.enqueue(task1)
     await broker.enqueue(task2)
-    await broker.enqueue(task3_delayed) # Delayed
+    await broker.enqueue(task3_delayed)  # Delayed
     await broker.enqueue(task4_later_created)
 
     print(f"Queue size after enqueues: {await broker.get_queue_size()}")
@@ -334,40 +401,55 @@ async def _test_in_memory_broker():
     print("\nDequeuing tasks (should be None as task3 is delayed):")
     # Dequeue (task3 is delayed, task1, task4, task2 are due. task1 is prio 0, earliest created)
     dequed_task = await broker.dequeue()
-    assert dequed_task and dequed_task.id == task1.id, f"Expected {task1.id}, got {dequed_task.id if dequed_task else 'None'}"
+    assert (
+        dequed_task and dequed_task.id == task1.id
+    ), f"Expected {task1.id}, got {dequed_task.id if dequed_task else 'None'}"
     print(f"Dequeued: {dequed_task.name if dequed_task else 'None'}")
-    if dequed_task: await broker.update_task_status(dequed_task.id, TaskStatus.PROCESSING)
+    if dequed_task:
+        await broker.update_task_status(dequed_task.id, TaskStatus.PROCESSING)
 
-
-    dequed_task = await broker.dequeue() # task4_later_created is prio 0, scheduled_now, created later than task1
-    assert dequed_task and dequed_task.id == task4_later_created.id, f"Expected {task4_later_created.id}, got {dequed_task.id if dequed_task else 'None'}"
+    dequed_task = (
+        await broker.dequeue()
+    )  # task4_later_created is prio 0, scheduled_now, created later than task1
+    assert (
+        dequed_task and dequed_task.id == task4_later_created.id
+    ), f"Expected {task4_later_created.id}, got {dequed_task.id if dequed_task else 'None'}"
     print(f"Dequeued: {dequed_task.name if dequed_task else 'None'}")
-    if dequed_task: await broker.update_task_status(dequed_task.id, TaskStatus.PROCESSING)
+    if dequed_task:
+        await broker.update_task_status(dequed_task.id, TaskStatus.PROCESSING)
 
-
-    dequed_task = await broker.dequeue() # task2 is prio 5
-    assert dequed_task and dequed_task.id == task2.id, f"Expected {task2.id}, got {dequed_task.id if dequed_task else 'None'}"
+    dequed_task = await broker.dequeue()  # task2 is prio 5
+    assert (
+        dequed_task and dequed_task.id == task2.id
+    ), f"Expected {task2.id}, got {dequed_task.id if dequed_task else 'None'}"
     print(f"Dequeued: {dequed_task.name if dequed_task else 'None'}")
     if dequed_task:
         await broker.mark_complete(dequed_task.id)
         completed_task_check = await broker.get_task(dequed_task.id)
-        assert completed_task_check and completed_task_check.status == TaskStatus.COMPLETED
+        assert (
+            completed_task_check and completed_task_check.status == TaskStatus.COMPLETED
+        )
         print(f"Task {dequed_task.name} marked COMPLETED.")
 
     # At this point, only task3_delayed should be in the queue, and it's not due yet.
     print("\nAttempting to dequeue before task3 is due:")
     dequed_task = await broker.dequeue()
-    assert dequed_task is None, f"Expected None, got {dequed_task.name if dequed_task else 'None'} because task3 is not due."
+    assert (
+        dequed_task is None
+    ), f"Expected None, got {dequed_task.name if dequed_task else 'None'} because task3 is not due."
     print(f"Dequeued: {dequed_task.name if dequed_task else 'None'}")
 
     print(f"\nWaiting for task3_delayed to become due (5 seconds)...")
     # Need to import timedelta for this test code
     from datetime import timedelta
+
     await asyncio.sleep(5.1)
 
     print("\nAttempting to dequeue task3_delayed after it's due:")
     dequed_task = await broker.dequeue()
-    assert dequed_task and dequed_task.id == task3_delayed.id, f"Expected {task3_delayed.id}, got {dequed_task.id if dequed_task else 'None'}"
+    assert (
+        dequed_task and dequed_task.id == task3_delayed.id
+    ), f"Expected {task3_delayed.id}, got {dequed_task.id if dequed_task else 'None'}"
     print(f"Dequeued: {dequed_task.name if dequed_task else 'None'}")
     if dequed_task:
         await broker.mark_failed(dequed_task.id)
@@ -385,7 +467,9 @@ async def _test_in_memory_broker():
     # Test get_task and task_exists
     retrieved_task1 = await broker.get_task(task1.id)
     assert retrieved_task1 and retrieved_task1.status == TaskStatus.PROCESSING
-    print(f"\nRetrieved task1: {retrieved_task1.name}, status: {retrieved_task1.status}")
+    print(
+        f"\nRetrieved task1: {retrieved_task1.name}, status: {retrieved_task1.status}"
+    )
 
     assert await broker.task_exists(task1.id) == True
     assert await broker.task_exists(uuid.uuid4()) == False
@@ -393,7 +477,8 @@ async def _test_in_memory_broker():
 
     print("\nInMemoryBroker test completed.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # This is how you would run the test function if this file were executed directly.
     # Note: The AbstractBroker definition is in the same file, so it's available.
     # Task and TaskStatus are also imported from models.

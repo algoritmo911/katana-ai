@@ -8,3 +8,8 @@ fastapi
 uvicorn[standard]
 python-telegram-bot
 apscheduler
+redis[hiredis]
+
+# Testing dependencies
+pytest-asyncio # Required for async pytest fixtures and tests
+fakeredis>=2.0.0 # For mocking Redis in tests without needing a live server
