@@ -8,3 +8,7 @@ fastapi
 uvicorn[standard]
 redis
 PyYAML
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-grpc
+opentelemetry-instrumentation

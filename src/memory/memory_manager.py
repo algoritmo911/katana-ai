@@ -1,11 +1,12 @@
 import redis
 import json
 import os
-import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
 
-logger = logging.getLogger(__name__)
+from src.utils.standard_logger import get_logger
+
+logger = get_logger(__name__)
 
 class MemoryManager:
     """
@@ -161,7 +162,7 @@ class MemoryManager:
 
 # Example Usage (for testing purposes, typically not run directly like this)
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    # The new get_logger initializes the root logger, so basicConfig is not needed.
 
     # Attempt to get Redis connection details from environment variables
     # These would be set in your .env file or deployment environment
