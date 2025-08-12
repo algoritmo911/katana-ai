@@ -1,0 +1,193 @@
+{
+  "name": "Dynamic Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "dynamic-assistant",
+        "options": {}
+      },
+      "id": "1",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "value1": "{{$json.body.priority}}",
+              "operation": "equal",
+              "value2": "high"
+            },
+            {
+              "value1": "{{$json.body.priority}}",
+              "operation": "equal",
+              "value2": "low"
+            }
+          ]
+        }
+      },
+      "id": "2",
+      "name": "Switch Node",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "calendarId": "primary",
+        "title": "{{$json.body.request}}",
+        "start": "{{$now.toISO()}}",
+        "end": "{{$now.plus({minutes: 30}).toISO()}}"
+      },
+      "id": "3",
+      "name": "Google Calendar Node",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        750,
+        200
+      ],
+      "credentials": {
+        "googleCalendarApi": {
+          "id": "YOUR_GOOGLE_CREDENTIALS_ID",
+          "name": "Google Calendar Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "High priority task added to calendar: {{$json.body.request}}",
+        "parseMode": "MarkdownV2"
+      },
+      "id": "4",
+      "name": "Telegram Sender",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "table": "Задачи на потом",
+        "columns": {
+          "request": "{{$json.body.request}}"
+        }
+      },
+      "id": "5",
+      "name": "Supabase Node",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        750,
+        400
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIALS_ID",
+          "name": "Supabase Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "responseCode": 200,
+        "responseBody": "{\"status\": \"ok\"}",
+        "responseContentType": "application/json"
+      },
+      "id": "6",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Switch Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Node": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar Node",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase Node",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Google Calendar Node": {
+      "main": [
+        [
+          {
+            "node": "Telegram Sender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Sender": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Node": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "id": "3"
+}

@@ -1,0 +1,129 @@
+{
+  "name": "Information Courier",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://rss.app/feeds/U341q2S3pA2a8d6f.xml",
+        "pollTimes": {
+          "mode": "everyX",
+          "value": 1,
+          "unit": "hours"
+        }
+      },
+      "id": "1",
+      "name": "RSS Feed Trigger",
+      "type": "n8n-nodes-base.rssFeedReadTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "{{$json.title}}",
+              "operation": "contains",
+              "value2": "AGI"
+            },
+            {
+              "value1": "{{$json.title}}",
+              "operation": "contains",
+              "value2": "LLM"
+            }
+          ]
+        },
+        "combinator": "or"
+      },
+      "id": "2",
+      "name": "IF Keywords",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "prompt": "Summarize the following article in 100 words or less: {{$json.content}}"
+      },
+      "id": "3",
+      "name": "OpenAI Summarizer",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        750,
+        200
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIALS_ID",
+          "name": "OpenAI Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "{{$json.choices[0].message.content}}",
+        "parseMode": "MarkdownV2"
+      },
+      "id": "4",
+      "name": "Telegram Sender",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram Credentials"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "RSS Feed Trigger": {
+      "main": [
+        [
+          {
+            "node": "IF Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Keywords": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Summarizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Summarizer": {
+      "main": [
+        [
+          {
+            "node": "Telegram Sender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "id": "1"
+}

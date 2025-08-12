@@ -1,0 +1,98 @@
+{
+  "name": "Visual Archivist",
+  "nodes": [
+    {
+      "parameters": {
+        "events": "photo"
+      },
+      "id": "1",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIALS_ID",
+          "name": "Telegram Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-vision-preview",
+        "prompt": "Describe this image in detail, considering the context from the caption: {{$json.caption}}",
+        "inputPropertyName": "data"
+      },
+      "id": "2",
+      "name": "OpenAI Vision",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIALS_ID",
+          "name": "OpenAI Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "baseId": "YOUR_AIRTABLE_BASE_ID",
+        "tableId": "YOUR_AIRTABLE_TABLE_ID",
+        "fields": {
+          "Timestamp": "{{$now}}",
+          "Image URL": "{{$json.photo[0].file_id}}",
+          "Caption": "{{$json.caption}}",
+          "AI Description": "{{$json.choices[0].message.content}}"
+        }
+      },
+      "id": "3",
+      "name": "Airtable Node",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [
+        750,
+        300
+      ],
+      "credentials": {
+        "airtableApi": {
+          "id": "YOUR_AIRTABLE_CREDENTIALS_ID",
+          "name": "Airtable Credentials"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Vision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Vision": {
+      "main": [
+        [
+          {
+            "node": "Airtable Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "id": "2"
+}
