@@ -9,3 +9,4 @@ uvicorn[standard]
 redis
 PyYAML
 httpx
+fakeredis
