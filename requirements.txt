@@ -1,0 +1,6 @@
+pyTelegramBotAPI
+pydantic
+sentence-transformers
+scikit-learn
+openai
+numpy
