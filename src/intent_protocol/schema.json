@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Praetor Intent Protocol",
+  "description": "A formal, machine-readable contract that defines a high-level objective, its constraints, and measurable success criteria. This protocol transforms an abstract intent into a verifiable and actionable law.",
+  "type": "object",
+  "properties": {
+    "objective": {
+      "description": "A high-level, clear, and concise description of the desired end-state. Example: 'Increase conversion in the X sales funnel.'",
+      "type": "string"
+    },
+    "constraints": {
+      "description": "The operational boundaries and limitations within which the objective must be achieved.",
+      "type": "object",
+      "properties": {
+        "max_budget_sapiens_coin": {
+          "description": "The maximum allocated budget in Sapiens Coin for the entire operation.",
+          "type": "number",
+          "minimum": 0
+        },
+        "max_duration_hours": {
+          "description": "The maximum time in hours allowed for the mission to be completed.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "forbidden_actions": {
+          "description": "A list of actions, strategies, or methods that are explicitly forbidden.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": []
+    },
+    "success_criteria": {
+      "description": "A set of specific, measurable, achievable, relevant, and time-bound (SMART) metrics that define success.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "metric_name": {
+            "description": "The name of the metric to be measured. Example: 'user_conversion_rate'.",
+            "type": "string"
+          },
+          "operator": {
+            "description": "The comparison operator.",
+            "type": "string",
+            "enum": [">", "<", ">=", "<=", "=="]
+          },
+          "target_value": {
+            "description": "The target value for the metric. Example: 0.15 for a 15% conversion rate.",
+            "type": "number"
+          }
+        },
+        "required": ["metric_name", "operator", "target_value"]
+      }
+    }
+  },
+  "required": ["objective", "success_criteria"]
+}
