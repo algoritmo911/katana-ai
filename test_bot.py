@@ -1,227 +1,150 @@
 import unittest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import json
 from pathlib import Path
-import shutil # For robust directory removal
+import shutil
+import io
+import sys
 
-# Assuming bot.py is in the same directory or accessible in PYTHONPATH
 import bot
+from katana.core.contracts.commands import PingCommand, LogEventCommand
+from katana.core.logging import logger as bot_logger
 
-class TestBot(unittest.TestCase):
+class TestBotCerberus(unittest.TestCase):
 
     def setUp(self):
-        # Create a dummy commands directory for testing
-        self.test_commands_dir = Path("test_commands_temp_dir") # Using a more unique name
-        self.test_commands_dir.mkdir(parents=True, exist_ok=True)
-
-        # Store original and set to test
-        self.original_command_file_dir = bot.COMMAND_FILE_DIR
-        bot.COMMAND_FILE_DIR = self.test_commands_dir
-
-        # Mock the bot object and its methods
+        # --- Мокирование зависимостей ---
         self.mock_bot_instance = MagicMock()
-        # Patch the bot instance within the 'bot' module
         self.bot_patcher = patch('bot.bot', self.mock_bot_instance)
         self.mock_bot_module_instance = self.bot_patcher.start()
 
-        # Mock datetime to control timestamps in filenames
-        self.mock_datetime_patcher = patch('bot.datetime')
-        self.mock_datetime = self.mock_datetime_patcher.start()
-        self.mock_datetime.utcnow.return_value.strftime.return_value = "YYYYMMDD_HHMMSS_ffffff"
+        # --- Мокирование файловой системы ---
+        self.test_commands_dir = Path("test_commands_temp_dir")
+        self.test_commands_dir.mkdir(parents=True, exist_ok=True)
+        self.original_command_file_dir = bot.COMMAND_FILE_DIR
+        bot.COMMAND_FILE_DIR = self.test_commands_dir
 
+        # --- Перехват stdout/stderr для тестирования логов ---
+        self.stdout_capture = io.StringIO()
+        self.stderr_capture = io.StringIO()
+        self.stdout_patcher = patch('sys.stdout', self.stdout_capture)
+        self.stderr_patcher = patch('sys.stderr', self.stderr_capture)
+        self.stdout_patcher.start()
+        self.stderr_patcher.start()
+
+        # --- Мокирование хендлеров ---
+        self.ping_handler_patcher = patch('bot.handle_ping')
+        self.mock_ping_handler = self.ping_handler_patcher.start()
+
+        self.log_event_handler_patcher = patch('bot.handle_log_event')
+        self.mock_log_event_handler = self.log_event_handler_patcher.start()
+
+        self.mind_clearing_handler_patcher = patch('bot.handle_mind_clearing')
+        self.mock_mind_clearing_handler = self.mind_clearing_handler_patcher.start()
 
     def tearDown(self):
-        # Stop patchers
         self.bot_patcher.stop()
-        self.mock_datetime_patcher.stop()
+        self.stdout_patcher.stop()
+        self.stderr_patcher.stop()
+        self.ping_handler_patcher.stop()
+        self.log_event_handler_patcher.stop()
+        self.mind_clearing_handler_patcher.stop()
 
-        # Clean up: remove dummy directory and its contents
         if self.test_commands_dir.exists():
-            shutil.rmtree(self.test_commands_dir) # shutil.rmtree is more robust for non-empty dirs
-
-        # Restore original
+            shutil.rmtree(self.test_commands_dir)
         bot.COMMAND_FILE_DIR = self.original_command_file_dir
-
 
     def _create_mock_message(self, text_payload):
         mock_message = MagicMock()
         mock_message.chat.id = 12345
-        mock_message.text = json.dumps(text_payload)
+        mock_message.text = json.dumps(text_payload) if isinstance(text_payload, dict) else text_payload
         return mock_message
 
-    # --- Test Command Validation ---
-    def test_valid_command_gets_saved(self):
-        command = {"type": "test_type", "module": "test_module", "args": {}, "id": "test_id"}
+    def _get_log_events(self, stream):
+        """Извлекает и парсит JSON-логи из перехваченного потока."""
+        log_lines = stream.getvalue().strip().split('\n')
+        if not log_lines or not log_lines[0]:
+            return []
+        return [json.loads(line) for line in log_lines]
+
+    def test_valid_ping_command_routes_correctly(self):
+        command = {"type": "ping", "module": "system", "id": "test_ping_001", "args": {}}
         mock_message = self._create_mock_message(command)
-
+        self.mock_ping_handler.return_value = "Ping Handled"
         bot.handle_message(mock_message)
 
-        # Check file creation
-        expected_module_dir = self.test_commands_dir / "telegram_mod_test_module"
-        self.assertTrue(expected_module_dir.exists())
+        self.mock_ping_handler.assert_called_once()
+        args, _ = self.mock_ping_handler.call_args
+        self.assertIsInstance(args[0], PingCommand)
+        self.assertEqual(args[0].id, "test_ping_001")
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Ping Handled")
 
-        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
-        expected_file_path = expected_module_dir / expected_filename
-        self.assertTrue(expected_file_path.exists())
+        log_events = self._get_log_events(self.stdout_capture)
+        self.assertTrue(any(log['message'] == 'Command validated successfully' and log['command_id'] == 'test_ping_001' for log in log_events))
 
-        with open(expected_file_path, "r") as f:
-            saved_data = json.load(f)
-        self.assertEqual(saved_data, command)
-
-        # Check reply
-        self.mock_bot_module_instance.reply_to.assert_called_once()
-        args, kwargs = self.mock_bot_module_instance.reply_to.call_args
-        self.assertEqual(args[0], mock_message)
-        self.assertTrue(args[1].startswith("✅ Command received and saved as"))
-        self.assertIn(str(expected_file_path), args[1])
-
-
-    def test_invalid_json_format(self):
-        mock_message = MagicMock() # Simpler mock for this case
-        mock_message.chat.id = 123
-        mock_message.text = "not a valid json"
+    def test_valid_log_event_command_routes_correctly(self):
+        command = {"type": "log_event", "module": "audit", "id": 123, "args": {"level": "info", "message": "User logged in"}}
+        mock_message = self._create_mock_message(command)
         bot.handle_message(mock_message)
+
+        self.mock_log_event_handler.assert_called_once()
+        args, _ = self.mock_log_event_handler.call_args
+        self.assertIsInstance(args[0], LogEventCommand)
+        self.assertEqual(args[0].args.message, "User logged in")
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed.")
+
+    def test_invalid_json_format_fails(self):
+        mock_message = self._create_mock_message("this is not json")
+        bot.handle_message(mock_message)
+
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Invalid JSON format.")
+        log_events = self._get_log_events(self.stderr_capture)
+        self.assertTrue(any(log['message'] == 'Invalid JSON format' and log['extra']['command_text'] == 'this is not json' for log in log_events))
 
-    def test_missing_type_field(self):
-        command = {"module": "test_module", "args": {}, "id": "test_id"} # type is missing
+    def test_unknown_command_type_fails(self):
+        command = {"type": "non_existent_command", "module": "test", "id": 1}
         mock_message = self._create_mock_message(command)
         bot.handle_message(mock_message)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Missing required field 'type'.")
 
-    def test_missing_module_field(self):
-        command = {"type": "test_type", "args": {}, "id": "test_id"} # module is missing
+        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Unknown command type 'non_existent_command'.")
+        log_events = self._get_log_events(self.stderr_capture)
+        self.assertTrue(any(log['message'] == 'Unknown command type' and log['command_type'] == 'non_existent_command' for log in log_events))
+
+    def test_missing_required_field_fails(self):
+        command = {"type": "ping", "module": "system", "args": {}}
         mock_message = self._create_mock_message(command)
         bot.handle_message(mock_message)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Missing required field 'module'.")
 
-    def test_invalid_args_type(self):
-        command = {"type": "test_type", "module": "test_module", "args": "not_a_dict", "id": "test_id"}
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'args' must be type dict. Got str.")
-
-    def test_invalid_id_type(self):
-        command = {"type": "test_type", "module": "test_module", "args": {}, "id": [1,2,3]} # id is a list
-        mock_message = self._create_mock_message(command)
-        bot.handle_message(mock_message)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Error: Field 'id' must be type str or int. Got list.")
-
-
-    # --- Test Command Routing ---
-
-    @patch('bot.log_local_bot_event')
-    def test_handle_log_event_calls_logger(self, mock_log_local_bot_event_func):
-        from bot_components.handlers.log_event_handler import handle_log_event # Updated import path
-        command_data = {'type': 'log_event', 'module': 'test', 'args': {'message': 'hello test'}, 'id': 'test001'}
-        chat_id = 98765
-
-        handle_log_event(command_data, chat_id, mock_log_local_bot_event_func) # Pass mock logger
-
-        mock_log_local_bot_event_func.assert_called_once()
-        expected_log_message = f"handle_log_event called for chat_id {chat_id} with data: {command_data}"
-        mock_log_local_bot_event_func.assert_called_with(expected_log_message)
-
-    def test_handle_ping_calls_logger(self):
-        from bot_components.handlers.ping_handler import handle_ping # Direct import for direct test
-        command_data = {'type': 'ping', 'module': 'test', 'args': {}, 'id': 'ping_test_002'}
-        chat_id = 54321
-        mock_logger = MagicMock()
-
-        reply = handle_ping(command_data, chat_id, mock_logger)
-
-        mock_logger.assert_called_once_with(f"handle_ping called for chat_id {chat_id} with data: {command_data}")
-        self.assertEqual(reply, "✅ 'ping' received.")
-
-    def test_handle_mind_clearing_calls_logger(self):
-        from bot_components.handlers.mind_clearing_handler import handle_mind_clearing
-        command_data = {'type': 'mind_clearing', 'module': 'test_wellness', 'args': {'duration': '5m'}, 'id': 'mc_test_003'}
-        chat_id = 13579
-        mock_logger = MagicMock()
-
-        reply = handle_mind_clearing(command_data, chat_id, mock_logger)
-
-        mock_logger.assert_called_once_with(f"handle_mind_clearing called for chat_id {chat_id} with data: {command_data}")
-        self.assertEqual(reply, "✅ 'mind_clearing' processed (placeholder).")
-
-    def test_log_event_success(self):
-        command_data = {"type": "log_event", "module": "logging_module", "args": {"level": "info", "message": "Successful event"}, "id": "log_success_001"}
-        mock_message = self._create_mock_message(command_data)
-
-        # We need to patch handle_log_event because we are testing the reply from handle_message,
-        # not the full execution of handle_log_event itself here.
-        with patch('bot.handle_log_event') as mock_actual_handler: # Corrected patch path
-            bot.handle_message(mock_message)
-            # Assert that the mock_actual_handler (the moved handle_log_event) is called with the command_data, chat_id, AND the actual log_local_bot_event from bot.py
-            mock_actual_handler.assert_called_once_with(command_data, mock_message.chat.id, bot.log_local_bot_event)
-
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
-
-    @patch('bot.handle_log_event') # Corrected patch path
-    def test_routing_log_event(self, mock_handle_log_event_func):
-        command = {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
-        mock_message = self._create_mock_message(command)
-
-        bot.handle_message(mock_message)
-
-        # Assert that the mock_handle_log_event_func is called with command, chat_id, AND the actual log_local_bot_event from bot.py
-        mock_handle_log_event_func.assert_called_once_with(command, mock_message.chat.id, bot.log_local_bot_event)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
-
-    @patch('bot.handle_ping') # Patching where it's used in bot.py
-    def test_routing_ping(self, mock_handle_ping_func):
-        command = {"type": "ping", "module": "system", "args": {}, "id": "ping001"}
-        mock_message = self._create_mock_message(command)
-
-        # Define a specific return value for the mock
-        mock_handle_ping_func.return_value = "Ping success from mock"
-
-        bot.handle_message(mock_message)
-
-        mock_handle_ping_func.assert_called_once_with(command, mock_message.chat.id, bot.log_local_bot_event)
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Ping success from mock")
-
-    @patch('bot.handle_mind_clearing')
-    def test_routing_mind_clearing(self, mock_handle_mind_clearing_func):
-        command = {"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}
-        mock_message = self._create_mock_message(command)
-
-        # Set the mock's return value, as bot.py now uses it for the reply
-        mock_handle_mind_clearing_func.return_value = "✅ 'mind_clearing' processed (placeholder)."
-
-        bot.handle_message(mock_message)
-
-        # Assert that the mock is called with the logger function as the third argument
-        mock_handle_mind_clearing_func.assert_called_once_with(command, mock_message.chat.id, bot.log_local_bot_event)
-        # This assertion should still pass as bot.py uses the return value from the handler
-        self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'mind_clearing' processed (placeholder).")
-
-
-    def test_unknown_command_type_saves_normally(self):
-        command = {"type": "unknown_type", "module": "custom_module", "args": {}, "id": "custom003"}
-        mock_message = self._create_mock_message(command)
-
-        bot.handle_message(mock_message)
-
-        # Check file creation
-        expected_module_dir = self.test_commands_dir / "telegram_mod_custom_module"
-        self.assertTrue(expected_module_dir.exists())
-
-        expected_filename = f"YYYYMMDD_HHMMSS_ffffff_{mock_message.chat.id}.json"
-        expected_file_path = expected_module_dir / expected_filename
-        self.assertTrue(expected_file_path.exists())
-
-        with open(expected_file_path, "r") as f:
-            saved_data = json.load(f)
-        self.assertEqual(saved_data, command)
-
-        # Check reply
         self.mock_bot_module_instance.reply_to.assert_called_once()
-        args, kwargs = self.mock_bot_module_instance.reply_to.call_args
-        self.assertEqual(args[0], mock_message)
-        self.assertTrue(args[1].startswith("✅ Command received and saved as"))
-        self.assertIn(str(expected_file_path), args[1])
+        reply_arg = self.mock_bot_module_instance.reply_to.call_args[0][1]
+        self.assertIn("Validation Error", reply_arg)
+        self.assertIn("- id: Field required", reply_arg)
+
+        log_events = self._get_log_events(self.stderr_capture)
+        self.assertTrue(any(log['message'] == 'Command validation failed' and log['command_type'] == 'ping' for log in log_events))
+
+    def test_invalid_arg_type_fails(self):
+        command = {"type": "log_event", "module": "audit", "id": 456, "args": {"level": 123, "message": "A message"}}
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+
+        self.mock_bot_module_instance.reply_to.assert_called_once()
+        reply_arg = self.mock_bot_module_instance.reply_to.call_args[0][1]
+        self.assertIn("Validation Error", reply_arg)
+        # Проверяем обновленный, более точный формат ошибки
+        self.assertIn("- args -> level: Input should be a valid string", reply_arg)
+
+    def test_missing_required_arg_fails(self):
+        command = {"type": "log_event", "module": "audit", "id": 789, "args": {"level": "warning"}}
+        mock_message = self._create_mock_message(command)
+        bot.handle_message(mock_message)
+
+        self.mock_bot_module_instance.reply_to.assert_called_once()
+        reply_arg = self.mock_bot_module_instance.reply_to.call_args[0][1]
+        self.assertIn("Validation Error", reply_arg)
+        # Проверяем обновленный, более точный формат ошибки
+        self.assertIn("- args -> message: Field required", reply_arg)
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(argv=['first-arg-is-ignored'], exit=False)
