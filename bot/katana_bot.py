@@ -96,6 +96,7 @@ MESSAGE_ROLE_ASSISTANT = "assistant"
 try:
     from src.memory.memory_manager import MemoryManager
     from src.memory.memory import Memory
+    from src.agents.n8n_screenshot_analyzer import N8nScreenshotAnalyzer
 except ImportError:
     # Fallback for local execution if PYTHONPATH isn't set, e.g. when running katana_bot.py directly for testing
     # This assumes katana_bot.py is in bot/ and src/ is a sibling directory
@@ -104,6 +105,7 @@ except ImportError:
     sys.path.insert(0, str(project_root))
     from src.memory.memory_manager import MemoryManager
     from src.memory.memory import Memory
+    from src.agents.n8n_screenshot_analyzer import N8nScreenshotAnalyzer
 
 
 redis_host = os.getenv('REDIS_HOST', 'localhost')
@@ -116,10 +118,11 @@ chat_ttl = int(chat_ttl_str) if chat_ttl_str else None
 # memory_manager will be initialized by init_dependencies()
 memory_manager: Optional[MemoryManager] = None
 memory: Optional[Memory] = None
+n8n_analyzer: Optional[N8nScreenshotAnalyzer] = None
 
 def init_dependencies():
     """Initializes global dependencies like MemoryManager."""
-    global memory_manager, memory
+    global memory_manager, memory, n8n_analyzer
     if memory_manager is None:
         logger.info("Initializing MemoryManager...")
         # These variables are already defined at module level
@@ -141,6 +144,14 @@ def init_dependencies():
         logger.info("Memory initialized.")
     else:
         logger.info("Memory already initialized.")
+
+    if n8n_analyzer is None:
+        logger.info("Initializing N8nScreenshotAnalyzer...")
+        # For now, we pass None for the llm_client. This will be replaced later.
+        n8n_analyzer = N8nScreenshotAnalyzer(llm_client=None)
+        logger.info("N8nScreenshotAnalyzer initialized.")
+    else:
+        logger.info("N8nScreenshotAnalyzer already initialized.")
 
 # --- End MemoryManager Initialization ---
 
@@ -375,6 +386,63 @@ def handle_message(message):
             logger.info(f"Replied to chat_id {message.chat.id} with unhandled error message: {user_error_message}")
         except Exception as ex_reply:
             logger.error(f"[ErrorID: {error_id}] Failed to send error reply to user {message.chat.id}: {ex_reply}", exc_info=True)
+
+
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    """Handles incoming photos, expecting an n8n workflow screenshot."""
+    chat_id_str = str(message.chat.id)
+    logger.info(f"Received photo from chat_id {chat_id_str}. Analyzing as n8n workflow...")
+
+    try:
+        # 1. Download the photo
+        # Get the largest photo
+        photo_id = message.photo[-1].file_id
+        file_info = bot.get_file(photo_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+
+        # Create a temporary path to save the file
+        temp_dir = Path('temp_screenshots')
+        temp_dir.mkdir(exist_ok=True)
+        photo_path = temp_dir / f"{photo_id}.jpg"
+
+        with open(photo_path, 'wb') as new_file:
+            new_file.write(downloaded_file)
+
+        logger.info(f"Photo saved to {photo_path}")
+
+        # 2. Analyze the screenshot using the agent
+        if n8n_analyzer:
+            bot.reply_to(message, "Анализирую скриншот... Это может занять некоторое время.")
+
+            # This is where the magic happens
+            workflow_json = n8n_analyzer.analyze_screenshot(str(photo_path))
+            errors = n8n_analyzer.find_logical_errors(workflow_json)
+
+            # 3. Formulate and send the response
+            if not errors:
+                response_text = "Анализ завершен. Ошибок в логике воркфлоу не найдено."
+            else:
+                response_text = "Найдены следующие потенциальные ошибки в воркфлоу:\n\n"
+                for error in errors:
+                    response_text += f"- {error}\n"
+
+            bot.reply_to(message, response_text)
+            logger.info(f"Sent analysis result to chat_id {chat_id_str}")
+
+        else:
+            logger.error("N8nScreenshotAnalyzer not initialized. Cannot process photo.")
+            bot.reply_to(message, "Ошибка: Анализатор скриншотов не инициализирован.")
+
+        # 4. Clean up the downloaded file
+        os.remove(photo_path)
+        logger.info(f"Cleaned up temporary file: {photo_path}")
+
+    except Exception as e:
+        error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
+        logger.error(f"[ErrorID: {error_id}] Error processing photo for chat_id {chat_id_str}: {e}", exc_info=True)
+        bot.reply_to(message, f"Произошла ошибка при обработке изображения. (Код ошибки: {error_id})")
+
 
 if __name__ == '__main__':
     # This configuration will be applied only if katana_bot.py is run directly.
