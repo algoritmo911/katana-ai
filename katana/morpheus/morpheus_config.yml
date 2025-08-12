@@ -1,0 +1,20 @@
+# katana/morpheus/morpheus_config.yml
+
+# Конфигурация для триггера 'Циркадный Ритм'
+circadian_rhythm:
+  # Как часто (в секундах) проверять, не пора ли 'уснуть'
+  check_interval_seconds: 60
+
+  # Условия для перехода в состояние 'сна'
+  sleep_conditions:
+    # Период (в секундах), в течение которого все условия должны выполняться
+    sustained_idle_period_seconds: 900 # 15 минут
+
+    # Пороговые значения метрик
+    thresholds:
+      # Максимальное количество входящих запросов в минуту
+      max_requests_per_minute: 5
+      # Максимальное количество активных фоновых задач в 'Хроносе'
+      max_active_background_tasks: 0
+      # Максимальная средняя загрузка CPU (%)
+      max_avg_cpu_load_percent: 10.0
