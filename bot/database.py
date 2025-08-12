@@ -110,6 +110,18 @@ def search_messages_by_keywords(chat_id: int, keywords: list[str]):
         print(f"ОШИБКА DB: Не удалось выполнить поиск по ключевым словам для chat_id {chat_id}. Ошибка: {e}")
         return []
 
+def get_all_documents():
+    """
+    Извлекает все документы из таблицы documents.
+    """
+    try:
+        supabase = get_supabase_client()
+        data, count = supabase.table('documents').select('id, source, content, embedding').execute()
+        return data[1] if data and len(data) > 1 else []
+    except (ValueError, Exception) as e:
+        print(f"ОШИБКА DB: Не удалось извлечь все документы. Ошибка: {e}")
+        return []
+
 
 # Пример использования (для ручного тестирования)
 if __name__ == '__main__':

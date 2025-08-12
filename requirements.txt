@@ -2,3 +2,6 @@ pyTelegramBotAPI
 supabase
 openai
 python-dotenv
+beautifulsoup4
+scikit-learn
+networkx
