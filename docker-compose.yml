@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5.20.0
+    container_name: neo4j_katana
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j_data:/data
+    environment:
+      - NEO4J_AUTH=neo4j/password1234  # ЗАМЕНИТЬ на более безопасный пароль в реальной среде
+      - NEO4J_PLUGINS=["apoc"] # Установка полезного плагина APOC
+      - NEO4J_server_http_listen__address=0.0.0.0
+      - NEO4J_server_bolt_listen__address=0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --fail http://localhost:7474 || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  neo4j_data:

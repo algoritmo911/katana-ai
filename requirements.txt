@@ -1,0 +1,9 @@
+# Telegram Bot
+pyTelegramBotAPI
+
+# Knowledge Graph
+neo4j
+python-dotenv
+
+# LLM Integration
+openai
