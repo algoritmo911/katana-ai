@@ -9,6 +9,11 @@ import sys # For sys.argv and sys.exit
 import uuid # For generating command IDs if needed
 # import traceback # Not used
 
+
+# --- Katana Personality Core ---
+from katana.core.personality.state import PersonalityState, DEFAULT_PERSONALITY
+
+
 # --- File Paths ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 COMMANDS_FILE = os.path.join(SCRIPT_DIR, "katana.commands.json")
@@ -88,6 +93,7 @@ class KatanaCLI:
         self.logger = katana_logger
         self.cli_logger = cli_activities_logger # Specific logger for CLI actions
         self.telegram_logger = telegram_processing_logger # Specific for Telegram processing
+        self.personality = DEFAULT_PERSONALITY.model_copy(deep=True) # MORPHEUS CORE
         self.agent_memory_state = {} # Instance variable for memory state
         # File paths remain global constants, accessible directly
 

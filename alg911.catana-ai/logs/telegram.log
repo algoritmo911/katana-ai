@@ -1,0 +1,20 @@
+[2025-08-12 00:00:54] [INFO] [KatanaTelegramProcessing] Processing Telegram message: user_id=test_user, chat_id=test_chat, text='/status', original_cmd_id='original_id_from_tg'
+[2025-08-12 00:00:54] [INFO] [KatanaTelegramProcessing] Sent combined status to chat_id test_chat.
+[2025-08-12 00:00:54] [INFO] [KatanaTelegramProcessing] Processing Telegram message: user_id=unknown_user, chat_id=tg_chat_start, text='/start_katana', original_cmd_id='unknown_original_cmd'
+[2025-08-12 00:00:54] [INFO] [KatanaTelegramProcessing] Processed /start_katana for chat_id tg_chat_start. Result: Katana service started successfully.
+[2025-08-12 00:00:54] [INFO] [KatanaTelegramProcessing] Processing Telegram message: user_id=unknown_user, chat_id=tg_chat_stop, text='/stop_katana', original_cmd_id='unknown_original_cmd'
+[2025-08-12 00:00:54] [INFO] [KatanaTelegramProcessing] Processed /stop_katana for chat_id tg_chat_stop. Result: Katana service stopped successfully.
+[2025-08-12 00:00:54] [INFO] [KatanaTelegramProcessing] Processing Telegram message: user_id=unknown_user, chat_id=tg_chat_echo, text='/echo_tg Hello Katana', original_cmd_id='unknown_original_cmd'
+[2025-08-12 00:00:54] [INFO] [KatanaTelegramProcessing] Sent echo response to chat_id tg_chat_echo.
+[2025-08-12 00:00:54] [INFO] [KatanaTelegramProcessing] Processing Telegram message: user_id=unknown_user, chat_id=tg_chat_unknown, text='/foobar', original_cmd_id='unknown_original_cmd'
+[2025-08-12 00:00:54] [INFO] [KatanaTelegramProcessing] Unknown Telegram command from chat_id tg_chat_unknown: '/foobar'
+[2025-08-12 00:03:23] [INFO] [KatanaTelegramProcessing] Processing Telegram message: user_id=test_user, chat_id=test_chat, text='/status', original_cmd_id='original_id_from_tg'
+[2025-08-12 00:03:23] [INFO] [KatanaTelegramProcessing] Sent combined status to chat_id test_chat.
+[2025-08-12 00:03:23] [INFO] [KatanaTelegramProcessing] Processing Telegram message: user_id=unknown_user, chat_id=tg_chat_start, text='/start_katana', original_cmd_id='unknown_original_cmd'
+[2025-08-12 00:03:23] [INFO] [KatanaTelegramProcessing] Processed /start_katana for chat_id tg_chat_start. Result: Katana service started successfully.
+[2025-08-12 00:03:23] [INFO] [KatanaTelegramProcessing] Processing Telegram message: user_id=unknown_user, chat_id=tg_chat_stop, text='/stop_katana', original_cmd_id='unknown_original_cmd'
+[2025-08-12 00:03:23] [INFO] [KatanaTelegramProcessing] Processed /stop_katana for chat_id tg_chat_stop. Result: Katana service stopped successfully.
+[2025-08-12 00:03:23] [INFO] [KatanaTelegramProcessing] Processing Telegram message: user_id=unknown_user, chat_id=tg_chat_echo, text='/echo_tg Hello Katana', original_cmd_id='unknown_original_cmd'
+[2025-08-12 00:03:23] [INFO] [KatanaTelegramProcessing] Sent echo response to chat_id tg_chat_echo.
+[2025-08-12 00:03:23] [INFO] [KatanaTelegramProcessing] Processing Telegram message: user_id=unknown_user, chat_id=tg_chat_unknown, text='/foobar', original_cmd_id='unknown_original_cmd'
+[2025-08-12 00:03:23] [INFO] [KatanaTelegramProcessing] Unknown Telegram command from chat_id tg_chat_unknown: '/foobar'

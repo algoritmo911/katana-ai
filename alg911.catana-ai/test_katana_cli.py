@@ -1,6 +1,7 @@
 import unittest
 import os
 import json
+import logging
 import shutil
 from unittest.mock import patch, MagicMock, mock_open
 import datetime
@@ -286,7 +287,7 @@ class TestKatanaCLI(unittest.TestCase):
         self.assertIn("Unknown Telegram command processed", result_msg)
         self.cli.update_task(task_id, {"status": "completed", "result": result_msg})
 
-        self.cli.send_telegram_message.assert_called_once_with("tg_chat_unknown", "Sorry, I didn't understand that command. Try /status or /echo_tg <message>.")
+        self.cli.send_telegram_message.assert_called_once_with("tg_chat_unknown", "Sorry, I didn't understand that command. Try /status, /echo_tg <message>, /start_katana, or /stop_katana.")
 
 
     @patch('katana_agent.datetime.datetime')
@@ -327,8 +328,7 @@ class TestKatanaCLI(unittest.TestCase):
     def test_08_addtask_cli_command(self):
         success, msg = self.cli._dispatch_command_execution("addtask", ["my_cli_action", "p1=v1", "p2=v2_val"], source="cli")
         self.assertTrue(success)
-        self.assertIn("Task", msg)
-        self.assertIn("added", msg)
+        self.assertTrue(msg.startswith("CREATED_TASK_ID:"))
 
         tasks = self._read_json_file(TEST_COMMANDS_FILE)
         self.assertIsNotNone(tasks)
@@ -351,7 +351,8 @@ class TestKatanaCLI(unittest.TestCase):
 
     def test_10_memdump_command_cli(self):
         self.cli.agent_memory_state = {"test_key": "test_value"} # Setup some memory
-        expected_dump = json.dumps({"test_key": "test_value", "katana_service_status": "stopped"}, indent=2) # status init by setup
+        # The test should expect the memory state that was just set.
+        expected_dump = json.dumps(self.cli.agent_memory_state, indent=2)
 
         with patch('builtins.print') as mocked_print:
             success, result_msg = self.cli._dispatch_command_execution("memdump", [], source="cli")
@@ -386,5 +387,3 @@ if __name__ == "__main__":
 # For example, to check for the N8N URL warning:
 #   In setUp: self.cli.logger.removeHandler(self.cli.logger.handlers[0]) # remove console handler
 #   or set level higher. The current `self.cli.logger.setLevel(logging.CRITICAL + 1)` in setUp works.
-
-```

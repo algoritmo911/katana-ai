@@ -1,0 +1,44 @@
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Adding to command history: 'test command 1...'
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Adding to command history: 'test command 2...'
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Executing status_katana command (source: task).
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Executing start_katana command (source: task).
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Executing start_katana command (source: task).
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Executing stop_katana command (source: task).
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'start_katana' with params: [] from source: cli
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Executing start_katana command (source: cli).
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'status_katana' with params: [] from source: cli
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Executing status_katana command (source: cli).
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'stop_katana' with params: [] from source: cli
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Executing stop_katana command (source: cli).
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'status_katana' with params: [] from source: cli
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Executing status_katana command (source: cli).
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'addtask' with params: ['my_cli_action', 'p1=v1', 'p2=v2_val'] from source: cli
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Task 8377625935334971a5940e0d6ed4158c for action 'my_cli_action' added via CLI's addtask command.
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'echo' with params: ['hello', 'world'] from source: cli
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Executing echo command with params: ['hello', 'world'] from source: cli
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'memdump' with params: [] from source: cli
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Executing memdump command (source: cli).
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'exit' with params: [] from source: cli
+[2025-08-12 00:00:54] [INFO] [KatanaCLIActivities] Exit command received via CLI. Terminating shell.
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Adding to command history: 'test command 1...'
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Adding to command history: 'test command 2...'
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Executing status_katana command (source: task).
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Executing start_katana command (source: task).
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Executing start_katana command (source: task).
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Executing stop_katana command (source: task).
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'start_katana' with params: [] from source: cli
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Executing start_katana command (source: cli).
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'status_katana' with params: [] from source: cli
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Executing status_katana command (source: cli).
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'stop_katana' with params: [] from source: cli
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Executing stop_katana command (source: cli).
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'status_katana' with params: [] from source: cli
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Executing status_katana command (source: cli).
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'addtask' with params: ['my_cli_action', 'p1=v1', 'p2=v2_val'] from source: cli
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Task 932ac59204ac4e1fae2121d4cec6c5d6 for action 'my_cli_action' added via CLI's addtask command.
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'echo' with params: ['hello', 'world'] from source: cli
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Executing echo command with params: ['hello', 'world'] from source: cli
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'memdump' with params: [] from source: cli
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Executing memdump command (source: cli).
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Attempting to dispatch command: 'exit' with params: [] from source: cli
+[2025-08-12 00:03:23] [INFO] [KatanaCLIActivities] Exit command received via CLI. Terminating shell.
