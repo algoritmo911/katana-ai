@@ -1,6 +1,7 @@
-python-telegram-bot==20.8
-python-dotenv==1.0.0
-# Add other dependencies here as needed, e.g.
-# requests
-# numpy
-# spacy (for more advanced NLP)
+aiogram~=3.4.0
+fastapi~=0.111.0
+uvicorn[standard]~=0.29.0
+pydantic-settings~=2.2.1
+loguru~=0.7.2
+python-dotenv~=1.0.1
+pytest~=8.2.0
