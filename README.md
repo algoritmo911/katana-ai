@@ -1,4 +1,37 @@
-# katana-ai
+# Katana AI
+
+This repository contains the Katana AI monorepo.
+
+## Getting Started: Environment Setup with Poetry
+
+This project uses [Poetry](https://python-poetry.org/) for dependency management and running scripts.
+
+### Prerequisites
+
+Ensure you have Poetry installed. You can find installation instructions [here](https://python-poetry.org/docs/#installation).
+
+### Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
+    cd katana-ai
+    ```
+
+2.  **Install dependencies:**
+    This command will create a virtual environment inside the project directory and install all necessary main and development dependencies.
+    ```bash
+    poetry install --with dev
+    ```
+
+### Running Tests
+
+To run the entire test suite, use the following command. This will execute `pytest` within the Poetry-managed environment.
+```bash
+poetry run pytest
+```
+
+---
 
 ## Logging
 
