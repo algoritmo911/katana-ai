@@ -1,6 +1,6 @@
 import logging
 import os # For os.path.join if used in __main__
-from logging_config import setup_logging
+from katana.logging_config import setup_logging
 from katana_agent import KatanaAgent
 from katana.exchange.coinbase_api import get_spot_price
 

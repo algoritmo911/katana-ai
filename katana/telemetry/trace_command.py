@@ -121,8 +121,6 @@ def trace_command(
 
 # Example of how to use the decorator (for illustration)
 if __name__ == "__main__": # pragma: no cover
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
     # This example assumes SUPABASE_URL and SUPABASE_KEY are set in environment
     # if you want to test the Supabase logging part.
 

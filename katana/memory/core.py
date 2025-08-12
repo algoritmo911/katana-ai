@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from supabase import create_client, Client
 from typing import List, Dict, Any, Optional
 
+from katana.services.vectorization import VectorizationService
+
 # Initialize logger
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ class MemoryCore:
                 "SUPABASE_URL and/or SUPABASE_KEY environment variables are not set. "
                 "MemoryCore will not be functional."
             )
+        self.vectorization_service = VectorizationService()
 
     def _handle_response(self, response, operation_name: str):
         """
@@ -94,7 +97,17 @@ class MemoryCore:
         }
         try:
             response = self.client.table("command_logs").insert(log_entry).execute()
-            return self._handle_response(response, "add_dialogue")
+            dialogue_data = self._handle_response(response, "add_dialogue")
+            if dialogue_data and dialogue_data[0].get("id"):
+                dialogue_id = dialogue_data[0]["id"]
+                # Combine input and output for vectorization
+                text_to_vectorize = f"Input: {log_entry['input_data']} Output: {log_entry['output_data']}"
+                embedding = self.vectorization_service.vectorize(text_to_vectorize)
+                if embedding:
+                    self.store_embedding(dialogue_id, text_to_vectorize, embedding)
+                else:
+                    logger.warning(f"Could not generate embedding for dialogue_id: {dialogue_id}")
+            return dialogue_data
         except Exception as e:
             logger.error(f"Unexpected error storing log: {e}", exc_info=True)
             return None
@@ -270,6 +283,36 @@ class MemoryCore:
             return self._handle_response(response, "delete_fact")
         except Exception as e:
             logger.error(f"Unexpected error deleting fact: {e}", exc_info=True)
+            return None
+
+    def store_embedding(
+        self, dialogue_id: int, content: str, embedding: List[float]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Stores a vector embedding in the vector_store table.
+
+        Args:
+            dialogue_id: The ID of the dialogue entry this embedding belongs to.
+            content: The original text content that was vectorized.
+            embedding: The vector embedding.
+
+        Returns:
+            The newly created embedding entry, or None if an error occurred.
+        """
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot store embedding.")
+            return None
+
+        embedding_entry = {
+            "dialogue_id": dialogue_id,
+            "content": content,
+            "embedding": embedding,
+        }
+        try:
+            response = self.client.table("vector_store").insert(embedding_entry).execute()
+            return self._handle_response(response, "store_embedding")
+        except Exception as e:
+            logger.error(f"Unexpected error storing embedding: {e}", exc_info=True)
             return None
 
     def get_dialogue_history(

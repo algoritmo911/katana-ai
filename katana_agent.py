@@ -1,5 +1,5 @@
 import logging
-from logging_config import setup_logging
+from katana.logging_config import setup_logging
 
 # It's good practice to get a logger specific to the module
 logger = logging.getLogger('katana.agent') # Child logger of 'katana'

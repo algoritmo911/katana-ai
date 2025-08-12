@@ -1,7 +1,7 @@
 import unittest
 import logging
 from unittest.mock import patch, MagicMock
-from katana_agent import KatanaAgent, setup_logging as agent_setup_logging # To avoid conflict
+from katana_agent import KatanaAgent
 
 class TestKatanaAgentLogging(unittest.TestCase):
 

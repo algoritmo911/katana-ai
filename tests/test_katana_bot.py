@@ -1,7 +1,7 @@
 import unittest # Changed from pytest to unittest for consistency with other new tests
 import logging
 from unittest.mock import patch, MagicMock
-from katana_bot import KatanaBot, setup_logging as bot_setup_logging # To avoid conflict
+from katana_bot import KatanaBot
 from katana_agent import KatanaAgent # KatanaBot uses KatanaAgent
 
 # Original pytest tests, commented out or to be converted

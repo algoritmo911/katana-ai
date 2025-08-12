@@ -9,10 +9,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from katana_bot import KatanaBot
-from logging_config import setup_logging
+from katana.logging_config import setup_logging
 
 # Configure logging
-setup_logging(logging.DEBUG)
+setup_logging(level="DEBUG")
 logger = logging.getLogger(__name__)
 
 # --- Application Setup ---
