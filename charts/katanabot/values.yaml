@@ -1,0 +1,23 @@
+# Default values for katanabot.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: katanabot
+  pullPolicy: IfNotPresent
+  # Overridden by the CLI during local development
+  tag: "latest"
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 8000
+  # NodePort can be specified or left empty to be assigned automatically
+  # nodePort: 30080
+
+containerPort: 8000
+
+# We are not defining resources and other advanced features yet
+# to keep the initial chart simple.
