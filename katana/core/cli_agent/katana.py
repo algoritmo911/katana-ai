@@ -22,7 +22,7 @@ class KatanaCore:
         self.core_dir = Path(core_dir_path_str).resolve() # Resolve to absolute path
 
         self.commands_file_path = self.core_dir / 'commands.json'
-        self.status_file_path = self.core_dir / 'sync_status.json'
+        self.status_file_path = self.core_dir / 'status.json'
         self.memory_file_path = self.core_dir / 'memory.json'
 
         self.commands = {}

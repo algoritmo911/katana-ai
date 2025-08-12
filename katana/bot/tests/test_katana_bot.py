@@ -125,7 +125,11 @@ class TestKatanaBot(unittest.IsolatedAsyncioTestCase):
 
     @patch(f'{katan_bot_module_path}.client')
     async def test_handle_message_openai_authentication_error(self, mock_openai_client):
-        mock_openai_client.chat.completions.create = AsyncMock(side_effect=AuthenticationError("auth error"))
+        # For openai > 1.0, AuthenticationError requires response and body args
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        auth_error = AuthenticationError("auth error", response=mock_response, body=None)
+        mock_openai_client.chat.completions.create = AsyncMock(side_effect=auth_error)
         await katana_bot.handle_message(self.mock_update, self.mock_context)
         self.mock_update.message.reply_text.assert_called_once_with(
             "Error: OpenAI authentication failed. Please check the API key configuration with the administrator."
@@ -134,16 +138,21 @@ class TestKatanaBot(unittest.IsolatedAsyncioTestCase):
 
     @patch(f'{katan_bot_module_path}.client')
     async def test_handle_message_openai_rate_limit_error(self, mock_openai_client):
-        mock_openai_client.chat.completions.create = AsyncMock(side_effect=RateLimitError("rate limit error"))
+        # For openai > 1.0, RateLimitError requires response and body args
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        rate_limit_error = RateLimitError("rate limit error", response=mock_response, body=None)
+        mock_openai_client.chat.completions.create = AsyncMock(side_effect=rate_limit_error)
         await katana_bot.handle_message(self.mock_update, self.mock_context)
         self.mock_update.message.reply_text.assert_called_once_with("Error: OpenAI rate limit exceeded. Please try again later.")
         self.mock_logger.error.assert_any_call("OpenAI Rate Limit Error: rate limit error.", extra={'user_id': 12345})
 
     @patch(f'{katan_bot_module_path}.client')
     async def test_handle_message_openai_api_error(self, mock_openai_client):
-        mock_response = MagicMock()
-        mock_response.status_code = 400
-        mock_openai_client.chat.completions.create = AsyncMock(side_effect=APIError("api error", response=mock_response, body=None))
+        # For openai > 1.0, APIError requires request and body args
+        mock_request = MagicMock()
+        api_error = APIError("api error", request=mock_request, body=None)
+        mock_openai_client.chat.completions.create = AsyncMock(side_effect=api_error)
         await katana_bot.handle_message(self.mock_update, self.mock_context)
         self.mock_update.message.reply_text.assert_called_once_with("An error occurred with the OpenAI API: api error")
         self.mock_logger.error.assert_any_call("OpenAI API Error: api error", extra={'user_id': 12345})

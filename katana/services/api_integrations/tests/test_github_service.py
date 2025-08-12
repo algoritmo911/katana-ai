@@ -82,6 +82,8 @@ class TestGitHubService(unittest.TestCase):
         self.mock_github_class = self.github_class_patch.start()
         self.addCleanup(self.github_class_patch.stop)
         self.mock_github_instance = self.mock_github_class.return_value
+        # Explicitly add the method that the autospec might miss on the instance
+        self.mock_github_instance.get_notifications = MagicMock()
 
     def test_get_github_service_success(self):
         self.mock_getenv.return_value = 'test_pat_value'
