@@ -303,7 +303,7 @@ def handle_message_impl(message):
             # 5. Запись исходящего сообщения в состояние
             # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text}) # Replaced
             memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text})
-            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}. History length: {len(memory_manager.get_history(chat_id_str))}") # Corrected, log current length from manager
+            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}.")
 
         except Exception as e:
             error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
@@ -375,6 +375,9 @@ def handle_message(message):
             logger.info(f"Replied to chat_id {message.chat.id} with unhandled error message: {user_error_message}")
         except Exception as ex_reply:
             logger.error(f"[ErrorID: {error_id}] Failed to send error reply to user {message.chat.id}: {ex_reply}", exc_info=True)
+
+# Initialize dependencies upon module import to ensure memory_manager is available
+init_dependencies()
 
 if __name__ == '__main__':
     # This configuration will be applied only if katana_bot.py is run directly.

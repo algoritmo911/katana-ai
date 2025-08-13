@@ -80,33 +80,31 @@ class TestKatanaBot(unittest.TestCase):
 
         # Patch MemoryManager class globally for the duration of the import
         # This mock will be replaced by a more specific instance mock later if needed by tests.
-        # Force re-import by removing from sys.modules first, then importing.
         if 'bot.katana_bot' in sys.modules:
             del sys.modules['bot.katana_bot']
+        if 'src.memory.memory_manager' in sys.modules:
+            del sys.modules['src.memory.memory_manager']
 
-        # Import the module. With lazy-init, MemoryManager won't be created now.
-        # get_katana_response still needs to be mocked if it's used by other module-level code (if any)
-        # or to ensure tests use the mock.
-        self.mock_get_katana_for_test = MagicMock(return_value="Default mock for get_katana_response")
-        patch_get_katana_during_import = patch('bot.katana_bot.get_katana_response', self.mock_get_katana_for_test)
 
-        patch_get_katana_during_import.start()
-        self.bot_module = importlib.import_module('bot.katana_bot')
-        patch_get_katana_during_import.stop() # Stop it, will re-patch if needed or rely on this one.
-                                            # For simplicity, let this be the main mock for get_katana_response.
-        self.addCleanup(patch_get_katana_during_import.stop) # Ensure it's stopped at cleanup.
-
-        # self.bot_module.memory_manager is None at this point.
-        # Create a mock instance that will replace `self.bot_module.memory_manager`
+        # We MUST patch the MemoryManager class BEFORE importing katana_bot
+        # so that when katana_bot runs init_dependencies(), it uses our mock class.
         self.mock_memory_manager_instance = MagicMock()
-        self.mock_memory_manager_instance.get_history = MagicMock(return_value=[])
-        self.mock_memory_manager_instance.add_message_to_history = MagicMock()
-        self.mock_memory_manager_instance.clear_history = MagicMock()
+        patch_memory_manager_class = patch('src.memory.memory_manager.MemoryManager', return_value=self.mock_memory_manager_instance)
+        self.mock_mm_class = patch_memory_manager_class.start()
+        self.addCleanup(patch_memory_manager_class.stop)
 
-        # Patch the instance variable `memory_manager` in the loaded bot_module
-        self.patch_bot_module_mm_instance = patch.object(self.bot_module, 'memory_manager', self.mock_memory_manager_instance)
-        self.patch_bot_module_mm_instance.start()
-        self.addCleanup(self.patch_bot_module_mm_instance.stop)
+        # Mock get_katana_response as well
+        self.mock_get_katana_for_test = MagicMock(return_value="Default mock for get_katana_response")
+        patch_get_katana = patch('bot.katana_bot.get_katana_response', self.mock_get_katana_for_test)
+        self.mock_get_katana = patch_get_katana.start()
+        self.addCleanup(patch_get_katana.stop)
+
+        # Now it's safe to import the module
+        self.bot_module = importlib.import_module('bot.katana_bot')
+
+        # The module-level `memory_manager` variable should now be our mock instance
+        self.assertIsNotNone(self.bot_module.memory_manager, "memory_manager should be initialized")
+        self.assertIs(self.bot_module.memory_manager, self.mock_memory_manager_instance, "memory_manager is not the mocked instance")
 
         # If katana_bot.init_dependencies() was to be called by tests, this is where it would go,
         # and self.bot_module.memory_manager would then be our mock.
@@ -140,11 +138,12 @@ class TestKatanaBot(unittest.TestCase):
 
     def test_handle_start(self):
         msg = DummyMessage("/start", 123456)
-        with patch('bot.bot_instance.bot') as mock_bot:
-            mock_bot.reply_to = MagicMock()
-            self.bot_module.handle_start(msg)
-            expected_reply = "Привет! Я — Katana. Готов к диалогу или JSON-команде."
-            mock_bot.reply_to.assert_called_once_with(msg, expected_reply)
+        # The bot instance is already mocked in setUp.
+        # We should assert against the global mock_telebot_instance.
+        self.bot_module.handle_start(msg)
+        expected_reply = "Привет! Я — Katana. Готов к диалогу или JSON-команде."
+        # Use the globally mocked instance from setUp
+        mock_telebot_instance.reply_to.assert_called_once_with(msg, expected_reply)
 
     def test_natural_language_message_success(self):
         self.message.text = "Привет, Катана!"
