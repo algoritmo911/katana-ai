@@ -1,0 +1,8 @@
+{
+  "id": "mci_mc_001",
+  "type": "trigger_module",
+  "module": "mind_clearing",
+  "executed_at": "2025-08-13T19:33:08.011787",
+  "status": "done",
+  "execution_summary": "{'status': 'success', 'message': 'MC default run'}"
+}

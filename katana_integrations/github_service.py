@@ -11,6 +11,7 @@ try:
     PYGITHUB_AVAILABLE = True
 except ImportError:
     PYGITHUB_AVAILABLE = False
+    Github = type("Github", (), {}) # Dummy class for type hinting
     # This print will occur when github_service.py is imported or run if PyGithub is missing.
     print("[GitHubService:CRITICAL_DEPENDENCY_ERROR] PyGithub library not found. Please run: pip install PyGithub")
 

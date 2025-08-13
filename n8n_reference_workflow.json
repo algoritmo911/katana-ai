@@ -1,0 +1,73 @@
+{
+  "name": "ZEUS-Reference-Telemetry-Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "zeus-telemetry-webhook-placeholder",
+        "httpMethod": "POST"
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const referencePayload = {\n    \"event_name\": \"user.login.success\",\n    \"trace_id\": \"0x0123456789abcdef0123456789abcdef\",\n    \"span_id\": \"0x0123456789abcdef\",\n    \"timestamp\": \"2025-08-12T15:00:00.000Z\",\n    \"severity\": \"INFO\",\n    \"body\": {\n        \"message\": \"User 'test-user' successfully logged in.\",\n        \"user_id\": \"test-user-123\",\n        \"duration_ms\": 150,\n        \"success\": true,\n        \"attributes\": {\n            \"login_method\": \"password\",\n            \"client_ip\": \"192.168.1.100\"\n        }\n    }\n};\n\n$json.data = referencePayload;\nreturn $json;"
+      },
+      "name": "Generate Reference Payload",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://webhook.site/placeholder-url-for-zeus-project",
+        "options": {
+          "sendBody": true
+        },
+        "bodyParameters": {
+          "__SNDL_RAW__": true,
+          "data": "={{ $json.data }}"
+        }
+      },
+      "name": "POST to Collector",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        750,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Generate Reference Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Reference Payload": {
+      "main": [
+        [
+          {
+            "node": "POST to Collector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

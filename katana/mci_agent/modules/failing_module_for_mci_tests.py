@@ -1,0 +1,1 @@
+def run(**kwargs): raise ValueError('This module is designed to fail')

@@ -1,9 +1,16 @@
 import os
-import logging
+import traceback
 from pathlib import Path
-from katana.utils.logging_config import (
-    setup_logger,
+
+from katana.utils.telemetry_provider import (
+    setup_telemetry,
+    get_logger,
+    get_tracer,
+    log_event,
+    log_unstructured_message,
 )
+from opentelemetry import trace
+from opentelemetry.logs import SeverityNumber
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -17,269 +24,212 @@ from openai import (
     APIError,
     AuthenticationError,
     RateLimitError,
-)  # For openai >= 1.0.0
-import traceback
+)
 
+# --- Global Variables ---
+# The logger will be initialized in main() after telemetry is set up.
+logger = None
 
-# --- Initialize Logger ---
-# The actual logger object is now configured and retrieved via setup_logger.
-# We still define a global 'logger' variable for the rest of the script to use.
-# The setup_logger call will be made in main().
-logger = logging.getLogger("KatanaBotAI") # Default logger instance
-
-# --- Configuration & Log File Setup ---
-# Token and keys from environment variables
+# --- Configuration ---
 TELEGRAM_TOKEN = os.environ.get("KATANA_TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-# Determine if running in development mode (e.g., via environment variable)
-# This will be passed to setup_logger.
-IS_DEV_MODE = os.environ.get("ENV_MODE", "").lower() == "dev"
-
-# Log file will be command_telemetry.log as per new requirements for the telemetry logger
-LOG_FILE_NAME = "command_telemetry.log"
-BOT_LOG_DIR = Path(__file__).resolve().parent / "logs" # Retain logs subdirectory for organization
-BOT_LOG_FILE = BOT_LOG_DIR / LOG_FILE_NAME # Path object for the log file
-
-# --- Initialize OpenAI Client (v1.x.x) ---
-client: OpenAI = None  # type: ignore
+# --- Initialize OpenAI Client ---
+client: OpenAI = None
 if OPENAI_API_KEY:
     client = OpenAI(api_key=OPENAI_API_KEY)
-    # Logger will be configured in main() before this is needed for file logging
-else:
-    # Logger will be configured in main()
-    pass
 
 
 # --- Bot Command Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends a welcome message when the /start command is issued."""
-    user_id = (
-        update.effective_user.id if update.effective_user else "UnknownUser"
+    user_id = update.effective_user.id if update.effective_user else "UnknownUser"
+
+    log_event(
+        logger,
+        "bot.command.start.received",
+        body={"user_id": str(user_id), "message": "Received /start command"},
+        severity=SeverityNumber.INFO,
     )
-    logger.debug(
-        f"Entering start function for user_id: {user_id}",
-        extra={"user_id": user_id},
-    )
-    logger.info(
-        "Received /start command", extra={"user_id": user_id}
-    )  # Removed unnecessary f-string
+
     await update.message.reply_text(
         "⚔️ Katana (AI Chat Mode) is online. Send me a message and I'll try to respond using OpenAI."
     )
-    logger.debug(
-        f"Exiting start function for user_id: {user_id}",
-        extra={"user_id": user_id},
+
+    log_event(
+        logger,
+        "bot.command.start.completed",
+        body={"user_id": str(user_id), "message": "Welcome message sent"},
+        severity=SeverityNumber.DEBUG,
     )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles non-command text messages by sending them to OpenAI GPT."""
-    user_id = (
-        update.effective_user.id if update.effective_user else "UnknownUser"
-    )  # Moved up for earlier logging
-    logger.debug(
-        f"Entering handle_message for user_id: {user_id}",
-        extra={"user_id": user_id},
-    )
-    if not update.message or not update.message.text:
-        logger.debug(
-            "Empty message received, exiting.", extra={"user_id": user_id}
-        )
-        return
+    tracer = get_tracer(__name__)
+    user_id = update.effective_user.id if update.effective_user else "UnknownUser"
 
-    user_text = update.message.text
-    logger.info(
-        f"Received message: {user_text[:100]}", extra={"user_id": user_id}
-    )  # Log truncated message
-    logger.debug(f"Full message text: {user_text}", extra={"user_id": user_id})
+    with tracer.start_as_current_span("bot.handle_message") as span:
+        span.set_attribute("user.id", str(user_id))
 
-    if not client:  # Check if OpenAI client is initialized
-        logger.error(
-            "OpenAI client not initialized. Cannot process message.",
-            extra={"user_id": user_id},
-        )
-        await update.message.reply_text(
-            "I apologize, but my connection to the AI core (OpenAI) is not configured. Please contact the administrator."
-        )
-        logger.debug(
-            "Exiting handle_message due to uninitialized OpenAI client.",
-            extra={"user_id": user_id},
-        )
-        return
+        if not update.message or not update.message.text:
+            log_event(
+                logger,
+                "bot.message.empty",
+                body={"user_id": str(user_id), "message": "Empty or no-text message received, ignoring."},
+                severity=SeverityNumber.DEBUG,
+            )
+            span.set_attribute("message.empty", True)
+            return
 
-    try:
-        logger.debug(
-            f"Attempting to send to OpenAI. Model: gpt-4.",
-            extra={"user_id": user_id, "text_prefix": user_text[:50]},
-        )
-        logger.info(
-            f"Sending to OpenAI (GPT-4 model): {user_text[:50]}...",
-            extra={"user_id": user_id},
-        )
-        completion = client.chat.completions.create(
-            model="gpt-4", messages=[{"role": "user", "content": user_text}]
-        )
-        ai_reply = completion.choices[0].message.content.strip()
-        logger.info(
-            f"OpenAI reply: {ai_reply[:50]}...", extra={"user_id": user_id}
-        )
-        logger.debug(
-            f"Full OpenAI reply: {ai_reply}", extra={"user_id": user_id}
-        )
-        await update.message.reply_text(ai_reply)
+        user_text = update.message.text
+        span.set_attribute("message.length", len(user_text))
 
-    except AuthenticationError as e:
-        logger.error(
-            f"OpenAI Authentication Error: {e}. Check your API key.",
-            extra={"user_id": user_id},
+        log_event(
+            logger,
+            "bot.message.received",
+            body={
+                "user_id": str(user_id),
+                "message_preview": f"{user_text[:100]}...",
+                "message_length": len(user_text),
+            },
+            severity=SeverityNumber.INFO,
         )
-        await update.message.reply_text(
-            "Error: OpenAI authentication failed. Please check the API key configuration with the administrator."
-        )
-    except RateLimitError as e:
-        logger.error(
-            f"OpenAI Rate Limit Error: {e}.", extra={"user_id": user_id}
-        )
-        await update.message.reply_text(
-            "Error: OpenAI rate limit exceeded. Please try again later."
-        )
-    except APIError as e:  # More general API errors from OpenAI v1.x
-        logger.error(f"OpenAI API Error: {e}", extra={"user_id": user_id})
-        await update.message.reply_text(
-            f"An error occurred with the OpenAI API: {str(e)}"  # noqa: F541, f-string is used
-        )
-    except Exception as e:
-        logger.error(
-            f"An unexpected error occurred in handle_message: {e}",  # noqa: F541, f-string is used
-            extra={"user_id": user_id, "traceback": traceback.format_exc()},
-        )
-        await update.message.reply_text(
-            "Sorry, an unexpected error occurred while processing your message."
-        )
-    logger.debug(
-        f"Exiting handle_message for user_id: {user_id}",
-        extra={"user_id": user_id},
-    )
+
+        if not client:
+            log_event(
+                logger,
+                "bot.error.openai_client_missing",
+                body={"user_id": str(user_id), "message": "OpenAI client not initialized."},
+                severity=SeverityNumber.ERROR,
+            )
+            await update.message.reply_text(
+                "I apologize, but my connection to the AI core (OpenAI) is not configured. Please contact the administrator."
+            )
+            span.set_status(trace.Status(trace.StatusCode.ERROR, "OpenAI client not initialized"))
+            return
+
+        try:
+            log_unstructured_message(logger, f"Sending to OpenAI for user {user_id}...")
+
+            with tracer.start_as_current_span("openai.call") as openai_span:
+                start_time = monotonic()
+                completion = client.chat.completions.create(
+                    model="gpt-4", messages=[{"role": "user", "content": user_text}]
+                )
+                duration_ms = (monotonic() - start_time) * 1000
+                ai_reply = completion.choices[0].message.content.strip()
+
+                openai_span.set_attribute("response.length", len(ai_reply))
+                openai_span.set_attribute("duration_ms", duration_ms)
+
+            log_event(
+                logger,
+                "bot.openai.response.success",
+                body={
+                    "user_id": str(user_id),
+                    "response_preview": f"{ai_reply[:100]}...",
+                    "response_length": len(ai_reply),
+                    "duration_ms": round(duration_ms),
+                    "success": True,
+                },
+                severity=SeverityNumber.INFO,
+            )
+            await update.message.reply_text(ai_reply)
+            span.set_status(trace.StatusCode.OK)
+
+        except (AuthenticationError, RateLimitError, APIError) as e:
+            error_type = type(e).__name__
+            log_event(
+                logger,
+                f"bot.error.openai.{error_type.lower()}",
+                body={
+                    "user_id": str(user_id),
+                    "message": str(e),
+                    "error_type": error_type,
+                    "success": False,
+                },
+                severity=SeverityNumber.ERROR,
+            )
+            span.set_status(trace.Status(trace.StatusCode.ERROR, f"OpenAI Error: {e}"))
+            # Choose user message based on error type
+            user_message = "An unexpected error occurred."
+            if isinstance(e, AuthenticationError):
+                user_message = "Error: OpenAI authentication failed. Please contact the administrator."
+            elif isinstance(e, RateLimitError):
+                 user_message = "Error: OpenAI rate limit exceeded. Please try again later."
+            elif isinstance(e, APIError):
+                 user_message = f"An error occurred with the OpenAI API: {str(e)}"
+            await update.message.reply_text(user_message)
+
+        except Exception as e:
+            log_event(
+                logger,
+                "bot.error.unexpected",
+                body={
+                    "user_id": str(user_id),
+                    "message": "An unexpected error occurred in handle_message.",
+                    "error_type": type(e).__name__,
+                    "error_details": str(e),
+                    "traceback": traceback.format_exc(),
+                    "success": False,
+                },
+                severity=SeverityNumber.ERROR,
+            )
+            await update.message.reply_text("Sorry, an unexpected error occurred while processing your message.")
+            span.set_status(trace.Status(trace.StatusCode.ERROR, f"Unexpected Error: {e}"))
 
 
 # --- Main Bot Setup ---
 def main():
     """Starts the bot."""
-    global logger  # Ensure we are modifying the global logger instance
-    # Update the setup_logger call to include dev_mode and use the new log file name.
-    # The BOT_LOG_FILE path object now correctly points to "command_telemetry.log" within the "logs" dir.
-    logger = setup_logger(
-        logger_name="KatanaBotAI",
-        log_file_path_str=str(BOT_LOG_FILE),
-        level=logging.DEBUG,
-        dev_mode=IS_DEV_MODE,  # Pass the dev_mode status
-    )
+    logger_provider = setup_telemetry(service_name="katana-bot")
 
-    # --- Initial Status Logging (after logger is fully configured) ---
-    # Note: BOT_LOG_DIR creation is handled by setup_logger
-    if OPENAI_API_KEY:
-        logger.info(
-            f"OpenAI client initialized with API key ending: ...{OPENAI_API_KEY[-4:] if len(OPENAI_API_KEY) > 4 else 'KEY_TOO_SHORT'}."
-        )
-    else:
-        logger.warning(
-            "OPENAI_API_KEY not found, OpenAI client not initialized. OpenAI features will be disabled."
-        )
+    global logger
+    logger = get_logger("KatanaBotAI")
+    tracer = get_tracer(__name__)
 
-    if not TELEGRAM_TOKEN:
-        logger.critical(
-            "Telegram bot cannot start: KATANA_TELEGRAM_TOKEN environment variable not set."
-        )
-        return
-    if not OPENAI_API_KEY:  # Already checked, but good for main entry point
-        logger.critical("OpenAI API Key not set. Message handling will fail.")
-        # Allow bot to start for /start command, but message handling will fail gracefully.
-
-    logger.info(
-        f"Initializing Katana Telegram Bot (AI Chat Mode) with token ending: ...{TELEGRAM_TOKEN[-4:] if len(TELEGRAM_TOKEN) > 4 else 'TOKEN_TOO_SHORT'}"
-    )
-
-    application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
-    )
-
-    logger.info(
-        "Katana Telegram Bot (AI Chat Mode) is running. Press Ctrl-C to stop."
-    )
     try:
-        # --- Sample logs for review ---
-        logger.debug(
-            "This is a sample debug message for bot review.",
-            extra={
-                "user_id": "test_review_user_123",
-                "detail": "bot_debug_info",
-            },
-        )
-        logger.info(
-            "This is a sample info message for bot review.",
-            extra={"user_id": "test_review_user_123"},
-        )
-        logger.warning(
-            "This is a sample bot warning message.",
-            extra={
-                "user_id": "test_review_user_123",
-                "warning_type": "config_issue",
-            },
-        )
-        logger.error(
-            "This is a sample bot error message, no exc_info.",
-            extra={
-                "user_id": "test_review_user_123",
-                "error_event": "mock_event_failure",
-            },
-        )
-        try:
-            data = {}
-            _ = data["missing_key"]  # Accessing missing key to cause KeyError
-        except KeyError as e:
-            logger.error(
-                "Sample bot error with simulated KeyError.",
-                exc_info=True,
-                extra={
-                    "user_id": "test_review_user_123",
-                    "attempted_action": "dict_access",
-                    "key_error": str(e),
-                },
-            )
-            logger.critical(
-                "Sample bot critical message after simulated KeyError.",
-                extra={
-                    "user_id": "test_review_user_123",
-                    "next_step": "data_integrity_check",
-                },
-            )
-        # --- End of sample logs for review ---
+        with tracer.start_as_current_span("bot.main"):
+            if OPENAI_API_KEY:
+                log_unstructured_message(logger, f"OpenAI client initialized.")
+            else:
+                log_unstructured_message(logger, "OPENAI_API_KEY not found, OpenAI features will be disabled.", SeverityNumber.WARN)
 
-        # Only run polling if we intend to start the bot fully for this test run.
-        # For sample log generation, we might not need this if it exits due to missing tokens.
-        # However, if tokens ARE set, this will run.
-        # For this review, assume we want it to try to run normally after logging samples.
-        application.run_polling()
+            if not TELEGRAM_TOKEN:
+                log_unstructured_message(logger, "FATAL: KATANA_TELEGRAM_TOKEN not set. Bot cannot start.", SeverityNumber.FATAL)
+                return
+            if not OPENAI_API_KEY:
+                log_unstructured_message(logger, "CRITICAL: OPENAI_API_KEY not set. Message handling will fail.", SeverityNumber.FATAL)
+
+
+            log_unstructured_message(logger, "Initializing Katana Telegram Bot (AI Chat Mode)...")
+
+            application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+            application.add_handler(CommandHandler("start", start))
+            application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+            log_unstructured_message(logger, "Katana Bot is running. Press Ctrl-C to stop.", SeverityNumber.INFO)
+
+            application.run_polling()
 
     except Exception as e_poll:
-        logger.critical(
-            f"Error during bot polling: {e_poll}",
-            extra={"traceback": traceback.format_exc()},
+        log_event(
+            logger,
+            "bot.error.polling",
+            body={
+                "message": "A critical error occurred during bot operation.",
+                "error_details": str(e_poll),
+                "traceback": traceback.format_exc(),
+            },
+            severity=SeverityNumber.FATAL,
         )
     finally:
-        logger.info(
-            "Katana Telegram Bot (AI Chat Mode) stopped."
-        )  # This will be logged on normal exit too.
+        log_unstructured_message(logger, "Katana Bot shutting down.", SeverityNumber.INFO)
+        if logger_provider:
+            logger_provider.shutdown()
 
 
 if __name__ == "__main__":
-    # To run this:
-    # 1. pip install python-telegram-bot "openai>=1.0.0"
-    # 2. Set KATANA_TELEGRAM_TOKEN environment variable.
-    # 3. Set OPENAI_API_KEY environment variable.
-    # 4. Run: python katana_bot.py
+    from time import monotonic
     main()

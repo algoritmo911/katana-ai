@@ -1,3 +1,1 @@
-def run(**kwargs):
-    print(f"🧠 Mind Clearing (test default) args: {kwargs}")
-    return {'status':'success', 'message':'MC default run'}
+def run(**kwargs): return {'status':'success', 'message':'MC default run'}

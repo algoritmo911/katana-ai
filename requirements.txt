@@ -1,1 +1,11 @@
 colorlog>=6.0.0,<7.0.0  # Using a version range for stability
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+opentelemetry-exporter-otlp-proto-http==1.21.0
+opentelemetry-instrumentation==0.42b0
+PyGithub
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+gkeepapi
+pyicloud
