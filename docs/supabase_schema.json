@@ -1,0 +1,74 @@
+{
+  "tables": [
+    {
+      "name": "command_logs",
+      "columns": [
+        {"name": "id", "type": "bigint", "isPrimaryKey": true, "isIdentity": true},
+        {"name": "user_id", "type": "text", "isNullable": false},
+        {"name": "command_name", "type": "text", "isNullable": false},
+        {"name": "input_data", "type": "jsonb", "isNullable": true},
+        {"name": "output_data", "type": "jsonb", "isNullable": true},
+        {"name": "duration", "type": "float8", "isNullable": false},
+        {"name": "success", "type": "boolean", "isNullable": false},
+        {"name": "tags", "type": "text[]", "isNullable": true},
+        {"name": "timestamp", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"},
+        {"name": "created_at", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Stores logs of executed commands, including inputs, outputs, duration, and success status."
+    },
+    {
+      "name": "insights",
+      "columns": [
+        {"name": "id", "type": "bigint", "isPrimaryKey": true, "isIdentity": true},
+        {"name": "user_id", "type": "text", "isNullable": false},
+        {"name": "type", "type": "text", "isNullable": false, "comment": "e.g., 'observation', 'error_pattern', 'suggestion'"},
+        {"name": "content", "type": "text", "isNullable": false},
+        {"name": "timestamp", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"},
+        {"name": "created_at", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Stores insights, conclusions, or patterns derived from bot interactions or data analysis."
+    },
+    {
+      "name": "notes",
+      "columns": [
+        {"name": "id", "type": "bigint", "isPrimaryKey": true, "isIdentity": true},
+        {"name": "title", "type": "text", "isNullable": false},
+        {"name": "content", "type": "text", "isNullable": true, "comment": "Can store plain text or stringified JSON/YAML"},
+        {"name": "tags", "type": "text[]", "isNullable": true},
+        {"name": "source_file", "type": "text", "isNullable": true, "comment": "Path to the original file if synced from local YAML"},
+        {"name": "timestamp", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"},
+        {"name": "created_at", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Stores general notes, YAML-based memory, textual records, or reflections."
+    },
+    {
+      "name": "memory_events",
+      "columns": [
+        {"name": "id", "type": "bigint", "isPrimaryKey": true, "isIdentity": true},
+        {"name": "user_id", "type": "text", "isNullable": false},
+        {"name": "event_type", "type": "text", "isNullable": false, "comment": "e.g., 'emotion_detected', 'cognitive_load_high', 'session_start', 'session_end'"},
+        {"name": "details", "type": "jsonb", "isNullable": true, "comment": "Specific data related to the event"},
+        {"name": "dialog_context", "type": "text", "isNullable": true, "comment": "Relevant part of the conversation if applicable"},
+        {"name": "timestamp", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"},
+        {"name": "created_at", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Tracks emotional, cognitive, or session-related events."
+    }
+  ],
+  "views": [
+    {
+      "name": "weekly_energy_heatmap",
+      "sql": "SELECT \n    user_id,\n    date_trunc('week', timestamp) AS week_start_date,\n    extract(isodow from timestamp) AS day_of_week, -- Monday=1, Sunday=7\n    extract(hour from timestamp) AS hour_of_day,\n    avg(CASE WHEN command_name = 'high_energy_command' THEN 5 -- Example: map commands to energy impact\n             WHEN command_name = 'low_energy_command' THEN 1\n             ELSE 3 END) AS avg_energy_level, -- This is a placeholder for actual energy calculation\n    count(*) AS activity_count\nFROM command_logs\n-- WHERE success = true -- Optionally filter by successful commands\nGROUP BY user_id, week_start_date, day_of_week, hour_of_day\nORDER BY user_id, week_start_date, day_of_week, hour_of_day;",
+      "comment": "A conceptual view to aggregate command logs into a weekly energy heatmap. \nActual energy level calculation would need more sophisticated logic based on command types or logged emotional states."
+    }
+  ],
+  "notes": [
+    "RLS (Row Level Security) should be enabled and configured for these tables based on application access patterns.",
+    "Consider appropriate indexing for columns frequently used in WHERE clauses or JOIN conditions (e.g., user_id, timestamp, type).",
+    "The 'energy_heatmap' is presented as a view. Actual implementation might involve a dedicated table populated by triggers or scheduled functions, or more complex queries against 'command_logs' and 'memory_events'."
+  ]
+}

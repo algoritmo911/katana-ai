@@ -1,0 +1,131 @@
+{
+  "name": "Patient Zero (Reanimated)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jules-patient-zero-webhook-a9b8c7d6",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "id": "webhook-trigger-node",
+      "position": [800, 400],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "user_id",
+              "value": "{{ $json.body.user_id }}"
+            },
+            {
+              "name": "command_name",
+              "value": "webhook_ingest"
+            }
+          ],
+          "json": [
+            {
+              "name": "input_data",
+              "value": "{{ $json.body }}"
+            }
+          ],
+          "number": [
+            {
+              "name": "duration",
+              "value": 0
+            }
+          ],
+          "boolean": [
+            {
+              "name": "success",
+              "value": true
+            }
+          ]
+        },
+        "options": {
+          "keepOnlySet": true
+        }
+      },
+      "name": "Set Log Data",
+      "type": "n8n-nodes-base.set",
+      "id": "set-log-data-node",
+      "position": [1000, 400],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "command_logs",
+        "columns": {
+          "values": [
+            {
+              "column": "user_id",
+              "value": "{{ $json.user_id }}"
+            },
+            {
+              "column": "command_name",
+              "value": "{{ $json.command_name }}"
+            },
+            {
+              "column": "input_data",
+              "value": "{{ $json.input_data }}"
+            },
+            {
+              "column": "duration",
+              "value": "{{ $json.duration }}"
+            },
+            {
+              "column": "success",
+              "value": "{{ $json.success }}"
+            },
+            {
+              "column": "timestamp",
+              "value": "{{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "name": "Log to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "id": "log-to-supabase-node",
+      "position": [1200, 400],
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "Dk68MyR1v7JIih8P",
+          "name": "Supabase Credentials (auto-created by Jules)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Log Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Log Data": {
+      "main": [
+        [
+          {
+            "node": "Log to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
