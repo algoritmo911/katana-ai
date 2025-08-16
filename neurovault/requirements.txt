@@ -1,0 +1,6 @@
+# This file will list the Python dependencies for the NeuroVault memory system.
+# For now, it is empty.
+# Example:
+# faiss-cpu
+# neo4j
+# numpy

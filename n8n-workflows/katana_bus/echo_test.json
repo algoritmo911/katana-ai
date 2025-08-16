@@ -1,0 +1,73 @@
+{
+  "name": "Katana Bus: Echo Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "httpMethod": "POST",
+        "path": "d1b5a293-5d34-4a25-a5e2-3f43f6793f78",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        400,
+        300
+      ],
+      "webhookId": "d1b5a293-5d34-4a25-a5e2-3f43f6793f78",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "placeholder-credential-id",
+          "name": "Katana Webhook Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "-1234567890",
+        "text": "📣 Katana Echo Test:\n\n`{{$json.body.message}}`",
+        "options": {
+          "parseMode": "Markdown"
+        }
+      },
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        600,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "placeholder-credential-id",
+          "name": "Katana Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

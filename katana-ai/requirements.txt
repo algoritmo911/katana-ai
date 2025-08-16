@@ -1,0 +1,6 @@
+# This file will list the Python dependencies for the Katana AI core.
+# For now, it is empty.
+# Example:
+# langchain
+# llama-index
+Flask

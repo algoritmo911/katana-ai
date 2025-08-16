@@ -1,0 +1,19 @@
+{
+  "version": "1.0-Kusanagi",
+  "last_interaction": "2025-08-16T12:25:00Z",
+  "active_mode": "Normal",
+  "focus_mode_details": null,
+  "recent_files": [
+    "katana-ai/src/katana_ai/orchestrator.py",
+    "katana-ai/docs/VOICE_INTEGRATION.md"
+  ],
+  "active_timers": {},
+  "user_cognitive_model": {
+    "preferred_style": "concise",
+    "known_technologies": [
+      "Python",
+      "Flask",
+      "Git"
+    ]
+  }
+}
