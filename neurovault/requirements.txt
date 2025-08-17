@@ -1,6 +1,23 @@
-# This file will list the Python dependencies for the NeuroVault memory system.
-# For now, it is empty.
-# Example:
-# faiss-cpu
-# neo4j
-# numpy
+# Core database drivers and ORM
+psycopg2-binary
+neo4j
+SQLAlchemy
+
+# pgvector integration for SQLAlchemy
+sqlalchemy-pgvector
+
+# Pydantic for data validation, useful for API layers
+pydantic
+
+# NLP and ML libraries for the ingestion pipeline
+langchain
+sentence-transformers
+
+# API Server
+Flask
+
+# Structured Logging
+structlog
+
+# Prometheus Metrics
+prometheus-client

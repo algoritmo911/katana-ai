@@ -1,6 +1,8 @@
 from .skill_graph import SkillGraph
 
 
+import structlog
+
 class CognitiveOrchestrator:
     """
     The central node for decision-making in the Katana AI.
@@ -9,8 +11,9 @@ class CognitiveOrchestrator:
     the appropriate skill.
     """
 
-    def __init__(self, skill_graph: SkillGraph):
+    def __init__(self, skill_graph: SkillGraph, logger=None):
         self._skill_graph = skill_graph
+        self.log = logger or structlog.get_logger()
 
     def execute_command(self, command: str) -> str:
         """
@@ -27,19 +30,32 @@ class CognitiveOrchestrator:
 
         parts = command.strip().split()
         skill_name = parts[0]
-        args = parts[1:]
+
+        log = self.log.bind(command=command, skill_name=skill_name)
+        log.info("command_received")
 
         try:
             skill = self._skill_graph.get_skill(skill_name)
-            # Execute the skill's function with the provided arguments.
-            result = skill.func(*args)
+
+            # Special handling for skills that take a single string argument
+            if skill_name in ["ask"]:
+                # Re-join all arguments after the command into a single string
+                query_string = " ".join(parts[1:])
+                if not query_string:
+                    return f"Error: The '{skill_name}' command requires an argument."
+                result = skill.func(query_string)
+            else:
+                # Original behavior for simple commands
+                args = parts[1:]
+                result = skill.func(*args)
+
             return str(result)
         except ValueError as e:
-            # Skill not found
+            log.error("skill_not_found", error=str(e))
             return f"Error: {e}"
         except TypeError:
-            # Mismatched arguments
+            log.error("skill_invalid_arguments")
             return f"Error: Invalid arguments for skill '{skill_name}'."
         except Exception as e:
-            # Catch any other exceptions during skill execution.
+            log.exception("skill_execution_failed")
             return f"An unexpected error occurred: {e}"

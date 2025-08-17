@@ -4,3 +4,13 @@
 # langchain
 # llama-index
 Flask
+
+# HTTP requests and OpenAI API
+requests
+openai
+
+# Structured Logging
+structlog
+
+# Prometheus Metrics
+prometheus-client
