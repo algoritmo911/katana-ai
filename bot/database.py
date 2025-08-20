@@ -122,6 +122,50 @@ def get_all_documents():
         print(f"ОШИБКА DB: Не удалось извлечь все документы. Ошибка: {e}")
         return []
 
+# def save_initiative_proposal(initiative_id: str, title: str, proposal_data: dict):
+#     """
+#     Сохраняет предложенную инициативу в таблицу 'initiatives'.
+#     ВРЕМЕННО ОТКЛЮЧЕНО ИЗ-ЗА ПРОБЛЕМЫ СЕРИАЛИЗАЦИИ В SUPABASE-PY.
+#     """
+#     try:
+#         supabase = get_supabase_client()
+#         data, count = supabase.table('initiatives').insert({
+#             'initiative_id': initiative_id,
+#             'title': title,
+#             'status': 'PENDING_APPROVAL', # Начальный статус после анализа
+#             'proposal_data': proposal_data
+#         }).execute()
+
+#         print(f"DB: Инициатива '{title}' сохранена со статусом PENDING_APPROVAL.")
+#         return data
+#     except Exception as e:
+#         print(f"ОШИБКА DB: Не удалось сохранить инициативу '{title}'. Ошибка: {e}")
+#         return None
+
+def update_initiative_status(initiative_id: str, new_status: str):
+    """Обновляет статус указанной инициативы."""
+    try:
+        supabase = get_supabase_client()
+        data, count = supabase.table('initiatives').update({'status': new_status}).eq('initiative_id', initiative_id).execute()
+        print(f"DB: Статус инициативы '{initiative_id}' обновлен на '{new_status}'.")
+        return data
+    except Exception as e:
+        print(f"ОШИБКА DB: Не удалось обновить статус для '{initiative_id}'. Ошибка: {e}")
+        return None
+
+def get_global_kill_switch_status() -> bool:
+    """Проверяет состояние 'красного телефона'. Возвращает True, если авто-режим включен."""
+    try:
+        supabase = get_supabase_client()
+        data, count = supabase.table('global_config').select('value').eq('key', 'AUTONOMOUS_MODE_ENABLED').execute()
+        if data and len(data) > 1 and data[1]:
+            return data[1][0]['value']
+        # По умолчанию, если ключ не найден, считаем, что режим выключен (безопасность)
+        return False
+    except Exception as e:
+        print(f"ОШИБКА DB: Не удалось получить статус 'красного телефона'. Ошибка: {e}")
+        return False
+
 
 # Пример использования (для ручного тестирования)
 if __name__ == '__main__':

@@ -1,10 +1,10 @@
-import os
 from bot.ingestion.data_ingestor import DataIngestor
+from dotenv import load_dotenv
 
-# Вручную устанавливаем переменные окружения, чтобы гарантировать их наличие
-os.environ["OPENAI_API_KEY"] = "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"
-os.environ["SUPABASE_KEY"] = "sb_secret_wtRSbhoCKkW53FAn2UzFpg_ED78K1LU"
-os.environ["SUPABASE_URL"] = "https://pmcaojgdrszvujvwzxrc.supabase.co"
+# Загружаем переменные окружения. Это позволит скрипту работать
+# как в локальном окружении с .env файлом, так и в окружении,
+# где переменные установлены заранее (например, через Doppler).
+load_dotenv()
 
 # ==============================================================================
 # ИСХОДНЫЕ ДАННЫЕ, ПРЕДОСТАВЛЕННЫЕ ПОЛЬЗОВАТЕЛЕМ

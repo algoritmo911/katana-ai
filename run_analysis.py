@@ -5,14 +5,14 @@ from bot.analysis.concept_analyzer import ConceptAnalyzer
 from bot.analysis.strategy_auditor import StrategyAuditor
 from bot.reporting.report_generator import ReportGenerator
 
+from dotenv import load_dotenv
+
 def main():
     """
     Основная функция для запуска полного процесса анализа.
     """
-    # Вручную устанавливаем переменные окружения для этого скрипта
-    os.environ["OPENAI_API_KEY"] = "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"
-    os.environ["SUPABASE_KEY"] = "sb_secret_wtRSbhoCKkW53FAn2UzFpg_ED78K1LU"
-    os.environ["SUPABASE_URL"] = "https://pmcaojgdrszvujvwzxrc.supabase.co"
+    # Загружаем переменные окружения
+    load_dotenv()
 
     output_dir = "analysis_results"
     os.makedirs(output_dir, exist_ok=True)
