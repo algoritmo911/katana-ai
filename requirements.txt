@@ -9,3 +9,7 @@ uvicorn[standard]
 redis
 openai
 PyYAML
+GitPython
+pydantic
+requests
+openai
