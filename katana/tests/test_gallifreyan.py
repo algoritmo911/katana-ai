@@ -1,0 +1,91 @@
+import unittest
+from unittest.mock import patch
+
+from katana.gallifreyan.ast import (
+    SimulationBlueprint,
+    TemporalQuditDeclaration,
+    Objective,
+    GateApplication,
+    Measurement,
+)
+from katana.gallifreyan.compiler import Compiler
+from katana.gallifreyan.simulator import QuantumStateSimulator
+
+class TestQuantumStateSimulator(unittest.TestCase):
+
+    def setUp(self):
+        self.simulator = QuantumStateSimulator()
+        # A simple blueprint for testing
+        self.blueprint = SimulationBlueprint(
+            name="TestSim",
+            reality_source="test",
+            objective=Objective(name="TestObjective"),
+            qudits=[
+                TemporalQuditDeclaration(
+                    name="Q1",
+                    initial_states={"t_0": "A"}
+                ),
+                TemporalQuditDeclaration(
+                    name="Q2",
+                    initial_states={"t_0": ["X", "Y"]}
+                )
+            ]
+        )
+        self.simulator.load_blueprint(self.blueprint)
+
+    def test_load_blueprint(self):
+        self.assertIn("Q1", self.simulator.qudits)
+        self.assertIn("Q2", self.simulator.qudits)
+        # Check that single states are correctly converted to probabilistic form
+        self.assertEqual(self.simulator.qudits["Q1"]["t_0"], [("A", 1.0)])
+        # Check that superpositions are assigned equal probability
+        self.assertEqual(self.simulator.qudits["Q2"]["t_0"], [("X", 0.5), ("Y", 0.5)])
+
+    def test_apply_tardis_gate(self):
+        gate_op = GateApplication(gate_name="TARDIS_Gate", target_qudit="Q1")
+        self.simulator.execute_gate(gate_op)
+        self.assertIn("t_0_next", self.simulator.qudits["Q1"])
+        next_state = self.simulator.qudits["Q1"]["t_0_next"]
+        self.assertEqual(len(next_state), 2)
+        self.assertAlmostEqual(next_state[0][1], 0.5)
+        self.assertAlmostEqual(next_state[1][1], 0.5)
+        self.assertEqual(next_state[0][0], "A_outcome_A")
+
+    @patch('random.choices')
+    def test_execute_measurement(self, mock_choices):
+        # Mock random.choices to always return the first state
+        mock_choices.return_value = ["X"]
+
+        measurement_op = Measurement(target_qudit="Q2")
+        result = self.simulator.execute_measurement(measurement_op)
+
+        self.assertEqual(result, "X")
+        # Check that the wave function has collapsed
+        self.assertEqual(self.simulator.qudits["Q2"]["t_0"], [("X", 1.0)])
+
+
+class TestCompiler(unittest.TestCase):
+
+    def test_compile(self):
+        compiler = Compiler()
+        blueprint = SimulationBlueprint(
+            name="CompileTest",
+            reality_source="test",
+            objective=Objective(
+                name="CompileObjective",
+                operations=[
+                    GateApplication(gate_name="TARDIS_Gate", target_qudit="Q1"),
+                    Measurement(target_qudit="Q1")
+                ]
+            )
+        )
+        circuit = compiler.compile(blueprint)
+        self.assertEqual(len(circuit), 3)
+        self.assertEqual(circuit[0][0], "load_blueprint")
+        self.assertEqual(circuit[1][0], "execute_gate")
+        self.assertEqual(circuit[2][0], "execute_measurement")
+        self.assertIsInstance(circuit[1][1], GateApplication)
+        self.assertIsInstance(circuit[2][1], Measurement)
+
+if __name__ == "__main__":
+    unittest.main()
