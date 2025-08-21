@@ -115,6 +115,44 @@ class QuantumStateSimulator:
         # Collapse the wave function
         self.qudits[target_qudit][latest_ts_str] = [(measured_value, 1.0)]
 
-        # TODO: Handle cascading collapses from entanglements
+        # --- Measurement Shockwave ---
+        # Resolve any entanglements connected to the measured qudit.
+        self._resolve_entanglements(target_qudit, measured_value, set())
 
         return measured_value
+
+    def _resolve_entanglements(self, source_qudit: str, source_value: Any, resolved_in_this_shockwave: set):
+        """
+        Recursively resolve entanglements after a measurement.
+        """
+        if source_qudit in resolved_in_this_shockwave:
+            return # Avoid infinite loops
+        resolved_in_this_shockwave.add(source_qudit)
+
+        for handshake in self.entanglements:
+            other_qudit = None
+            if handshake.qudit1 == source_qudit:
+                other_qudit = handshake.qudit2
+            elif handshake.qudit2 == source_qudit:
+                other_qudit = handshake.qudit1
+
+            if other_qudit:
+                history = self.qudits.get(other_qudit, {})
+                if not history: continue
+
+                latest_ts_str = max(history.keys())
+
+                # If the other qudit is already collapsed, do nothing
+                if len(history[latest_ts_str]) == 1:
+                    continue
+
+                # Simple entanglement rule: the other qudit collapses to a state
+                # derived from the source qudit's measured value.
+                entangled_value = f"entangled_from({source_qudit}={source_value})"
+
+                print(f"  [Entanglement] {source_qudit}={source_value} caused {other_qudit} to collapse to {entangled_value}")
+
+                self.qudits[other_qudit][latest_ts_str] = [(entangled_value, 1.0)]
+
+                # Continue the shockwave
+                self._resolve_entanglements(other_qudit, entangled_value, resolved_in_this_shockwave)

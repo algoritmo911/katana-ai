@@ -7,6 +7,7 @@ from katana.gallifreyan.ast import (
     Objective,
     GateApplication,
     Measurement,
+    HandshakeDeclaration,
 )
 from katana.gallifreyan.compiler import Compiler
 from katana.gallifreyan.simulator import QuantumStateSimulator
@@ -62,6 +63,29 @@ class TestQuantumStateSimulator(unittest.TestCase):
         self.assertEqual(result, "X")
         # Check that the wave function has collapsed
         self.assertEqual(self.simulator.qudits["Q2"]["t_0"], [("X", 1.0)])
+
+    def test_measurement_shockwave(self):
+        """Tests that measuring one qudit collapses an entangled one."""
+        # Setup: Q_A is collapsed, Q_B is in superposition
+        # They are entangled.
+        self.blueprint.qudits = [
+            TemporalQuditDeclaration(name="Q_A", initial_states={"t_0": "A"}),
+            TemporalQuditDeclaration(name="Q_B", initial_states={"t_0": ["B1", "B2"]})
+        ]
+        self.blueprint.handshakes = [HandshakeDeclaration(qudit1="Q_A", qudit2="Q_B")]
+        self.simulator.load_blueprint(self.blueprint)
+
+        # Pre-condition check: Q_B is in superposition
+        self.assertEqual(len(self.simulator.qudits["Q_B"]["t_0"]), 2)
+
+        # Action: Measure Q_A
+        measurement_op = Measurement(target_qudit="Q_A")
+        self.simulator.execute_measurement(measurement_op)
+
+        # Post-condition check: Q_B should now be collapsed due to entanglement
+        self.assertEqual(len(self.simulator.qudits["Q_B"]["t_0"]), 1)
+        self.assertEqual(self.simulator.qudits["Q_B"]["t_0"][0][1], 1.0) # Probability is 1.0
+        self.assertEqual(self.simulator.qudits["Q_B"]["t_0"][0][0], "entangled_from(Q_A=A)")
 
 
 class TestCompiler(unittest.TestCase):

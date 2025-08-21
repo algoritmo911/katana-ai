@@ -3,3 +3,4 @@ openai
 python-dotenv
 networkx
 requests
+neo4j
