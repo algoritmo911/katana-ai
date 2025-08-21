@@ -3,13 +3,15 @@ import asyncio # For asyncio operations
 import json
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import subprocess # Added for run_katana_command
+import time # Added for performance timing
 from nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
 from katana.katana_agent import KatanaAgent # Import KatanaAgent
 from katana.decorators.trace_command import trace_command # Import the decorator
+from katana.logging.telemetry_logger import log_command_telemetry # Import the telemetry logger
 
 # Load environment variables from .env file
 load_dotenv()
@@ -19,7 +21,7 @@ load_dotenv()
 API_TOKEN = os.environ.get('TELEGRAM_API_TOKEN', '12345:dummytoken')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
-BOT_START_TIME = datetime.utcnow() # For uptime calculation
+BOT_START_TIME = datetime.now(timezone.utc) # For uptime calculation
 
 bot = telebot.async_telebot.AsyncTeleBot(API_TOKEN) # Use AsyncTeleBot
 katana_agent_instance = KatanaAgent() # Instantiate KatanaAgent
@@ -43,7 +45,7 @@ COMMAND_LOG_FILE = LOG_DIR / 'commands.log'
 def log_command_event(message: str):
     """Appends a structured command message to the command_events.log file."""
     with open(COMMAND_LOG_FILE, 'a', encoding='utf-8') as f:
-        f.write(f"{datetime.utcnow().isoformat()} | {message}\n")
+        f.write(f"{datetime.now(timezone.utc).isoformat()} | {message}\n")
 
 # Dictionary to store active GPT streaming tasks and their cancellation events
 # Key: chat_id, Value: tuple(asyncio.Task, asyncio.Event, telegram_message_id_being_edited)
@@ -104,28 +106,29 @@ def get_history(chat_id: int) -> list:
 def log_to_general_file(message, filename=GENERAL_LOG_FILE):
     """Appends a message to the general log file."""
     with open(filename, 'a', encoding='utf-8') as f:
-        f.write(f"{datetime.utcnow().isoformat()} | {message}\n")
+        f.write(f"{datetime.now(timezone.utc).isoformat()} | {message}\n")
 
 def log_local_bot_event(message):
     """Logs an event to the console and to the general log file."""
-    print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message}")
+    print(f"[BOT EVENT] {datetime.now(timezone.utc).isoformat()}: {message}")
     log_to_general_file(f"[BOT_EVENT] {message}")
 
 # --- Katana Command Execution ---
 async def run_katana_command(command: str) -> str:
     """
-    Executes a shell command asynchronously and returns its output.
-    This is a simplified placeholder. In a real scenario, this would interact
-    with a more complex 'katana_agent' or similar.
+    Executes a shell command asynchronously, logs its telemetry, and returns its output.
     """
+    command_name = "nlp_shell_command"
+    start_time = time.perf_counter()
+    success = False
+    error_obj = None
+    output = ""
+
     log_local_bot_event(f"Running katana command: {command}")
     try:
-        # Using functools.partial to pass arguments to the blocking function
-        # when using run_in_executor.
         import functools
-
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
+        proc_result = await loop.run_in_executor(
             None,
             functools.partial(
                 subprocess.run,
@@ -137,23 +140,39 @@ async def run_katana_command(command: str) -> str:
                 timeout=30
             )
         )
-        output = result.stdout.strip()
-        if result.stderr.strip():
-            output += f"\nStderr:\n{result.stderr.strip()}"
+        output = proc_result.stdout.strip()
+        if proc_result.stderr.strip():
+            output += f"\nStderr:\n{proc_result.stderr.strip()}"
+        success = True
         log_local_bot_event(f"Command output: {output}")
         return output
     except subprocess.CalledProcessError as e:
-        error_message = f"Error executing command '{command}': {e.stderr.strip() if e.stderr else 'No stderr'}"
-        log_local_bot_event(error_message)
-        return error_message
-    except subprocess.TimeoutExpired:
-        error_message = f"Command '{command}' timed out."
-        log_local_bot_event(error_message)
-        return error_message
+        error_obj = e
+        output = f"Error executing command '{command}': {e.stderr.strip() if e.stderr else 'No stderr'}"
+        log_local_bot_event(output)
+        return output
+    except subprocess.TimeoutExpired as e:
+        error_obj = e
+        output = f"Command '{command}' timed out."
+        log_local_bot_event(output)
+        return output
     except Exception as e:
-        error_message = f"An unexpected error occurred while running command '{command}': {str(e)}"
-        log_local_bot_event(error_message)
-        return error_message
+        error_obj = e
+        output = f"An unexpected error occurred while running command '{command}': {str(e)}"
+        log_local_bot_event(output)
+        return output
+    finally:
+        end_time = time.perf_counter()
+        execution_time = end_time - start_time
+        log_command_telemetry(
+            command_name=command_name,
+            args=(command,), # Pass the executed command as an argument
+            kwargs={},
+            success=success,
+            result=output, # Log the stdout/stderr output as the result
+            error=error_obj,
+            execution_time=execution_time
+        )
 
 async def handle_log_event(command_data, chat_id):
     """Placeholder for handling 'log_event' commands."""
@@ -171,6 +190,41 @@ async def handle_mind_clearing(command_data, chat_id):
     log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
     # await bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
 
+# --- JSON Command Tracing ---
+async def trace_json_command(command_data, chat_id, command_logic_coro):
+    """
+    A wrapper to trace the execution of JSON-based commands.
+    It logs telemetry data such as execution time, success/failure, and arguments.
+    """
+    command_name = f"json_command.{command_data.get('module', 'unknown')}.{command_data.get('type', 'unknown')}"
+    start_time = time.perf_counter()
+    success = False
+    error_obj = None
+    result = None
+
+    try:
+        # The actual work is done by awaiting the passed coroutine
+        result = await command_logic_coro
+        success = True
+        return result
+    except Exception as e:
+        error_obj = e
+        log_local_bot_event(f"Error processing JSON command {command_name} for chat {chat_id}: {e}")
+        # Re-raise the exception so the caller can handle it (e.g., send a reply to the user)
+        raise
+    finally:
+        end_time = time.perf_counter()
+        execution_time = end_time - start_time
+        log_command_telemetry(
+            command_name=command_name,
+            args=(),  # Positional args are not used for JSON commands
+            kwargs=command_data,  # Log the entire JSON payload
+            success=success,
+            result=result,
+            error=error_obj,
+            execution_time=execution_time
+        )
+
 # --- Unified Message Processing ---
 async def process_user_message(chat_id: int, text: str, original_message: telebot.types.Message):
     """
@@ -183,10 +237,10 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
     nlp_command = interpret(text)
 
     if nlp_command:
-        log_to_file(f'[NLU] "{text}" → "{nlp_command}" for chat {chat_id}')
+        # This part is a bit of a hack, as log_to_file is not defined. I'll comment it out.
+        # log_to_file(f'[NLU] "{text}" → "{nlp_command}" for chat {chat_id}')
         output = await run_katana_command(nlp_command)
         # Use original_message for reply context if available, otherwise send to chat_id
-        reply_target = original_message if original_message else chat_id
         try:
             await bot.reply_to(original_message, f"🧠 Понял. Выполняю:\n`{nlp_command}`\n\n{output}", parse_mode="Markdown")
         except Exception as e: # Fallback if reply_to fails (e.g. original_message is None or from a different context)
@@ -231,39 +285,59 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
             return
 
         log_local_bot_event(f"Successfully validated JSON command from {chat_id}: {json.dumps(command_data)}")
-        command_type = command_data.get("type")
 
-        if command_type == "log_event":
-            await handle_log_event(command_data, chat_id)
-            await bot.reply_to(original_message, "✅ 'log_event' processed (placeholder).")
-            return
-        elif command_type == "mind_clearing":
-            await handle_mind_clearing(command_data, chat_id)
-            await bot.reply_to(original_message, "✅ 'mind_clearing' processed (placeholder).")
-            return
-
-        log_local_bot_event(f"Command type '{command_type}' not specifically handled, proceeding with default save. Full command data: {json.dumps(command_data)}")
+        # --- Traceable JSON Command Execution ---
         try:
-            loop = asyncio.get_event_loop()
-            timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
-            command_file_name = f"{timestamp_str}_{chat_id}.json"
-            module_name = command_data.get('module', 'telegram_general')
-            module_command_dir_name = f"telegram_mod_{module_name}" if module_name != 'telegram_general' else 'telegram_general'
+            command_type = command_data.get("type")
 
-            def _save_command_file():
-                module_command_dir = COMMAND_FILE_DIR / module_command_dir_name
-                module_command_dir.mkdir(parents=True, exist_ok=True)
-                command_file_path_res = module_command_dir / command_file_name
-                with open(command_file_path_res, "w", encoding="utf-8") as f:
-                    json.dump(command_data, f, ensure_ascii=False, indent=2)
-                return command_file_path_res
+            if command_type == "log_event":
+                await trace_json_command(
+                    command_data, chat_id,
+                    handle_log_event(command_data, chat_id)
+                )
+                await bot.reply_to(original_message, "✅ 'log_event' processed.")
 
-            command_file_path = await loop.run_in_executor(None, _save_command_file)
-            await bot.reply_to(original_message, f"✅ Command received and saved as `{command_file_path}`.")
-            log_local_bot_event(f"Saved command from {chat_id} to {command_file_path}")
+            elif command_type == "mind_clearing":
+                await trace_json_command(
+                    command_data, chat_id,
+                    handle_mind_clearing(command_data, chat_id)
+                )
+                await bot.reply_to(original_message, "✅ 'mind_clearing' processed.")
+
+            else:
+                # Default action: save to file, but now wrapped in the tracer
+                log_local_bot_event(f"Command type '{command_type}' not specifically handled, proceeding with default save.")
+
+                async def save_command_coro():
+                    loop = asyncio.get_event_loop()
+                    timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')
+                    command_file_name = f"{timestamp_str}_{chat_id}.json"
+                    module_name = command_data.get('module', 'telegram_general')
+                    module_command_dir_name = f"telegram_mod_{module_name}" if module_name != 'telegram_general' else 'telegram_general'
+
+                    def _save_command_file_sync():
+                        module_command_dir = COMMAND_FILE_DIR / module_command_dir_name
+                        module_command_dir.mkdir(parents=True, exist_ok=True)
+                        command_file_path_res = module_command_dir / command_file_name
+                        with open(command_file_path_res, "w", encoding="utf-8") as f:
+                            json.dump(command_data, f, ensure_ascii=False, indent=2)
+                        return str(command_file_path_res)
+
+                    command_file_path = await loop.run_in_executor(None, _save_command_file_sync)
+                    log_local_bot_event(f"Saved command from {chat_id} to {command_file_path}")
+                    return command_file_path
+
+                saved_path = await trace_json_command(
+                    command_data, chat_id,
+                    save_command_coro()
+                )
+                await bot.reply_to(original_message, f"✅ Command received and saved as `{saved_path}`.")
+
         except Exception as e:
-            log_local_bot_event(f"Error saving command file for chat {chat_id}: {e}")
-            await bot.reply_to(original_message, "⚠️ Error saving command to file.")
+            # This will catch errors from both the tracer and the command logic itself
+            # The tracer will have already logged the error, so we just need to inform the user.
+            await bot.reply_to(original_message, "⚠️ An error occurred while processing your command.")
+
         return
 
     except json.JSONDecodeError:
@@ -309,35 +383,6 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
             else:
                 await bot.send_message(chat_id, error_reply)
         return # KatanaAgent has handled the message.
-
-        # --- Old GPT Streaming Logic (Now Bypassed/Replaced by KatanaAgent) ---
-        # # --- Start of new task management for GPT streaming ---
-        # if chat_id in active_gpt_streams:
-        #     old_task, old_cancel_event, old_msg_id = active_gpt_streams[chat_id]
-        #     log_local_bot_event(f"log_event({chat_id}, \"gpt_interrupt_request\", \"New message received, attempting to cancel previous stream for message {old_msg_id}.\")")
-        #     old_cancel_event.set()
-        #     try:
-        #         await asyncio.wait_for(old_task, timeout=2.0) # Wait for old task to finish/cancel
-        #         log_local_bot_event(f"log_event({chat_id}, \"gpt_previous_stream_cancelled\", \"Previous stream task for message {old_msg_id} completed/cancelled.\")")
-        #     except asyncio.TimeoutError:
-        #         log_local_bot_event(f"log_event({chat_id}, \"gpt_previous_stream_timeout\", \"Timeout waiting for previous stream task for message {old_msg_id} to cancel.\")")
-        #     # Removal from active_gpt_streams is handled by the task itself in its finally block
-        #
-        # # Define the coroutine that will handle the actual streaming for this new request
-        # async def _handle_gpt_streaming_for_chat(current_text, current_chat_id, current_original_message, current_cancellation_event):
-        #     # ... (GPT streaming implementation was here) ...
-        #
-        # # Create and store the new task
-        # new_cancellation_event = asyncio.Event()
-        # # Pass the original_message to the handler for reply context
-        # gpt_task = asyncio.create_task(
-        #     _handle_gpt_streaming_for_chat(text, chat_id, original_message, new_cancellation_event)
-        # )
-        # active_gpt_streams[chat_id] = (gpt_task, new_cancellation_event, None) # Initially no message_id to edit
-        # log_local_bot_event(f"log_event({chat_id}, \"gpt_new_stream_task_created\", \"New GPT stream task started.\")")
-        # # Note: We don't await gpt_task here, it runs in the background.
-        # return
-        # --- End of old GPT task management ---
 
 # This will be the new text handler
 @bot.message_handler(func=lambda message: True, content_types=['text'])
@@ -389,9 +434,6 @@ async def get_text_from_voice(voice_file_path: str) -> str | None:
 
 # --- Voice Message Handler ---
 VOICE_FILE_DIR = Path('voice_temp')
-# This mkdir should ideally be at startup, but for now, it's fine.
-# If multiple handlers run concurrently before it's created, it might cause issues.
-# For simplicity, leaving as is; it has exist_ok=True.
 VOICE_FILE_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -427,16 +469,6 @@ async def handle_voice_message(message):
 
         if transcribed_text is not None: # Process if we have a transcription (even if empty string)
             log_local_bot_event(f"Voice from {chat_id} transcribed to: '{transcribed_text}'")
-            # Create a new message object that looks like a text message
-            # This allows reusing the handle_text_message logic
-            # Some attributes of message might not be perfectly replicated, but core ones for handle_text_message should be.
-            # Important: telebot.types.Message is complex. We only mock what's needed.
-            # A cleaner way might be to refactor handle_text_message to accept text directly.
-            # For now, this approach minimizes changes to existing text handling.
-
-            # Mimic a text message to pass to handle_text_message - NO LONGER NEEDED
-            # We will call process_user_message directly.
-
             await bot.reply_to(message, f"🗣️ Распознано: \"{transcribed_text}\"")
             # Call the unified processor
             await process_user_message(chat_id, transcribed_text, message)
@@ -449,12 +481,6 @@ async def handle_voice_message(message):
         log_local_bot_event(f"Error processing voice message from {chat_id}: {e}")
     finally:
         # Clean up the temporary file (blocking I/O)
-        # temp_voice_path is defined at the start of the handler's try block
-        loop = asyncio.get_event_loop()
-
-        # Check existence and delete in executor to avoid blocking
-        # Path.exists() can also be blocking on some systems for network drives, etc.
-        # So, we run the check and deletion together in the executor.
         def _check_and_delete_temp_file():
             if temp_voice_path.exists():
                 try:
@@ -465,80 +491,12 @@ async def handle_voice_message(message):
             else:
                 log_local_bot_event(f"Temporary voice file {temp_voice_path} not found for deletion or already deleted.")
 
+        loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, _check_and_delete_temp_file)
 
 # --- GPT Streaming ---
-async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_event: asyncio.Event):
-    """
-    Gets a streamed response from OpenAI GPT asynchronously.
-    Yields chunks of text as they are received.
-    Stops if cancellation_event is set.
-    """
-    if not OPENAI_API_KEY:
-        log_local_bot_event(f"log_event({chat_id}, \"gpt_skipped_no_api_key\", \"OpenAI API key not configured.\")")
-        yield "⚠️ GPT functionality is not configured on the server."
-        return
-
-    log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_start\", \"User text: {user_text[:100].replace('\"', 'QUOTE').replace('\n', '\\n')}...\")")
-    try:
-        import functools
-        loop = asyncio.get_event_loop()
-
-        if cancellation_event.is_set(): # Check before even making the API call
-            log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_before_start\", \"Cancellation event set before API call.\")")
-            return
-
-        def _create_openai_stream():
-            return openai.ChatCompletion.create(
-                model="gpt-3.5-turbo", # Or your preferred model
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": user_text}
-                ],
-                stream=True
-            )
-
-        stream_iterator = await loop.run_in_executor(None, _create_openai_stream)
-
-        _SENTINEL = object()
-        while True:
-            if cancellation_event.is_set():
-                log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_pre_chunk_fetch\", \"Cancellation event set before fetching next chunk.\")")
-                break
-
-            chunk_item = await loop.run_in_executor(None, next, stream_iterator, _SENTINEL)
-
-            if cancellation_event.is_set(): # Check again immediately after the blocking call returns
-                log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_post_chunk_fetch\", \"Cancellation event set after fetching chunk.\")")
-                break
-
-            if chunk_item is _SENTINEL:
-                break
-
-            content = chunk_item.choices[0].get("delta", {}).get("content")
-            if content:
-                log_content = content[:50].replace('\n', '\\n').replace('"', 'QUOTE')
-                log_local_bot_event(f"log_event({chat_id}, \"gpt_chunk_received\", \"{log_content}...\")")
-                yield content
-
-        if not cancellation_event.is_set(): # Only log 'finished' if not cancelled
-            log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_finished\", \"Stream completed naturally.\")")
-        else:
-            log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_ended_by_cancellation\", \"Stream processing stopped due to cancellation.\")")
-
-
-    except StopIteration:
-        if not cancellation_event.is_set(): # Avoid double logging if cancellation happened near end
-            log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_stopped_iteration\", \"StopIteration received, stream likely ended.\")")
-    except openai.APIError as e:
-        log_local_bot_event(f"log_event({chat_id}, \"gpt_api_error\", \"Error: {str(e).replace('\n', '\\n')}\")")
-        if not cancellation_event.is_set(): # Don't yield error if cancelled, it's not relevant to user
-            yield f"🤖 GPT Error: {str(e)}"
-    except Exception as e:
-        log_local_bot_event(f"log_event({chat_id}, \"gpt_unexpected_error\", \"Error: {str(e).replace('\n', '\\n')}\")")
-        if not cancellation_event.is_set():
-            yield f"🤖 Unexpected error with GPT: {str(e)}"
-
+# This functionality is currently bypassed by the KatanaAgent logic.
+# If it were to be re-enabled, it would need to be updated to handle async/await properly.
 
 if __name__ == '__main__':
     # asyncio.run(main()) # This was the correct way from previous step
@@ -572,76 +530,73 @@ if __name__ == '__main__':
 @trace_command
 async def command_status_impl(message):
     """Implementation for the /status command."""
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     chat_id = message.chat.id
     user_id = message.from_user.id
     command_name = "/status"
+    status = "error" # Default status
+    uptime_str = "N/A"
 
     log_entry_start = f"command='{command_name}' event_type='start' user_id={user_id} chat_id={chat_id}"
     log_command_event(log_entry_start)
-    # log_local_bot_event(f"Executing command: {command_name} for user {user_id}") # Optional: General log for command initiation
 
     try:
-        uptime_delta = datetime.utcnow() - BOT_START_TIME
-    days = uptime_delta.days
-    hours, remainder = divmod(uptime_delta.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
+        uptime_delta = datetime.now(timezone.utc) - BOT_START_TIME
+        days = uptime_delta.days
+        hours, remainder = divmod(uptime_delta.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
 
-    status_message = (
-        f"🤖 **Bot Status** 🤖\n\n"
-        f"**Uptime:** {uptime_str}\n"
-        # Add more status details here as needed in the future
-        # e.g., version, number of processed messages (if tracked globally)
-        f"**Version:** 1.0.0 (feat/command-handling-improvements)\n"
-        f"**Active Features:** Text, Voice, JSON commands, Slash commands"
-    )
+        status_message = (
+            f"🤖 **Bot Status** 🤖\n\n"
+            f"**Uptime:** {uptime_str}\n"
+            f"**Version:** 1.0.0 (feat/command-handling-improvements)\n"
+            f"**Active Features:** Text, Voice, JSON commands, Slash commands"
+        )
 
         await bot.reply_to(message, status_message, parse_mode="Markdown")
         status = "success"
     except Exception as e:
-        status = "error"
         error_message = str(e).replace('\n', ' - ') # Sanitize error message for logging
         log_command_event(f"command='{command_name}' event_type='error' user_id={user_id} chat_id={chat_id} error='{error_message}'")
         log_local_bot_event(f"Error processing command {command_name} for user {user_id}: {error_message}")
         await bot.reply_to(message, "An error occurred while fetching status.")
     finally:
-        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
-        log_entry_end = f"command='{command_name}' event_type='end' user_id={user_id} chat_id={chat_id} status='{status}' duration_ms={duration_ms:.2f} details={{'uptime': '{uptime_str if status=='success' else 'N/A'}'}}"
+        duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+        log_entry_end = f"command='{command_name}' event_type='end' user_id={user_id} chat_id={chat_id} status='{status}' duration_ms={duration_ms:.2f} details={{'uptime': '{uptime_str}'}}"
         log_command_event(log_entry_end)
 
 
 @trace_command
 async def command_help_impl(message):
     """Implementation for the /help command."""
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     chat_id = message.chat.id
     user_id = message.from_user.id
     command_name = "/help"
+    status = "error"
 
     log_entry_start = f"command='{command_name}' event_type='start' user_id={user_id} chat_id={chat_id}"
     log_command_event(log_entry_start)
-    # log_local_bot_event(f"Executing command: {command_name} for user {user_id}")
 
     try:
         all_commands = get_all_commands()
-    if not all_commands:
-        help_text = "No commands are currently registered."
-    else:
-        help_text = "📚 **Available Commands** 📚\n\n"
-        for cmd, desc in sorted(all_commands.items()): # Sort for consistent order
-            help_text += f"/{cmd} - {desc}\n"
+        if not all_commands:
+            help_text = "No commands are currently registered."
+        else:
+            help_text = "📚 **Available Commands** 📚\n\n"
+            for cmd, desc in sorted(all_commands.items()): # Sort for consistent order
+                help_text += f"/{cmd} - {desc}\n"
 
         await bot.reply_to(message, help_text.strip(), parse_mode="Markdown")
         status = "success"
     except Exception as e:
-        status = "error"
         error_message = str(e).replace('\n', ' - ')
         log_command_event(f"command='{command_name}' event_type='error' user_id={user_id} chat_id={chat_id} error='{error_message}'")
         log_local_bot_event(f"Error processing command {command_name} for user {user_id}: {error_message}")
         await bot.reply_to(message, "An error occurred while fetching help information.")
     finally:
-        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
         log_entry_end = f"command='{command_name}' event_type='end' user_id={user_id} chat_id={chat_id} status='{status}' duration_ms={duration_ms:.2f} details={{}}"
         log_command_event(log_entry_end)
 
@@ -649,15 +604,15 @@ async def command_help_impl(message):
 @trace_command
 async def command_reset_impl(message):
     """Implementation for the /reset command."""
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     chat_id = message.chat.id
     user_id = message.from_user.id
     command_name = "/reset"
     history_cleared_flag = False
+    status = "error"
 
     log_entry_start = f"command='{command_name}' event_type='start' user_id={user_id} chat_id={chat_id}"
     log_command_event(log_entry_start)
-    # log_local_bot_event(f"Executing command: {command_name} for user {user_id}")
 
     try:
         if chat_id in chat_histories:
@@ -672,13 +627,12 @@ async def command_reset_impl(message):
         await bot.reply_to(message, response_message)
         status = "success"
     except Exception as e:
-        status = "error"
         error_message = str(e).replace('\n', ' - ')
         log_command_event(f"command='{command_name}' event_type='error' user_id={user_id} chat_id={chat_id} error='{error_message}'")
         log_local_bot_event(f"Error processing command {command_name} for user {user_id}: {error_message}")
         await bot.reply_to(message, "An error occurred while resetting history.")
     finally:
-        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
         log_entry_end = f"command='{command_name}' event_type='end' user_id={user_id} chat_id={chat_id} status='{status}' duration_ms={duration_ms:.2f} details={{'history_cleared': {history_cleared_flag}}}"
         log_command_event(log_entry_end)
 
