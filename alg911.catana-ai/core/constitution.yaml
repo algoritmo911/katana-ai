@@ -1,0 +1,28 @@
+# Constitution for the Katana DAO-Core
+
+# High-level goal for the agent.
+# This defines the primary directive for the agent's actions.
+goal: "maximize_knowledge_connectivity"
+
+# System constraints.
+# The agent must operate within these boundaries.
+constraints:
+  # System fatigue represents the accumulated operational load on the agent.
+  # It's a measure of how much work the agent has been doing recently.
+  # The agent should avoid taking on new tasks if its fatigue is too high.
+  system_fatigue: "< 0.9"
+
+  # Resource utilization is a measure of how many resources (CPU, memory, etc.)
+  # the agent is currently using. The agent should avoid taking on new tasks
+  # that would exceed this limit.
+  resource_utilization: "< 0.8"
+
+# Goal formulation parameters.
+# These parameters are used to guide the goal synthesizer in formulating
+# specific, achievable goals.
+goal_synthesis:
+  # The minimum priority for a goal to be considered for execution.
+  min_priority: 0.5
+
+  # The maximum number of goals to be considered at any given time.
+  max_goals: 3
