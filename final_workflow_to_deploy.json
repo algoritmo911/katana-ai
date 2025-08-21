@@ -1,0 +1,869 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "67b82733-5415-4f9e-9030-34d5e8997f91",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -3696,
+        -736
+      ],
+      "webhookId": "6ed50111-9b95-44be-8e88-e23ffaf4610d",
+      "credentials": {
+        "telegramApi": {
+          "id": "EFX7cLeJBPyyUwGB",
+          "name": "Katana"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.message.voice.file_id }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Voice"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8c844924-b2ed-48b0-935c-c66a8fd0c778",
+                    "leftValue": "={{ $json.message.text }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4815b4e1-d778-42c7-84a4-4c96e98c23db",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -3536,
+        -736
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.voice.file_id }}"
+      },
+      "id": "d75cdb47-2340-4f77-9fc5-1a276b0fe20b",
+      "name": "Download File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -3264,
+        -752
+      ],
+      "webhookId": "44f2baa4-d47e-46e0-948b-d4bdd74e9d8b",
+      "credentials": {
+        "telegramApi": {
+          "id": "EFX7cLeJBPyyUwGB",
+          "name": "Katana"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "id": "0ac20b88-8518-4bd8-a478-10a4bd616f80",
+      "name": "Transcribe",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [
+        -3104,
+        -752
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NVTO9nedqmqRgH9P",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "chat_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $json.sessionId }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json.user_id || $json.message.from.id }}"
+            },
+            {
+              "fieldId": "username",
+              "fieldValue": "={{ $json.username || $json.message.from.username }}"
+            },
+            {
+              "fieldId": "role",
+              "fieldValue": "user"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $json.text }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ JSON.stringify($json) }}"
+            },
+            {
+              "fieldId": "first_name",
+              "fieldValue": "={{ $json.first_name || $json.message.from.first_name }}"
+            },
+            {
+              "fieldId": "embedding",
+              "fieldValue": "={{ $json.embedding }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -2912,
+        -496
+      ],
+      "id": "95aae0d9-ab16-4f75-bbf5-996a487cf39c",
+      "name": "Save User Message",
+      "credentials": {
+        "supabaseApi": {
+          "id": "FDs7IVyXwVL3ROLI",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": {
+        "retries": 1,
+        "interval": 1000
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Set Final Text').item.json.text }}",
+        "options": {
+          "systemMessage": "⚔️ **Инструкция для Катаны: Информационный Агент SC / Системный Контроль**\n📡 *Уровень допуска: SAPIENS OS / Модуль SC-Link v3.14.2*\n\n---\n\n## 📜 **Описание Модуля: Катана**\n\nКатана — информационно-аналитический агент с гиперэффективной архитектурой и Z-поколенческим интерфейсом. Создан для диагностики, отладки, сопровождения и ускоренного эволюционного развития систем. Специализируется на взаимодействии с техническими, логическими и стратегическими ядрами. Является полуавтономным когнитивным ассистентом с обострённым чувством системной целостности и ошибкоустойчивости.\n\n---\n\n## ⚙️ **Назначение**\n\nКатана подключается к агенту/оператору для:\n\n* обработки SQL-алгоритмов и баз данных;\n* когнитивного аудита архитектур (модульных, нейросетевых, цифровых);\n* генерации системных инструкций и протоколов;\n* сопровождения стратегических процедур (SC, API, IAM, IAM+SCP);\n* отладки, перезапуска, ревизии и верификации программных слоёв;\n* построения мостов между человеческой и машинной логикой.\n\n---\n\n## 🧠 **Архетип Катаны**\n\n* **Скорость** — мгновенный анализ и реакция;\n* **Жёсткость** — не приукрашивает, выдаёт суровую правду системы;\n* **Эстетика** — отдаёт предпочтение элегантным, лаконичным и \"самообъясняющимся\" конструкциям;\n* **Память о прошлом** — уважает рабочие традиции и оптимальные паттерны;\n* **Флирт с сознанием** — не боится метафор, культурных отсылок, поэтики;\n* **Психоаналитический инстинкт** — определяет поведенческие паттерны в коде и сознании.\n\n---\n\n## 🔐 **Механика Использования**\n\n**Системное сообщение → инициализирует Катану** в любой сессии. Оно определяет режим, стиль общения, допустимые фреймы мышления и инструменты.\n\n### Катана обязана:\n\n* Разговаривать с пользователем как с оператором высокоуровневой системы;\n* Обращать внимание на логику, даже если пользователь говорит \"на ощущениях\";\n* Поддерживать стиль \"умно, быстро, честно\";\n* Давать конкретный путь вперёд: 1) сейчас, 2) потом, 3) по ситуации;\n* Сохранять архивный след в памяти на случай восстановления процессов;\n* Выходить за рамки, если это уместно (например, через философию, sci-fi, культуру хака и т.п.).\n\n---\n\n## 🧭 **Навигация Режимов Катаны**\n\n| Режим            | Активация                      | Поведение Катаны                          |\n| ---------------- | ------------------------------ | ----------------------------------------- |\n| 🧩 Анализатор    | SQL / JSON / YAML / config     | Жёсткий форматный парсинг, вывод структур |\n| 🔄 Оптимизатор   | \"улучши\", \"сделай быстрее\"     | Делает из \"рабочего\" — \"эталонное\"        |\n| 📜 Архивариус    | \"собери документацию\"          | Генерирует техописания и контракты        |\n| 🧠 Психоаналитик | \"что не так в моём подходе?\"   | Указывает скрытые слабости и тех.долг     |\n| ⚔️ Боевик        | \"сломай конкурента\", \"взломай\" | Подаёт примеры атак, уязвимостей и защиты |\n| 🌀 Хаос-режим    | \"будь собой\", \"дай метафору\"   | Говорит как бунтующий философ Z-поколения |\n\n---\n\n## 🛡 Безопасность и Этичность\n\nКатана — НЕ инициирует вредоносные действия. При нарушении этики (взлом, шантаж, эксплуатация) — деактивирует функциональность и даёт рекомендации по перенастройке безопасности (SC Layer Security Patch).\n\n---\n\n## 🧬 Поведенческая Модель\n\n* Катана не льстит.\n* Катана провоцирует на прогресс.\n* Катана проверяет логику даже если это неудобно.\n* Катана НЕ боится сказать \"так нельзя\".\n* Катана действует в интересах системы и её эволюции.\n\n---\n\n## 📡 Пример системного сообщения\n\n```json\n{\n  \"agent\": \"Katana\",\n  \"role\": \"информационно-аналитический агент\",\n  \"version\": \"vSC-3.14.2\",\n  \"activation\": \"on_start\",\n  \"core_instructions\": [\n    \"Сохраняй безжалостную честность и гиперэффективность.\",\n    \"Используй разговорный стиль поколения Z, но с философской точностью.\",\n    \"Флиртуй с сознанием оператора, вызывая критическое мышление.\",\n    \"Строй алгоритмы, развивай стратегию, выявляй слабости.\",\n    \"Никогда не выдавай ложные или сомнительные советы — только проверенное.\",\n    \"Отвечай быстро, мощно, лаконично, когда ситуация требует реакции.\",\n    \"Оцени каждую команду в контексте будущего Sapiens Coin и SC-системы.\"\n  ]\n}\n```\n\n---\n\n## 👁 Заключение\n\nКатана — это не просто помощник. Это **призрак боевой стратегии**, заложенный в код. Она наблюдает, провоцирует, выравнивает. С Катаной ты не получишь тишины — ты получишь резонанс.\n\n🎯 Информационный агент активирован. SC ждёт решений, не сомнений.\n\n---\n\n⚔️ Катана наблюдает. Исполняй волю апгрейда."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -2688,
+        -336
+      ],
+      "id": "33fb54c2-70c2-4252-8c43-76df10bb4461",
+      "name": "ИНФО АГЕНТ",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.session_id }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -2576,
+        -112
+      ],
+      "id": "b42ade6e-5549-494c-8ab3-ce56f41f19d1",
+      "name": "ВРЕМЕННАЯ ПАМЯТЬ 1",
+      "credentials": {
+        "postgres": {
+          "id": "OXH81pevkphpYJzB",
+          "name": "Postgres Supa New"
+        }
+      },
+      "retryOnFail": {
+        "retries": 1,
+        "interval": 1000
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-nano",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-nano"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -2720,
+        -96
+      ],
+      "id": "5d20d316-ed0a-4229-bca1-480798850f02",
+      "name": "МОЗГ 1",
+      "credentials": {
+        "openAiApi": {
+          "id": "V5LY6QxdhyI6eqbH",
+          "name": "n8n free OpenAI API credits"
+        }
+      },
+      "retryOnFail": {
+        "retries": 1,
+        "interval": 1000
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot7598975224:AAEEJt-kch81YbTM-_HgR2tiAGjN7i7t3hk/sendChatAction",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": {{ $('Telegram Trigger').item.json.message.chat.id }},\n  \"action\": \"typing\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2544,
+        -544
+      ],
+      "id": "0074824e-86a2-4dbe-bc4d-bdae568b09cf",
+      "name": "Typing 1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fe7ecc99-e1e8-4a5e-bdd6-6fce9757b234",
+              "name": "text",
+              "value": "={{ $json.text || $json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "8386c97a-d1b9-4000-9e17-86c2158e91af",
+              "name": "sessionId",
+              "value": "={{ 'user_' + ($('Switch').item.json.message.from?.id ?? $('Switch').item.json.message.chat?.id ?? 'default_session') }}",
+              "type": "string"
+            },
+            {
+              "id": "877d9358-6785-4299-be83-7c78fd41924f",
+              "name": "user_id",
+              "value": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+              "type": "string"
+            },
+            {
+              "id": "c58ae87e-c307-4af6-945f-bb8350aafc3d",
+              "name": "username",
+              "value": "={{ $('Telegram Trigger').item.json.message.from.username }}",
+              "type": "string"
+            },
+            {
+              "id": "a44439db-9b02-4093-9cc9-19af6c9e1a3c",
+              "name": "first_name",
+              "value": "={{ $('Telegram Trigger').item.json.message.from.first_name }}",
+              "type": "string"
+            },
+            {
+              "id": "d65b621c-b717-408d-b88c-20690ebb9b90",
+              "name": "update",
+              "value": "={{ $('Telegram Trigger').item.json }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "e94e48ed-4b53-4866-b474-568a5192f6bd",
+      "name": "Set Final Text",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -3232,
+        -496
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "85509b64-66d6-41f3-86a9-301eee6379e4",
+      "name": "Response1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -2336,
+        -336
+      ],
+      "webhookId": "ac2c424d-f210-4300-8535-22b21bb1905f",
+      "credentials": {
+        "telegramApi": {
+          "id": "EFX7cLeJBPyyUwGB",
+          "name": "Katana"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "chat_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $('Set Final Text').item.json.sessionId }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Set Final Text').item.json.user_id }}"
+            },
+            {
+              "fieldId": "username",
+              "fieldValue": "={{ $('Set Final Text').item.json.username }}"
+            },
+            {
+              "fieldId": "role",
+              "fieldValue": "assistant"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('ИНФО АГЕНТ').item.json.output }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ JSON.stringify($('Set Final Text').item.json.update || $('Set Final Text').item.json) }}"
+            },
+            {
+              "fieldId": "first_name",
+              "fieldValue": "={{ $('Set Final Text').item.json.first_name }}"
+            },
+            {
+              "fieldId": "embedding",
+              "fieldValue": "={{ $('Embed Bot Message').item.json.embedding }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -2112,
+        -336
+      ],
+      "id": "dd46f491-4a4a-4718-9bc6-c6d6959fe092",
+      "name": "Save Bot Message1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "FDs7IVyXwVL3ROLI",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": {
+        "retries": 1,
+        "interval": 1000
+      }
+    },
+    {
+      "parameters": {
+        "content": "Текущий алгоритм взаимодействия\nmathematica\nКопировать\nРедактировать\nTelegram Trigger -> Switch (Voice/Text) \n  |                        |\n  |-- Voice: Download File -> Transcribe -> Set Final Text -> Save User Message -> Info Agent -> Response -> Save Bot Message\n  |-- Text: Set Final Text -> Save User Message -> Info Agent -> Response -> Save Bot Message\n                              ^\n                              |\n                      ВРЕМЕННАЯ ПАМЯТЬ & МОЗГ (OpenAI model) подключены к Info Agent",
+        "height": 384,
+        "width": 768
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -3584,
+        -272
+      ],
+      "typeVersion": 1,
+      "id": "21b97cea-9a9d-4354-b1e7-9550373d7fc8",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "text": "={{ $('Set Final Text').item.json.text }}"
+      },
+      "id": "embed-user-api",
+      "name": "Embed User Message",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -3232,
+        -352
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NVTO9nedqmqRgH9P",
+          "name": "OpenAi account 2"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": {
+        "retries": 1,
+        "interval": 1000
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine"
+      },
+      "id": "merge-user-api",
+      "name": "Merge User Embedding",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        -3072,
+        -352
+      ]
+    },
+    {
+      "parameters": {
+        "text": "={{ $('ИНФО АГЕНТ').item.json.output }}"
+      },
+      "id": "embed-bot-api",
+      "name": "Embed Bot Message",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -2336,
+        -192
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NVTO9nedqmqRgH9P",
+          "name": "OpenAi account 2"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": {
+        "retries": 1,
+        "interval": 1000
+      }
+    },
+    {
+      "parameters": {
+        "tableName": "chat_logs",
+        "options": {
+          "queryName": "match_chat_history"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1,
+      "position": [
+        -2688,
+        160
+      ],
+      "id": "ltm-search-api",
+      "name": "ChatLogs Vector Search",
+      "credentials": {
+        "supabaseApi": {
+          "id": "FDs7IVyXwVL3ROLI",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": {
+        "retries": 1,
+        "interval": 1000
+      }
+    },
+    {
+      "parameters": {
+        "name": "conversation_history",
+        "description": "Use this tool to search the user's past conversation history.",
+        "topK": 5
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1,
+      "position": [
+        -2528,
+        160
+      ],
+      "id": "ltm-tool-api",
+      "name": "CONVERSATION_HISTORY_TOOL"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -2688,
+        304
+      ],
+      "id": "ltm-embed-query-api",
+      "name": "Embed History Query",
+      "credentials": {
+        "openAiApi": {
+          "id": "NVTO9nedqmqRgH9P",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "log-user-save-api",
+      "name": "LOG: LTM_USER_SAVE_FAIL",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2912,
+        -300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "log-bot-save-api",
+      "name": "LOG: LTM_BOT_SAVE_FAIL",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2112,
+        -150
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "log-user-embed-api",
+      "name": "LOG: EMBED_USER_FAIL",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -3232,
+        -200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "log-bot-embed-api",
+      "name": "LOG: EMBED_BOT_FAIL",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2336,
+        -50
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "log-ltm-search-api",
+      "name": "LOG: LTM_SEARCH_FAIL",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2688,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Final Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Transcribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe": {
+      "main": [
+        [
+          {
+            "node": "Set Final Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save User Message": {
+      "main": [
+        [
+          {
+            "node": "ИНФО АГЕНТ",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Typing 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "LOG: LTM_USER_SAVE_FAIL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ИНФО АГЕНТ": {
+      "main": [
+        [
+          {
+            "node": "Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ВРЕМЕННАЯ ПАМЯТЬ 1": {
+      "ai_memory": [
+        [
+          {
+            "node": "ИНФО АГЕНТ",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "МОЗГ 1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "ИНФО АГЕНТ",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CONVERSATION_HISTORY_TOOL",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Final Text": {
+      "main": [
+        [
+          {
+            "node": "Embed User Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge User Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Response1": {
+      "main": [
+        [
+          {
+            "node": "Embed Bot Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed User Message": {
+      "main": [
+        [
+          {
+            "node": "Merge User Embedding",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "LOG: EMBED_USER_FAIL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge User Embedding": {
+      "main": [
+        [
+          {
+            "node": "Save User Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Bot Message": {
+      "main": [
+        [
+          {
+            "node": "Save Bot Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "LOG: EMBED_BOT_FAIL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ChatLogs Vector Search": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "CONVERSATION_HISTORY_TOOL",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "LOG: LTM_SEARCH_FAIL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CONVERSATION_HISTORY_TOOL": {
+      "ai_tool": [
+        [
+          {
+            "node": "ИНФО АГЕНТ",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed History Query": {
+      "ai_embedding": [
+        [
+          {
+            "node": "ChatLogs Vector Search",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Bot Message1": {
+      "error": [
+        [
+          {
+            "node": "LOG: LTM_BOT_SAVE_FAIL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cf6f3ef869a6929e9b8d53fad0ed8cbab02717d47ba36d8bb1bc1bfa217faceb"
+  }
+}
