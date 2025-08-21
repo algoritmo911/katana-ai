@@ -1,5 +1,6 @@
 # telegram_bot.py
 import logging
+import sys
 import config
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -42,75 +43,64 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(help_text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles general messages from the user."""
+    """Handles general messages from the user by interpreting intent."""
     message_text = update.message.text
     user = update.effective_user
     logger.info(f"Received message from {user.username} (ID: {user.id}): {message_text}")
 
-    response_message = ""
+    response_message = "Sorry, something went wrong."
     try:
         intent, params = nlp_module.recognize_intent(message_text)
         logger.debug(f"NLP result: intent='{intent}', params={params}")
 
-        if intent == "run_command":
-            katana_command = params.get("command")
+        if intent:
+            # Map intent to a command for the Predictive Engine
+            command_map = {
+                "get_uptime": "uptime",
+                "greet_user": "greet_user",
+                "run_command": params.get("command")
+            }
+            katana_command = command_map.get(intent)
+
             if katana_command:
-                # For /run, the command string itself is the primary argument to Katana
-                # We pass the raw command string to katana_agent, which might parse it further
-                # or treat it as an executable string.
-                # The current katana_agent.execute_command might need adjustment if it expects
-                # specific command keywords vs. arbitrary strings from /run.
-                # For now, we'll pass it as is. If katana_agent has a specific handler for "uptime"
-                # that's fine, otherwise it might go to a generic handler or fail.
-                # Let's assume for /run, the command is the primary thing.
-                # We can use a convention like "execute_raw" or pass it as a special param.
-                # For now, sending the command string directly.
-                # Consider if `/run uptime` should map to `katana_agent.execute_command("uptime")`
-                # or `katana_agent.execute_command("run", {"actual_command": "uptime"})`
-                # The nlp_module currently returns intent "run_command" and param {"command": "uptime"}
-                # Let's make katana_agent handle "run_command" intent.
-                # No, katana_agent should receive the actual command to run.
-                # So if intent is "run_command", the command for Katana is params["command"].
-                response_message = katana_agent.execute_command(katana_command, params)
+                # Execute command and get structured response
+                advisor_response = katana_agent.execute_command(katana_command, params)
+                response_message = advisor_response.get("message", "No message received.")
             else:
-                response_message = "Please specify a command to run with /run. Usage: /run <command>"
-        elif intent == "get_uptime":
-            response_message = katana_agent.execute_command("uptime", params)
-        elif intent == "greet_user":
-            response_message = katana_agent.execute_command("greet_user", params)
-        elif intent is None:
-            response_message = f"Sorry, I couldn't understand: '{message_text}'. Try `/help`."
+                response_message = f"I understood '{intent}', but I don't know what to do."
+                logger.warning(f"No command mapping for intent: {intent}")
         else:
-            # Should not happen if NLP module is well-defined
-            response_message = f"I understood the intent as '{intent}', but I don't know how to handle it yet."
-            logger.warning(f"Unhandled recognized intent: {intent} for message: {message_text}")
+            response_message = f"Sorry, I couldn't understand: '{message_text}'. Try `/help`."
 
     except Exception as e:
-        logger.error(f"Error processing message from {user.username}: {message_text}. Error: {e}", exc_info=True)
-        response_message = "Sorry, something went wrong while processing your request."
+        logger.error(f"Error processing message from {user.username}: {e}", exc_info=True)
+        response_message = "An error occurred. Please try again later."
 
     await update.message.reply_text(response_message)
 
+
 async def run_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /run command and executes the arguments in Katana."""
+    """Handles the /run command for direct execution."""
     user = update.effective_user
     command_parts = context.args
-
     logger.info(f"User {user.username} (ID: {user.id}) issued /run command with args: {command_parts}")
 
     if not command_parts:
-        await update.message.reply_text("Please specify a command to run. Usage: `/run <command_text>`")
+        await update.message.reply_text("Usage: `/run <command_text>`")
         return
 
     katana_command_text = " ".join(command_parts)
-    response_message = ""
+    response_message = "An error occurred while running the command."
     try:
-        # Here, the `katana_command_text` is what the user typed after /run
-        # We pass this directly to the katana_agent.
-        # The `params` argument could be used if we wanted to pass additional context,
-        # but for /run, the command_text is the main payload.
-        logger.info(f"Executing Katana command from /run: '{katana_command_text}'")
-        response_message = katana_agent.execute_command(katana_command_text, params={"source": "/run command"})
+        logger.info(f"Executing direct command from /run: '{katana_command_text}'")
+        # The `execute_command` now returns a dictionary
+        advisor_response = katana_agent.execute_command(
+            katana_command_text,
+            params={"source": "/run command", "user": user.username}
+        )
+        # Extract the message to be sent to the user
+        response_message = advisor_response.get("message", "No response message from Katana.")
+
     except Exception as e:
         logger.error(f"Error executing /run command '{katana_command_text}' for {user.username}: {e}", exc_info=True)
         response_message = f"Sorry, an error occurred while trying to run the command: `{katana_command_text}`."
@@ -118,28 +108,34 @@ async def run_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(response_message)
 
 def main() -> None:
-    """Starts the Telegram bot."""
-    logger.info("Starting Telegram bot...")
+    """Initializes and starts the Telegram bot."""
+    logger.info("Initializing Telegram bot...")
 
-    if config.TELEGRAM_BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN_HERE":
-        logger.error("TELEGRAM_BOT_TOKEN is not set. Please update your .env file or environment variable.")
-        print("Error: TELEGRAM_BOT_TOKEN is not set. The bot cannot start.")
-        print("Please create a .env file with your token or set the environment variable.")
-        print("Example .env file content:\nTELEGRAM_BOT_TOKEN=\"123456:ABC-DEF1234ghIkl-zyx57W2v1uT0\"")
+    # Ensure the bot token is set
+    if not config.TELEGRAM_BOT_TOKEN or config.TELEGRAM_BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN_HERE":
+        logger.critical("TELEGRAM_BOT_TOKEN is not configured. The bot cannot start.")
+        print("FATAL: TELEGRAM_BOT_TOKEN is missing. Please check your .env file or environment variables.", file=sys.stderr)
         return
 
-    application = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+    # Initialize the bot application
+    try:
+        application = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
 
-    # Command handlers
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("run", run_command_handler, block=False)) # block=False for async
+        # Register command handlers
+        application.add_handler(CommandHandler("start", start_command))
+        application.add_handler(CommandHandler("help", help_command))
+        application.add_handler(CommandHandler("run", run_command_handler, block=False))
 
-    # Message handler for general messages (that are not commands)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        # Register message handler for non-command text
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    logger.info("Telegram bot polling started.")
-    application.run_polling()
+        # Start polling for updates
+        logger.info("Telegram bot is now polling for updates.")
+        application.run_polling()
+
+    except Exception as e:
+        logger.critical(f"Failed to initialize or run the bot: {e}", exc_info=True)
+        print(f"FATAL: An unexpected error occurred: {e}", file=sys.stderr)
 
 if __name__ == '__main__':
     main()

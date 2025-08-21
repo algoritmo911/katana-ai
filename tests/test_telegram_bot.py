@@ -56,19 +56,20 @@ class TestTelegramBotHandlers(unittest.IsolatedAsyncioTestCase):
     @patch('telegram_bot.katana_agent.execute_command')
     async def test_run_command_handler_with_args(self, mock_execute_katana):
         self.context.args = ["uptime", "--verbose"]
-        mock_execute_katana.return_value = "Katana says: uptime is good"
+        mock_execute_katana.return_value = {"status": "success", "message": "Katana says: uptime is good"}
 
         await telegram_bot.run_command_handler(self.update, self.context)
 
-        mock_execute_katana.assert_called_once_with("uptime --verbose", params={"source": "/run command"})
+        mock_execute_katana.assert_called_once_with(
+            "uptime --verbose",
+            params={"source": "/run command", "user": "testuser"}
+        )
         self.update.message.reply_text.assert_called_once_with("Katana says: uptime is good")
 
     async def test_run_command_handler_no_args(self):
         self.context.args = []
         await telegram_bot.run_command_handler(self.update, self.context)
-        self.update.message.reply_text.assert_called_once_with(
-            "Please specify a command to run. Usage: `/run <command_text>`"
-        )
+        self.update.message.reply_text.assert_called_once_with("Usage: `/run <command_text>`")
 
     @patch('telegram_bot.katana_agent.execute_command')
     async def test_run_command_handler_katana_error(self, mock_execute_katana):
@@ -77,7 +78,10 @@ class TestTelegramBotHandlers(unittest.IsolatedAsyncioTestCase):
 
         await telegram_bot.run_command_handler(self.update, self.context)
 
-        mock_execute_katana.assert_called_once_with("failing_command", params={"source": "/run command"})
+        mock_execute_katana.assert_called_once_with(
+            "failing_command",
+            params={"source": "/run command", "user": "testuser"}
+        )
         self.update.message.reply_text.assert_called_once_with(
             "Sorry, an error occurred while trying to run the command: `failing_command`."
         )
@@ -87,7 +91,7 @@ class TestTelegramBotHandlers(unittest.IsolatedAsyncioTestCase):
     async def test_handle_message_get_uptime_intent(self, mock_execute_katana, mock_recognize_intent):
         self.update.message.text = "what is the uptime"
         mock_recognize_intent.return_value = ("get_uptime", {})
-        mock_execute_katana.return_value = "Katana: Uptime is 100 days."
+        mock_execute_katana.return_value = {"status": "success", "message": "Katana: Uptime is 100 days."}
 
         await telegram_bot.handle_message(self.update, self.context)
 
@@ -101,7 +105,7 @@ class TestTelegramBotHandlers(unittest.IsolatedAsyncioTestCase):
         self.update.message.text = "greet Test Person"
         params = {"name": "Test Person"}
         mock_recognize_intent.return_value = ("greet_user", params)
-        mock_execute_katana.return_value = "Katana: Hello Test Person!"
+        mock_execute_katana.return_value = {"status": "success", "message": "Katana: Hello Test Person!"}
 
         await telegram_bot.handle_message(self.update, self.context)
 
@@ -112,14 +116,10 @@ class TestTelegramBotHandlers(unittest.IsolatedAsyncioTestCase):
     @patch('telegram_bot.nlp_module.recognize_intent')
     @patch('telegram_bot.katana_agent.execute_command')
     async def test_handle_message_run_command_intent(self, mock_execute_katana, mock_recognize_intent):
-        # This tests if /run command text makes it through general message handler
-        # if not caught by CommandHandler (e.g. if CommandHandler for /run was removed)
-        # or if NLP is made to recognize "run command xyz" as run_command intent.
-        # Current nlp_module.py recognizes "/run actual_cmd" as ("run_command", {"command": "actual_cmd"})
         self.update.message.text = "/run do_something"
         params = {"command": "do_something"}
         mock_recognize_intent.return_value = ("run_command", params)
-        mock_execute_katana.return_value = "Katana: Did something."
+        mock_execute_katana.return_value = {"status": "success", "message": "Katana: Did something."}
 
         await telegram_bot.handle_message(self.update, self.context)
 
@@ -129,16 +129,15 @@ class TestTelegramBotHandlers(unittest.IsolatedAsyncioTestCase):
 
     @patch('telegram_bot.nlp_module.recognize_intent')
     async def test_handle_message_run_command_intent_no_command_text(self, mock_recognize_intent):
-        # Test the specific error message if NLP returns run_command but command is empty
-        self.update.message.text = "/run" # Assume NLP somehow parsed this
-        params = {"command": ""} # NLP returns empty command string
+        self.update.message.text = "/run"
+        params = {"command": None}
         mock_recognize_intent.return_value = ("run_command", params)
 
         await telegram_bot.handle_message(self.update, self.context)
 
         mock_recognize_intent.assert_called_once_with("/run")
         self.update.message.reply_text.assert_called_once_with(
-            "Please specify a command to run with /run. Usage: /run <command>"
+            "I understood 'run_command', but I don't know what to do."
         )
 
     @patch('telegram_bot.nlp_module.recognize_intent')
@@ -156,13 +155,13 @@ class TestTelegramBotHandlers(unittest.IsolatedAsyncioTestCase):
     @patch('telegram_bot.nlp_module.recognize_intent')
     async def test_handle_message_unknown_recognized_intent(self, mock_recognize_intent):
         self.update.message.text = "some weird query"
-        mock_recognize_intent.return_value = ("unknown_but_recognized_intent", {})
+        mock_recognize_intent.return_value = ("unknown_intent", {})
 
         await telegram_bot.handle_message(self.update, self.context)
 
         mock_recognize_intent.assert_called_once_with("some weird query")
         self.update.message.reply_text.assert_called_once_with(
-            "I understood the intent as 'unknown_but_recognized_intent', but I don't know how to handle it yet."
+            "I understood 'unknown_intent', but I don't know what to do."
         )
 
     @patch('telegram_bot.nlp_module.recognize_intent')
@@ -174,7 +173,7 @@ class TestTelegramBotHandlers(unittest.IsolatedAsyncioTestCase):
 
         mock_recognize_intent.assert_called_once_with("trigger nlp error")
         self.update.message.reply_text.assert_called_once_with(
-            "Sorry, something went wrong while processing your request."
+            "An error occurred. Please try again later."
         )
 
     @patch('telegram_bot.nlp_module.recognize_intent')
@@ -189,7 +188,7 @@ class TestTelegramBotHandlers(unittest.IsolatedAsyncioTestCase):
         mock_recognize_intent.assert_called_once_with("trigger katana error")
         mock_execute_katana.assert_called_once_with("uptime", {})
         self.update.message.reply_text.assert_called_once_with(
-            "Sorry, something went wrong while processing your request."
+            "An error occurred. Please try again later."
         )
 
 # We are not testing main() directly here as it involves Application.run_polling()
