@@ -1,0 +1,25 @@
+# Reflex Map for the AutoHealer
+# Maps anomaly patterns to n8n workflows.
+
+# Example:
+# anomalies:
+#   - name: api_latency.coinbase.high
+#     workflow: run_coinbase_health_check_and_clear_cache
+#   - name: system_fatigue.high
+#     workflow: throttle_incoming_requests_and_notify_admin
+anomalies:
+  - name: api_latency.coinbase.high
+    workflow: run_coinbase_health_check_and_clear_cache
+    params:
+      service: coinbase
+      priority: high
+  - name: system_fatigue.high
+    workflow: throttle_incoming_requests_and_notify_admin
+    params:
+      throttle_level: 0.5
+      notify_channel: "#devops-alerts"
+  - name: database_connection_error
+    workflow: restart_database_and_run_diagnostics
+    params:
+      database: primary_db
+      diagnostics_level: full
