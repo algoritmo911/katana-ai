@@ -23,29 +23,36 @@ def check_module_integrity(module_path, expected_hash):
         return False, f"Integrity check failed. Expected {expected_hash}, but got {actual_hash}."
 
 def analyze_logs(log_file):
-    """Analyzes a log file to find errors and anomalies."""
+    """
+    Analyzes a log file to find lines containing error-related keywords.
+
+    :param log_file: Path to the log file.
+    :return: A tuple containing a list of error lines and a status message.
+             Returns (None, message) if the file cannot be read.
+    """
     if not os.path.exists(log_file):
-        return None, "Log file not found."
+        return None, f"Log file not found at '{log_file}'."
 
     error_patterns = [
         r"error",
         r"exception",
         r"traceback",
+        r"critical",
+        r"failed",
     ]
 
-    errors = []
-    with open(log_file, "r") as f:
-        for line in f:
-            for pattern in error_patterns:
-                if re.search(pattern, line, re.IGNORECASE):
-                    errors.append(line)
-                    break
+    errors_found = []
+    try:
+        with open(log_file, "r", encoding="utf-8") as f:
+            for line in f:
+                for pattern in error_patterns:
+                    if re.search(pattern, line, re.IGNORECASE):
+                        errors_found.append(line.strip())
+                        break  # Move to the next line after finding one match
+    except Exception as e:
+        return None, f"Failed to read or process log file: {e}"
 
-    if not errors:
+    if not errors_found:
         return [], "No errors found in logs."
 
-    # Anomaly detection (simple example: count frequent errors)
-    error_counts = Counter(errors)
-    anomalies = [error for error, count in error_counts.items() if count > 5] # Example threshold
-
-    return anomalies, f"Found {len(anomalies)} anomalies."
+    return errors_found, f"Found {len(errors_found)} error-related lines."

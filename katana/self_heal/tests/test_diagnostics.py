@@ -44,9 +44,20 @@ class TestDiagnostics(unittest.TestCase):
         self.assertFalse(success)
 
     def test_analyze_logs(self):
-        anomalies, message = diagnostics.analyze_logs(self.log_file)
-        self.assertEqual(len(anomalies), 1)
-        self.assertIn("Another error", anomalies[0])
+        """Test that analyze_logs correctly finds all error-related lines."""
+        errors_found, message = diagnostics.analyze_logs(self.log_file)
+
+        # The log file contains 8 lines with "error" or "traceback"
+        self.assertEqual(len(errors_found), 8)
+        self.assertIn("Found 8 error-related lines", message)
+
+        # Check that one of the expected lines is present
+        self.assertIn("ERROR: A critical error occurred.", errors_found)
+
+        # Test with a non-existent file
+        errors_found, message = diagnostics.analyze_logs("non_existent_file.log")
+        self.assertIsNone(errors_found)
+        self.assertIn("Log file not found", message)
 
 if __name__ == "__main__":
     unittest.main()

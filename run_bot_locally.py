@@ -43,6 +43,7 @@ else:
 try:
     # Импортируем логгер бота, чтобы он также унаследовал файловый обработчик, если настроен
     from bot.katana_bot import bot, logger as bot_logger, start_heartbeat_thread, stop_heartbeat_thread
+    from katana.self_heal.orchestrator import SelfHealingOrchestrator
     # Если в bot.katana_bot своя конфигурация логирования, она может перезаписать эту.
     # Убедимся, что katana_bot использует тот же logger или настраивается согласованно.
     # В текущей реализации katana_bot.py использует logging.getLogger(__name__),
@@ -57,6 +58,31 @@ except Exception as e:
 
 if __name__ == '__main__':
     logger.info("🚀 Starting Katana Bot locally...")
+
+    orchestrator = None
+    # --- Initialize and start Self-Healing Orchestrator ---
+    if os.getenv("SELF_HEAL_ENABLED", "false").lower() == "true":
+        logger.info("Self-healing feature is enabled. Initializing orchestrator...")
+        try:
+            config = {
+                "log_file_path": os.getenv("SELF_HEAL_LOG_PATH", LOG_FILE_PATH), # Use main log file by default
+                "service_name": os.getenv("SELF_HEAL_SERVICE_NAME"),
+                "check_interval_seconds": int(os.getenv("SELF_HEAL_INTERVAL_SECONDS", "60")),
+                "error_threshold": int(os.getenv("SELF_HEAL_ERROR_THRESHOLD", "10")),
+                "notification_chat_id": os.getenv("SELF_HEAL_NOTIFICATION_CHAT_ID"),
+            }
+            # Basic validation
+            if not config["service_name"] or not config["notification_chat_id"]:
+                raise ValueError("SELF_HEAL_SERVICE_NAME and SELF_HEAL_NOTIFICATION_CHAT_ID must be set when self-healing is enabled.")
+
+            orchestrator = SelfHealingOrchestrator(config)
+            orchestrator.start()
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize or start Self-Healing Orchestrator: {e}", exc_info=True)
+            # We don't exit here; the bot can still run without the orchestrator.
+    else:
+        logger.info("Self-healing feature is disabled.")
+
     start_heartbeat_thread() # Start the heartbeat thread
     try:
         # bot.polling() в katana_bot.py уже настроен с none_stop=True
@@ -77,6 +103,8 @@ if __name__ == '__main__':
         logger.error(f"💥 An unexpected error occurred while running the bot: {e}", exc_info=True)
     finally:
         logger.info("Initiating shutdown sequence...")
+        if orchestrator:
+            orchestrator.stop()
         stop_heartbeat_thread() # Stop the heartbeat thread
         # Considerations for further graceful shutdown:
         # - If message handlers were run in separate threads managed by this application,
