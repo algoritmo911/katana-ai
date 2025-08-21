@@ -1,3 +1,3 @@
-python-telegram-bot>=20.0<22.0
+python-telegram-bot==21.0.1
 # Using a version range for better stability
 # Consider adding other direct dependencies here if any are introduced later.

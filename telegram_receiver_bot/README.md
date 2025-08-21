@@ -1,15 +1,15 @@
 # Telegram Receiver Bot
 
-This bot acts as a simple, passive receiver for messages from Telegram. It listens for text messages, voice messages, and documents. Upon receiving any of these, it logs the message metadata (and text content for text messages) to a local file (`received_messages.log`).
+This bot acts as a message receiver from Telegram and transforms them into commands for the Katana AI project. It listens for text, voice, and document messages. Upon receiving a message, it formats it into a structured command and appends it to the central command file used by the Katana agent.
 
-The primary purpose of this bot is to act as a lightweight frontend for data ingestion. The actual processing of the received data is intended to be handled by downstream services or AI nodes that can consume the `received_messages.log` file or be triggered by other mechanisms (e.g., a file watcher).
+The primary purpose of this bot is to serve as the main entry point for data ingestion into the Katana AI ecosystem. It populates `../alg911.catana-ai/katana.commands.json` with new tasks for the agent to process.
 
 ## Features
 
--   Receives text messages.
--   Receives voice messages (saves `file_id` for later retrieval).
--   Receives documents (saves `file_id` for later retrieval).
--   Logs received message information to `received_messages.log` in JSON Lines format.
+-   Receives text, voice, and document messages.
+-   Formats each message into a structured JSON command.
+-   Appends the command to `../alg911.catana-ai/katana.commands.json`.
+-   Includes metadata such as `command_id`, `timestamp_utc`, and `source`.
 -   Basic logging for monitoring bot activity.
 
 ## Setup
@@ -29,7 +29,7 @@ The primary purpose of this bot is to act as a lightweight frontend for data ing
     pip install -r requirements.txt
     ```
 5.  **Set the Telegram Bot Token:**
-    You need a token from BotFather on Telegram. Set it as an environment variable:
+    You need a token from @BotFather on Telegram. Set it as an environment variable:
     ```bash
     export TELEGRAM_BOT_TOKEN="YOUR_ACTUAL_BOT_TOKEN"
     ```
@@ -43,17 +43,29 @@ Once the setup is complete, you can run the bot using:
 python bot.py
 ```
 
-The bot will start listening for messages. Any received text, voice, or document messages will be logged to `telegram_receiver_bot/received_messages.log`.
+The bot will start listening for messages. Any received text, voice, or document messages will be formatted and saved as commands in `../alg911.catana-ai/katana.commands.json`.
 
-## Log Format (`received_messages.log`)
+## Command Format (`katana.commands.json`)
 
-The `received_messages.log` file contains one JSON object per line (JSON Lines format). Each object represents a received message and has the following structure:
+The `katana.commands.json` file is a JSON array where each element is a command object. The bot adds new commands to this array. Each command has the following structure:
 
-**For text messages:**
 ```json
 {
+  "command_id": "a-unique-uuid-string",
+  "timestamp_utc": "YYYY-MM-DDTHH:MM:SS.ffffff+00:00",
+  "source": "telegram",
+  "command_type": "ingest_message",
+  "payload": {
+    // The content of the payload varies by message type
+  }
+}
+```
+
+### Payload for Text Messages
+
+```json
+"payload": {
   "type": "text",
-  "timestamp": "YYYY-MM-DDTHH:MM:SS.ffffffZ", // UTC timestamp
   "message_id": 123,
   "chat_id": 4567890,
   "user_id": 1234567,
@@ -61,36 +73,36 @@ The `received_messages.log` file contains one JSON object per line (JSON Lines f
 }
 ```
 
-**For voice messages:**
+### Payload for Voice Messages
+
 ```json
-{
+"payload": {
   "type": "voice",
-  "timestamp": "YYYY-MM-DDTHH:MM:SS.ffffffZ",
   "message_id": 124,
   "chat_id": 4567890,
   "user_id": 1234567,
   "file_id": "FILE_ID_PROVIDED_BY_TELEGRAM",
   "file_unique_id": "UNIQUE_FILE_ID",
-  "duration": 60, // seconds
+  "duration": 60,
   "mime_type": "audio/ogg",
-  "file_size": 50000 // bytes
+  "file_size": 50000
 }
 ```
 
-**For document messages:**
+### Payload for Document Messages
+
 ```json
-{
+"payload": {
   "type": "document",
-  "timestamp": "YYYY-MM-DDTHH:MM:SS.ffffffZ",
   "message_id": 125,
   "chat_id": 4567890,
   "user_id": 1234567,
   "file_id": "FILE_ID_PROVIDED_BY_TELEGRAM",
   "file_unique_id": "UNIQUE_FILE_ID",
-  "file_name": "example.pdf", // Optional, might not always be present
-  "mime_type": "application/pdf", // Optional
-  "file_size": 120000 // bytes, optional
+  "file_name": "example.pdf",
+  "mime_type": "application/pdf",
+  "file_size": 120000
 }
 ```
 
-This log file can then be used as an input source for other processing systems.Tool output for `create_file_with_block`:
+This file is the primary input for the `katana_agent.py` script, which processes these commands.
