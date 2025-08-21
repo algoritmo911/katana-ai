@@ -1,15 +1,11 @@
 import time
 import json
 import os
-from typing import List, Any, NamedTuple, Dict
+from typing import List, Any, Dict
 from src.memory.memory import Memory
 from src.agents.sync_agent import SyncAgent
 from src.agents.katana_agent import KatanaAgent
-
-class TaskResult(NamedTuple):
-    success: bool
-    details: str
-    task_content: str
+from src.orchestrator.models import TaskResult
 
 class TaskOrchestrator:
     def __init__(self, agent: 'KatanaAgent', memory: Memory, sync_agent: SyncAgent, batch_size: int = 3, max_batch: int = 10, metrics_log_file: str = "orchestrator_log.json"):

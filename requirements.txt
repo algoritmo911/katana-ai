@@ -9,3 +9,5 @@ uvicorn[standard]
 redis
 PyYAML
 httpx
+coinbase
+pandas

@@ -3,7 +3,7 @@ import json
 import os
 from typing import List, Dict, Any
 
-from src.orchestrator.task_orchestrator import TaskResult
+from src.orchestrator.models import TaskResult
 from src.memory.memory_manager import MemoryManager
 
 # Placeholder for the NLP response function, similar to katana_bot.py

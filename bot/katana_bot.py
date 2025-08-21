@@ -201,46 +201,31 @@ def handle_message_impl(message):
     # 1. Логирование входящего сообщения (уже сделано в handle_message)
     # logger.info(f"Processing message from chat_id {chat_id_str}: {user_message_text}")
 
-    # 2. Формирование контекста из MemoryManager
-    # No explicit initialization like `if chat_id not in katana_states:` needed.
-    # get_history will return empty list if no history.
-    # For now, we retrieve full history. Later, a limit can be passed based on token constraints.
-    current_history = memory_manager.get_history(chat_id_str)
-    logger.info(f"Retrieved history for chat_id {chat_id_str}. Length: {len(current_history)}")
-
+    # 2. Add user message to history first.
+    memory_manager.add_message_to_history(
+        chat_id_str,
+        {"role": MESSAGE_ROLE_USER, "content": user_message_text}
+    )
 
     # Попытка разобрать сообщение как JSON-команду
     is_json_command = False
     command_data = None
     try:
         parsed_json = json.loads(user_message_text)
-        # Проверяем, является ли это валидной командой с нужными полями
-        required_fields = {"type": str, "module": str, "args": dict, "id": (str, int)}
-        is_valid_command_structure = True
-        for field, expected_type in required_fields.items():
-            if field not in parsed_json:
-                is_valid_command_structure = False
-                break
-            if field == "id":
-                if not any(isinstance(parsed_json[field], t) for t in expected_type):
-                    is_valid_command_structure = False
-                    break
-            elif not isinstance(parsed_json[field], expected_type):
-                is_valid_command_structure = False
-                break
-
-        if is_valid_command_structure:
+        # Simplified check for command structure
+        if isinstance(parsed_json, dict) and all(k in parsed_json for k in ["type", "module", "args", "id"]):
             is_json_command = True
             command_data = parsed_json
         else:
+            is_json_command = False
+            command_data = None
             logger.info(f"Message from chat_id {chat_id_str} parsed as JSON but not a valid command structure: {user_message_text}")
 
     except json.JSONDecodeError:
-        logger.info(f"Message from chat_id {chat_id_str} is not JSON, treating as natural language: {user_message_text}")
-        pass # Не JSON, значит, обычное сообщение
-
-    # Добавляем сообщение пользователя в историю
-    current_history.append({"role": MESSAGE_ROLE_USER, "content": user_message_text})
+        is_json_command = False
+        command_data = None
+        # This is expected for natural language, so we just pass
+        pass
 
     if is_json_command and command_data:
         command_type = command_data.get("type")
@@ -287,23 +272,22 @@ def handle_message_impl(message):
             return
     else:
         # Это не JSON-команда или невалидная JSON-команда, значит, обычное текстовое сообщение
-        # 3. Вызов get_katana_response с правильной историей
-        # current_history already includes the user message due to local append after get_history
-        logger.info(f"Calling get_katana_response for chat_id {chat_id_str} with history length {len(current_history)}") # Corrected
+        # 3. Формирование контекста из MemoryManager
+        current_history = memory_manager.get_history(chat_id_str)
+        logger.info(f"Retrieved history for chat_id {chat_id_str} for NLP call. Length: {len(current_history)}")
 
         try:
             # 3. Вызов get_katana_response с правильной историей
             katana_response_text = get_katana_response(current_history)
-            logger.info(f"Katana response for chat_id {chat_id_str}: {katana_response_text}") # Corrected
+            logger.info(f"Katana response for chat_id {chat_id_str}: {katana_response_text}")
 
             # 4. Отправка ответа через bot.reply_to
             bot.reply_to(message, katana_response_text)
-            logger.info(f"Replied to chat_id {chat_id_str}: {katana_response_text}") # Corrected
+            logger.info(f"Replied to chat_id {chat_id_str}: {katana_response_text}")
 
             # 5. Запись исходящего сообщения в состояние
-            # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text}) # Replaced
             memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text})
-            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}. History length: {len(memory_manager.get_history(chat_id_str))}") # Corrected, log current length from manager
+            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}.")
 
         except Exception as e:
             error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')

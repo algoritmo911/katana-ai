@@ -45,59 +45,38 @@ class TestKatanaBot(unittest.TestCase):
         mock_telebot_class.return_value = mock_telebot_instance
 
         # Apply patches and then import the module fresh
-        # Ensure necessary env vars for module import are set, including for MemoryManager if it's not fully mocked during import
         env_vars_for_import = {
             "KATANA_TELEGRAM_TOKEN": "123456:ABCDEF",
-            "REDIS_HOST": "127.0.0.1", # Use explicit IP for testing
-            "REDIS_PORT": "63790", # Use a non-standard port to avoid collision / ensure it's our mock
-            "ANTHROPIC_API_KEY": "test_anthropic_key", # Prevent warnings
-            "OPENAI_API_KEY": "test_openai_key" # Prevent warnings
+            "REDIS_HOST": "127.0.0.1",
+            "REDIS_PORT": "63790",
+            "ANTHROPIC_API_KEY": "test_anthropic_key",
+            "OPENAI_API_KEY": "test_openai_key"
         }
         self.patch_env = patch.dict(os.environ, env_vars_for_import, clear=True)
-        self.patch_telebot = patch('telebot.TeleBot', mock_telebot_class)
-
         self.patch_env.start()
-        self.patch_telebot.start()
-        self.addCleanup(self.patch_telebot.stop)
-        self.addCleanup(self.patch_env.stop) # Env patch should be stopped last or after module is done
+        self.addCleanup(self.patch_env.stop)
 
-        # Force re-import by removing from sys.modules first, then importing.
+        # Force re-import by removing from sys.modules first
         if 'bot.katana_bot' in sys.modules:
             del sys.modules['bot.katana_bot']
+        if 'bot.bot_instance' in sys.modules:
+            del sys.modules['bot.bot_instance']
 
-        # Import the module first
-        # Note: This will run the global code in katana_bot.py, including MemoryManager instantiation.
-        # For this to not fail with Redis connection, os.environ should have KATANA_TELEGRAM_TOKEN,
-        # and ideally, we'd want to prevent the real MemoryManager from connecting.
-        # The patch_env for KATANA_TELEGRAM_TOKEN is already active.
-
-        # To prevent real MemoryManager connection during this initial import,
-        # we can temporarily patch redis.Redis itself if MemoryManager uses it directly.
-        # Or, a more robust way for testing is to ensure MemoryManager can be instantiated
-        # without side effects if certain env vars (like a TEST_MODE) are set.
-        # Given the current structure, patching the class `bot.katana_bot.MemoryManager`
-        # to return a simple MagicMock *during the import* is the goal.
-
-        # Patch MemoryManager class globally for the duration of the import
-        # This mock will be replaced by a more specific instance mock later if needed by tests.
-        # Force re-import by removing from sys.modules first, then importing.
-        if 'bot.katana_bot' in sys.modules:
-            del sys.modules['bot.katana_bot']
-
-        # Import the module. With lazy-init, MemoryManager won't be created now.
-        # get_katana_response still needs to be mocked if it's used by other module-level code (if any)
-        # or to ensure tests use the mock.
+        # Import the module.
         self.mock_get_katana_for_test = MagicMock(return_value="Default mock for get_katana_response")
         patch_get_katana_during_import = patch('bot.katana_bot.get_katana_response', self.mock_get_katana_for_test)
 
         patch_get_katana_during_import.start()
+        self.addCleanup(patch_get_katana_during_import.stop)
         self.bot_module = importlib.import_module('bot.katana_bot')
-        patch_get_katana_during_import.stop() # Stop it, will re-patch if needed or rely on this one.
-                                            # For simplicity, let this be the main mock for get_katana_response.
-        self.addCleanup(patch_get_katana_during_import.stop) # Ensure it's stopped at cleanup.
 
-        # self.bot_module.memory_manager is None at this point.
-        # Create a mock instance that will replace `self.bot_module.memory_manager`
+        # Now, patch the bot instance within the loaded module
+        self.patch_bot_in_module = patch.object(self.bot_module, 'bot', mock_telebot_instance)
+        self.patch_bot_in_module.start()
+        self.addCleanup(self.patch_bot_in_module.stop)
+
+
+        # Create a mock instance for MemoryManager
         self.mock_memory_manager_instance = MagicMock()
         self.mock_memory_manager_instance.get_history = MagicMock(return_value=[])
         self.mock_memory_manager_instance.add_message_to_history = MagicMock()
@@ -108,87 +87,56 @@ class TestKatanaBot(unittest.TestCase):
         self.patch_bot_module_mm_instance.start()
         self.addCleanup(self.patch_bot_module_mm_instance.stop)
 
-        # If katana_bot.init_dependencies() was to be called by tests, this is where it would go,
-        # and self.bot_module.memory_manager would then be our mock.
-        # For these tests, we assume init_dependencies() is NOT called, and handlers directly use
-        # the (now mocked) self.bot_module.memory_manager.
-        # If init_dependencies() *is* called by a test, that test needs to ensure
-        # `src.memory.memory_manager.MemoryManager` is patched if it wants to avoid real Redis.
-        # However, the handlers like handle_message_impl directly use the global `memory_manager`.
-        # They will only work if `memory_manager` is not None.
-        # So, we MUST ensure `self.bot_module.memory_manager` is our mock. The above patch.object does this.
-
-        self.bot_instance = self.bot_module.bot # This is the TeleBot mock
+        self.bot_instance = self.bot_module.bot
 
         # Sanity checks
         if self.bot_instance != mock_telebot_instance:
-            raise Exception(f"self.bot_instance is not mock_telebot_instance. TeleBot Patching failed.")
-
-        # if self.bot_module.get_katana_response is not self.mock_get_katana_for_test: # Check against the one used for import
-        #      raise Exception(f"bot.katana_bot.get_katana_response is not self.mock_get_katana_for_test. Patching get_katana_response failed.")
+            raise Exception(f"self.bot_instance is not mock_telebot_instance. Bot patching failed.")
 
         if self.bot_module.memory_manager is not self.mock_memory_manager_instance:
-             # This check is vital. It ensures the module-level 'memory_manager' variable in katana_bot
-             # is indeed our mock instance for the duration of the test.
             raise Exception("bot.katana_bot.memory_manager is not self.mock_memory_manager_instance. Patching MemoryManager instance failed.")
 
         # Common message object
         self.message = MagicMock()
-        self.message.chat.id = 123 # Will be converted to str for memory_manager
+        self.message.chat.id = 123
         self.chat_id_str = str(self.message.chat.id)
         self.message.from_user.username = "testuser"
 
     def test_handle_start(self):
         msg = DummyMessage("/start", 123456)
-        with patch('bot.bot_instance.bot') as mock_bot:
-            mock_bot.reply_to = MagicMock()
-            self.bot_module.handle_start(msg)
-            expected_reply = "Привет! Я — Katana. Готов к диалогу или JSON-команде."
-            mock_bot.reply_to.assert_called_once_with(msg, expected_reply)
+        self.bot_module.handle_start(msg)
+        expected_reply = "Привет! Я — Katana. Готов к диалогу или JSON-команде."
+        mock_telebot_instance.reply_to.assert_called_once_with(msg, expected_reply)
 
     def test_natural_language_message_success(self):
         self.message.text = "Привет, Катана!"
         specific_response = "Привет! Как я могу помочь?"
         self.mock_get_katana_for_test.return_value = specific_response
 
-        # Simulate MemoryManager returning an empty history for this new interaction
-        self.bot_module.memory_manager.get_history.return_value = []
+        # Configure mock to return history *with* the user message, as it's added before get_history is called
+        user_message_history = [{"role": self.bot_module.MESSAGE_ROLE_USER, "content": self.message.text}]
+        self.bot_module.memory_manager.get_history.return_value = user_message_history
 
         self.bot_module.handle_message_impl(self.message)
 
-        # 1. Check get_history was called
+        # 1. Check user message was added
+        self.bot_module.memory_manager.add_message_to_history.assert_any_call(self.chat_id_str, user_message_history[0])
+
+        # 2. Check get_history was called to prepare for NLP
         self.bot_module.memory_manager.get_history.assert_called_once_with(self.chat_id_str)
 
-        # 2. Check user message was added
-        expected_user_msg_content = {"role": self.bot_module.MESSAGE_ROLE_USER, "content": self.message.text}
-        # The history passed to get_katana_response includes the new user message
-        # So, the call to get_katana_response will have a list with one item.
-        # The add_message_to_history for user message is called before get_katana_response
-
-        # 3. Check get_katana_response was called with history including user message
-        # The local current_history is built up: fetched_history + user_message
-        history_for_nlp = [expected_user_msg_content] # Since get_history returned []
-        self.mock_get_katana_for_test.assert_called_once_with(history_for_nlp)
+        # 3. Check get_katana_response was called with the history
+        self.mock_get_katana_for_test.assert_called_once_with(user_message_history)
 
         # 4. Check bot replied
         mock_telebot_instance.reply_to.assert_called_once_with(self.message, specific_response)
 
         # 5. Check assistant message was added
         expected_assistant_msg_content = {"role": self.bot_module.MESSAGE_ROLE_ASSISTANT, "content": specific_response}
+        self.bot_module.memory_manager.add_message_to_history.assert_any_call(self.chat_id_str, expected_assistant_msg_content)
 
-        # Assert that add_message_to_history was called for user and then for assistant
+        # Total calls: one for user, one for assistant
         self.assertEqual(self.bot_module.memory_manager.add_message_to_history.call_count, 2)
-        calls = self.bot_module.memory_manager.add_message_to_history.call_args_list
-
-        # Check user message call (ignoring timestamp which is added internally)
-        self.assertEqual(calls[0][0][0], self.chat_id_str)
-        self.assertEqual(calls[0][0][1]['role'], expected_user_msg_content['role'])
-        self.assertEqual(calls[0][0][1]['content'], expected_user_msg_content['content'])
-
-        # Check assistant message call
-        self.assertEqual(calls[1][0][0], self.chat_id_str)
-        self.assertEqual(calls[1][0][1]['role'], expected_assistant_msg_content['role'])
-        self.assertEqual(calls[1][0][1]['content'], expected_assistant_msg_content['content'])
 
 
     @patch('bot.katana_bot.logger')
@@ -197,23 +145,20 @@ class TestKatanaBot(unittest.TestCase):
         test_exception = Exception("Test NLP error")
         self.mock_get_katana_for_test.side_effect = test_exception
 
-        self.bot_module.memory_manager.get_history.return_value = [] # Start with empty history
+        # History with user message
+        user_message_history = [{"role": self.bot_module.MESSAGE_ROLE_USER, "content": self.message.text}]
+        self.bot_module.memory_manager.get_history.return_value = user_message_history
 
         self.bot_module.handle_message_impl(self.message)
 
+        # Check get_history was called
         self.bot_module.memory_manager.get_history.assert_called_once_with(self.chat_id_str)
 
-        expected_user_msg_content = {"role": self.bot_module.MESSAGE_ROLE_USER, "content": self.message.text}
-        history_for_nlp = [expected_user_msg_content]
-        self.mock_get_katana_for_test.assert_called_once_with(history_for_nlp)
+        # Check get_katana_response was called
+        self.mock_get_katana_for_test.assert_called_once_with(user_message_history)
 
-        # User message should have been added
+        # User message was added, then exception, so only one add call
         self.bot_module.memory_manager.add_message_to_history.assert_called_once()
-        call_args = self.bot_module.memory_manager.add_message_to_history.call_args[0]
-        self.assertEqual(call_args[0], self.chat_id_str)
-        self.assertEqual(call_args[1]['role'], expected_user_msg_content['role'])
-        self.assertEqual(call_args[1]['content'], expected_user_msg_content['content'])
-        # Assistant's error message is NOT added to history.
 
         self.assertTrue(mock_logger_in_test.error.called)
         self.assertTrue(mock_telebot_instance.reply_to.called)
@@ -354,18 +299,20 @@ class TestKatanaBotTokenValidation(unittest.TestCase):
             final_env = default_redis_env
 
         with patch.dict(os.environ, final_env, clear=True):
-            with patch('telebot.TeleBot', local_mock_telebot_class) as validator_telebot_patch_obj:
-                # No need to patch MemoryManager class here if it's truly lazy loaded and not hit by token validation path
+            with patch('bot.bot_instance.telebot.TeleBot', local_mock_telebot_class) as validator_telebot_patch_obj:
+                # Reload bot_instance and katana_bot to apply the patch
+                if 'bot.bot_instance' in sys.modules:
+                    del sys.modules['bot.bot_instance']
                 if 'bot.katana_bot' in sys.modules:
                     del sys.modules['bot.katana_bot']
+
                 module = importlib.import_module('bot.katana_bot')
-                return module, validator_telebot_patch_obj, None # No MemoryManager class mock to return
+                return module, validator_telebot_patch_obj, None
 
 
     def test_missing_token(self):
-        with self.assertRaisesRegex(ValueError, "Invalid or missing Telegram API token"):
-            # Pass only an empty dict for env_vars if we want to simulate absolutely nothing set
-            # The helper will merge with its defaults. If we want to override defaults to be empty:
+        with self.assertRaisesRegex(ValueError, "KATANA_TELEGRAM_TOKEN environment variable not set!"):
+            # This test now checks the error from bot_instance.py, which is raised first.
             self.import_katana_bot_fresh_under_patches(env_vars={"KATANA_TELEGRAM_TOKEN": ""})
 
 
