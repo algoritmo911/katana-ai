@@ -1,0 +1,49 @@
+{
+  "tables": [
+    {
+      "name": "nodes",
+      "columns": [
+        {"name": "id", "type": "uuid", "isPrimaryKey": true, "isIdentity": true, "defaultValue": "gen_random_uuid()"},
+        {"name": "node_type", "type": "text", "isNullable": false, "comment": "e.g., 'MemoryEvent', 'Entity', 'Author', 'Narrative', 'LogicalFlow'"},
+        {"name": "attributes", "type": "jsonb", "isNullable": true, "comment": "Stores specific attributes of the node, like the content of a MemoryEvent, or the name of an Entity"},
+        {"name": "chronos_id", "type": "text", "isNullable": true, "isUnique": true, "comment": "A unique, deterministic hash for comparing events across different temporal streams."},
+        {"name": "created_at", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Represents a single node in the memory graph. Can be an event, entity, user, etc."
+    },
+    {
+      "name": "edges",
+      "columns": [
+        {"name": "id", "type": "uuid", "isPrimaryKey": true, "isIdentity": true, "defaultValue": "gen_random_uuid()"},
+        {"name": "source_node_id", "type": "uuid", "isNullable": false, "foreignKey": {"table": "nodes", "column": "id"}},
+        {"name": "target_node_id", "type": "uuid", "isNullable": false, "foreignKey": {"table": "nodes", "column": "id"}},
+        {"name": "edge_type", "type": "text", "isNullable": false, "comment": "e.g., 'happened_before', 'caused', 'is_part_of', 'influences'"},
+        {"name": "weight", "type": "float8", "isNullable": true, "comment": "The strength or significance of the edge (e.g., for causality or influence)."},
+        {"name": "attributes", "type": "jsonb", "isNullable": true, "comment": "Any other metadata about the edge."},
+        {"name": "created_at", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Represents a directed edge between two nodes in the memory graph, defining their relationship."
+    },
+    {
+      "name": "mem_narrative",
+      "columns": [
+        {"name": "id", "type": "uuid", "isPrimaryKey": true, "isIdentity": true, "defaultValue": "gen_random_uuid()"},
+        {"name": "title", "type": "text", "isNullable": false, "comment": "A human-readable title for the narrative."},
+        {"name": "summary", "type": "text", "isNullable": true, "comment": "A generated summary of the narrative's events."},
+        {"name": "involved_nodes", "type": "uuid[]", "isNullable": true, "comment": "An array of node IDs that are part of this narrative."},
+        {"name": "start_time", "type": "timestamptz", "isNullable": false},
+        {"name": "end_time", "type": "timestamptz", "isNullable": false},
+        {"name": "created_at", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Stores consolidated stories or cases derived from sequences of memory events."
+    }
+  ],
+  "notes": [
+    "This schema represents a graph database structure built on top of a relational database (Supabase).",
+    "Indexes should be created on `nodes(node_type)`, `nodes(chronos_id)`, `edges(source_node_id)`, `edges(target_node_id)`, and `edges(edge_type)` to ensure efficient querying.",
+    "The application logic in `memory_fabric.py` will be responsible for creating and linking nodes and edges correctly."
+  ]
+}

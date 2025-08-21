@@ -36,7 +36,7 @@ def test_add_dialogue_success(memory_core):
         user_id="test_user", command_name="test_cmd", input_data={},
         output_data={}, duration=0.1, success=True
     )
-    assert result == [{"id": 1, "user_id": "test_user"}]
+    assert result == {"id": 1, "user_id": "test_user"}
     assert memory_core.client.table.call_args_list[0].args[0] == "command_logs"
 
 
@@ -64,7 +64,7 @@ def test_add_dialogue_vectorization_failure(memory_core, caplog):
     with caplog.at_level("WARNING"):
         result = memory_core.add_dialogue("user1", "cmd", {"in": "a"}, {"out": "b"}, 0.1, True)
         # The original dialogue data should still be returned
-        assert result == [{"id": 123}]
+        assert result == {"id": 123}
         assert "Could not generate embedding for dialogue_id: 123" in caplog.text
 
     mock_vectorize.assert_called_once()

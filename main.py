@@ -10,6 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from katana_bot import KatanaBot
 from katana.logging_config import setup_logging
+from katana.memory.core import MemoryCore
 
 # Configure logging
 setup_logging(level="DEBUG")
@@ -19,8 +20,12 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="KatanaBot API", version="0.1.0")
 START_TIME = time.time()
 
-# Initialize KatanaBot (consider how to manage state if multiple worker processes are used)
-katana_bot_instance = KatanaBot("WebhookKatanaBot")
+# Initialize MemoryCore
+memory_core = MemoryCore()
+
+# Initialize KatanaBot with MemoryCore
+katana_bot_instance = KatanaBot("WebhookKatanaBot", memory=memory_core)
+
 
 # --- Telegram Bot Setup ---
 # It's better to get this from environment variables or a config file
@@ -128,7 +133,7 @@ async def telegram_webhook(request: Request):
             logger.info(f"Handling command '{command_text}' for chat_id {chat_id}")
 
             # Call KatanaBot's handle_command, which now returns a response string
-            response_text = katana_bot_instance.handle_command(command_text)
+            response_text = katana_bot_instance.handle_command(command_text, chat_id)
 
             if response_text:
                 logger.info(f"Sending response to chat_id {chat_id}: {response_text}")

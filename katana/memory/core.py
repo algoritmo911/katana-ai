@@ -6,6 +6,8 @@ from supabase import create_client, Client
 from typing import List, Dict, Any, Optional
 
 from katana.services.vectorization import VectorizationService
+from katana.memory.memory_fabric import MemoryFabric
+from katana.memory.graph_builder import GraphBuilder
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -14,12 +16,13 @@ class MemoryCore:
     """
     A class to handle all interactions with the Supabase database.
     This class provides a complete CRUD interface for all memory-related tables.
+    It also maintains a temporary in-memory cache for dialogue history per user session
+    and orchestrates the building of the memory graph.
     """
     def __init__(self):
         """
-        Initializes the MemoryCore client.
+        Initializes the MemoryCore client, the in-memory cache, and the graph components.
         It reads the Supabase URL and Key from the environment variables.
-        If they are not set, the client will not be functional.
         """
         supabase_url: Optional[str] = os.getenv("SUPABASE_URL")
         supabase_key: Optional[str] = os.getenv("SUPABASE_KEY")
@@ -30,9 +33,62 @@ class MemoryCore:
             self.client = None
             logger.warning(
                 "SUPABASE_URL and/or SUPABASE_KEY environment variables are not set. "
-                "MemoryCore will not be functional."
+                "MemoryCore will not be functional for database operations."
             )
+
+        # Initialize services
         self.vectorization_service = VectorizationService()
+
+        # Initialize in-memory cache
+        self.cache_history: Dict[str, List[Dict[str, Any]]] = {}
+        logger.info("In-memory cache initialized.")
+
+        # Initialize graph components
+        self.memory_fabric = MemoryFabric(self.client)
+        self.graph_builder = GraphBuilder(self.memory_fabric)
+        logger.info("Memory Fabric and Graph Builder initialized.")
+
+
+    def add_to_cache(self, user_id: str, dialogue: Dict[str, Any]):
+        """
+        Adds a dialogue entry to the in-memory cache for a specific user.
+
+        Args:
+            user_id: The ID of the user.
+            dialogue: The dialogue entry to cache.
+        """
+        if user_id not in self.cache_history:
+            self.cache_history[user_id] = []
+        self.cache_history[user_id].append(dialogue)
+        logger.debug(f"Added dialogue to cache for user_id: {user_id}")
+
+    def get_from_cache(self, user_id: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Retrieves the dialogue history for a user from the in-memory cache.
+
+        Args:
+            user_id: The ID of the user.
+
+        Returns:
+            A list of dialogue entries, or None if the user has no history in the cache.
+        """
+        return self.cache_history.get(user_id)
+
+    def clear_cache(self, user_id: str) -> bool:
+        """
+        Clears the dialogue history for a specific user from the in-memory cache.
+
+        Args:
+            user_id: The ID of the user.
+
+        Returns:
+            True if the cache was cleared, False if the user was not found.
+        """
+        if user_id in self.cache_history:
+            del self.cache_history[user_id]
+            logger.info(f"Cleared cache for user_id: {user_id}")
+            return True
+        return False
 
     def _handle_response(self, response, operation_name: str):
         """
@@ -65,7 +121,10 @@ class MemoryCore:
         tags: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
-        Adds a new dialogue entry to the command_logs table.
+        Adds a new dialogue entry. This involves:
+        1. Storing it in the command_logs table (long-term memory).
+        2. Adding it to the in-memory cache (short-term memory).
+        3. Processing it to build the memory graph (structural memory).
 
         Args:
             user_id: The ID of the user.
@@ -79,14 +138,11 @@ class MemoryCore:
         Returns:
             The newly created dialogue entry, or None if an error occurred.
         """
-        if not self.client:
-            logger.error("Supabase client not initialized. Cannot store log.")
-            return None
         if tags is None:
             tags = []
 
         log_entry = {
-            "user_id": user_id,
+            "user_id": str(user_id),
             "command_name": command_name,
             "input_data": json.dumps(input_data) if input_data is not None else None,
             "output_data": json.dumps(output_data) if output_data is not None else None,
@@ -95,6 +151,19 @@ class MemoryCore:
             "tags": tags,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+
+        # Add to in-memory cache
+        self.add_to_cache(str(user_id), log_entry)
+
+        # Process and add to memory graph
+        # This is done regardless of whether the DB is available, to keep the graph consistent with the cache
+        self.graph_builder.process_dialogue_event(log_entry)
+
+        # Add to Supabase if client is available
+        if not self.client:
+            logger.warning("Supabase client not initialized. Dialogue only stored in cache and processed for graph.")
+            return log_entry # Return the log entry even if not saved to DB
+
         try:
             response = self.client.table("command_logs").insert(log_entry).execute()
             dialogue_data = self._handle_response(response, "add_dialogue")
@@ -107,7 +176,8 @@ class MemoryCore:
                     self.store_embedding(dialogue_id, text_to_vectorize, embedding)
                 else:
                     logger.warning(f"Could not generate embedding for dialogue_id: {dialogue_id}")
-            return dialogue_data
+            # The response from Supabase might have more fields (like 'id'), so we prefer returning that
+            return dialogue_data[0] if dialogue_data else log_entry
         except Exception as e:
             logger.error(f"Unexpected error storing log: {e}", exc_info=True)
             return None
