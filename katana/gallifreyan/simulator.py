@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 """
 The Quantum State Simulator (Python Prototype)
 
@@ -10,7 +11,7 @@ import copy
 import random
 from typing import Any, Dict, List, Tuple
 
-from .ast import GateApplication, HandshakeDeclaration, Measurement, SimulationBlueprint
+from .ast import GateApplication, HandshakeDeclaration, Measurement, SimulationBlueprint, InterventionGate
 
 # State is a list of (value, probability) tuples. Probabilities must sum to 1.0
 ProbabilisticState = List[Tuple[Any, float]]
@@ -54,6 +55,29 @@ class QuantumStateSimulator:
             self._apply_tardis_gate(gate_op.target_qudit)
         else:
             raise ValueError(f"Unknown gate: {gate_op.gate_name}")
+
+    def execute_intervention(self, intervention_op: "InterventionGate"):
+        """
+        Forces a qudit into a specific state and triggers the shockwave.
+        This is a forced, deterministic measurement.
+        """
+        target_qudit = intervention_op.target_qudit
+        forced_value = intervention_op.force_state_to
+
+        history = self.qudits.get(target_qudit)
+        if not history:
+            raise ValueError(f"Cannot intervene on unknown qudit: {target_qudit}")
+
+        latest_ts_str = max(history.keys())
+
+        print(f"  [Intervention] Forcing {target_qudit} to '{forced_value}'")
+
+        # Collapse the wave function to the forced value
+        self.qudits[target_qudit][latest_ts_str] = [(forced_value, 1.0)]
+
+        # --- Measurement Shockwave ---
+        # The intervention acts as a measurement, so it triggers entanglements.
+        self._resolve_entanglements(target_qudit, forced_value, set())
 
     def _apply_tardis_gate(self, target_qudit: str):
         """
@@ -142,10 +166,6 @@ class QuantumStateSimulator:
 
                 latest_ts_str = max(history.keys())
 
-                # If the other qudit is already collapsed, do nothing
-                if len(history[latest_ts_str]) == 1:
-                    continue
-
                 # Simple entanglement rule: the other qudit collapses to a state
                 # derived from the source qudit's measured value.
                 entangled_value = f"entangled_from({source_qudit}={source_value})"
@@ -154,5 +174,6 @@ class QuantumStateSimulator:
 
                 self.qudits[other_qudit][latest_ts_str] = [(entangled_value, 1.0)]
 
-                # Continue the shockwave
-                self._resolve_entanglements(other_qudit, entangled_value, resolved_in_this_shockwave)
+                # For this phase, we stop the shockwave after one level to keep the demo clean.
+                # A full implementation would require more sophisticated rules to prevent runaway cascades.
+                # self._resolve_entanglements(other_qudit, entangled_value, resolved_in_this_shockwave)

@@ -49,10 +49,17 @@ class Measurement:
 
 
 @dataclass
+class InterventionGate:
+    """Represents an external intervention to force a qudit into a state."""
+    target_qudit: str
+    force_state_to: Any
+
+
+@dataclass
 class Objective:
     """Defines the goal of the simulation."""
     name: str
-    operations: List[Union[GateApplication, Measurement]] = field(default_factory=list)
+    operations: List[Union[GateApplication, Measurement, InterventionGate]] = field(default_factory=list)
 
 
 @dataclass

@@ -8,7 +8,7 @@ the QuantumStateSimulator can execute.
 """
 from typing import List, Tuple, Any, Dict
 
-from .ast import GateApplication, Measurement, SimulationBlueprint
+from .ast import GateApplication, Measurement, SimulationBlueprint, InterventionGate
 from .simulator import QuantumStateSimulator
 
 # A circuit is a list of (command_name, command_object) tuples
@@ -39,6 +39,8 @@ class Compiler:
                     circuit.append(("execute_gate", op))
                 elif isinstance(op, Measurement):
                     circuit.append(("execute_measurement", op))
+                elif isinstance(op, InterventionGate):
+                    circuit.append(("execute_intervention", op))
                 else:
                     raise TypeError(f"Unknown operation type in objective: {type(op)}")
 
@@ -55,6 +57,8 @@ class Compiler:
                 simulator.load_blueprint(obj)
             elif command == "execute_gate":
                 simulator.execute_gate(obj)
+            elif command == "execute_intervention":
+                simulator.execute_intervention(obj)
             elif command == "execute_measurement":
                 result = simulator.execute_measurement(obj)
                 results[obj.result_name] = result

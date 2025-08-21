@@ -8,6 +8,7 @@ from katana.gallifreyan.ast import (
     GateApplication,
     Measurement,
     HandshakeDeclaration,
+    InterventionGate,
 )
 from katana.gallifreyan.compiler import Compiler
 from katana.gallifreyan.simulator import QuantumStateSimulator
@@ -87,6 +88,25 @@ class TestQuantumStateSimulator(unittest.TestCase):
         self.assertEqual(self.simulator.qudits["Q_B"]["t_0"][0][1], 1.0) # Probability is 1.0
         self.assertEqual(self.simulator.qudits["Q_B"]["t_0"][0][0], "entangled_from(Q_A=A)")
 
+    def test_execute_intervention(self):
+        """Tests that an intervention forces a state and causes a shockwave."""
+        self.blueprint.qudits = [
+            TemporalQuditDeclaration(name="Q_A", initial_states={"t_0": "A"}),
+            TemporalQuditDeclaration(name="Q_B", initial_states={"t_0": ["B1", "B2"]})
+        ]
+        self.blueprint.handshakes = [HandshakeDeclaration(qudit1="Q_A", qudit2="Q_B")]
+        self.simulator.load_blueprint(self.blueprint)
+
+        # Action: Intervene on Q_A
+        intervention_op = InterventionGate(target_qudit="Q_A", force_state_to="Z")
+        self.simulator.execute_intervention(intervention_op)
+
+        # Post-condition check: Q_A is forced to Z
+        self.assertEqual(self.simulator.qudits["Q_A"]["t_0"], [("Z", 1.0)])
+        # Post-condition check: Entangled qudit Q_B is also collapsed
+        self.assertEqual(len(self.simulator.qudits["Q_B"]["t_0"]), 1)
+        self.assertEqual(self.simulator.qudits["Q_B"]["t_0"][0][0], "entangled_from(Q_A=Z)")
+
 
 class TestCompiler(unittest.TestCase):
 
@@ -99,17 +119,18 @@ class TestCompiler(unittest.TestCase):
                 name="CompileObjective",
                 operations=[
                     GateApplication(gate_name="TARDIS_Gate", target_qudit="Q1"),
+                    InterventionGate(target_qudit="Q2", force_state_to="Z"),
                     Measurement(target_qudit="Q1")
                 ]
             )
         )
         circuit = compiler.compile(blueprint)
-        self.assertEqual(len(circuit), 3)
+        self.assertEqual(len(circuit), 4)
         self.assertEqual(circuit[0][0], "load_blueprint")
         self.assertEqual(circuit[1][0], "execute_gate")
-        self.assertEqual(circuit[2][0], "execute_measurement")
-        self.assertIsInstance(circuit[1][1], GateApplication)
-        self.assertIsInstance(circuit[2][1], Measurement)
+        self.assertEqual(circuit[2][0], "execute_intervention")
+        self.assertEqual(circuit[3][0], "execute_measurement")
+        self.assertIsInstance(circuit[2][1], InterventionGate)
 
 if __name__ == "__main__":
     unittest.main()

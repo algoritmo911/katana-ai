@@ -66,16 +66,29 @@ class Incarnator:
                 qudits.append(qudit)
 
         # --- Entanglement Weaver Logic ---
+        # A map to define the 'main' property for a given node type for entanglement
+        PRIMARY_PROPERTY_MAP = {
+            "Person": "mood",
+            "Key": "type",
+            "Door": "state",
+        }
+
         for rel in graph_data["relationships"]:
-            # Entangle every property of the source node with every property of the target node.
-            # This is a simplification; a real system would have more specific rules.
-            from_node_props = graph_data["nodes"][rel["from"]]["properties"].keys()
-            to_node_props = graph_data["nodes"][rel["to"]]["properties"].keys()
-            for from_prop in from_node_props:
-                for to_prop in to_node_props:
+            from_node_id = rel["from"]
+            to_node_id = rel["to"]
+            from_node_data = graph_data["nodes"][from_node_id]
+            to_node_data = graph_data["nodes"][to_node_id]
+
+            # Find the primary property for each node in the relationship
+            from_prop = next((p for t, p in PRIMARY_PROPERTY_MAP.items() if t in from_node_data["labels"]), None)
+            to_prop = next((p for t, p in PRIMARY_PROPERTY_MAP.items() if t in to_node_data["labels"]), None)
+
+            if from_prop and to_prop:
+                # Check if the properties actually exist for these nodes before creating a handshake
+                if from_prop in from_node_data["properties"] and to_prop in to_node_data["properties"]:
                     handshake = HandshakeDeclaration(
-                        qudit1=f"{rel['from']}_{from_prop}",
-                        qudit2=f"{rel['to']}_{to_prop}"
+                        qudit1=f"{from_node_id}_{from_prop}",
+                        qudit2=f"{to_node_id}_{to_prop}"
                     )
                     handshakes.append(handshake)
 
