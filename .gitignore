@@ -1,0 +1,15 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+
+# Log files
+logs/
+
+# Temporary and user-specific data
+voice_temp/
+commands/
+user_data/
+remote_db.json
+
+# Environment variables
+.env

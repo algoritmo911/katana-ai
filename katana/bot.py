@@ -9,6 +9,8 @@ import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
 from katana.core.user_profile import UserProfile # Added for user personalization
 from katana.adapters.local_file_adapter import LocalFileAdapter
+from katana.diagnostics.service_map import get_default_service_map
+from katana.diagnostics.health_checker import HealthChecker
 
 # Load environment variables from .env file
 load_dotenv()
@@ -124,6 +126,24 @@ def handle_mind_clearing(command_data, chat_id):
     # TODO: Add more specific logging based on args if needed
     log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
     # bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
+
+# --- Diagnostics Setup ---
+service_map = get_default_service_map()
+health_checker = HealthChecker(service_map)
+# Run an initial check and start periodic checks
+health_checker.run_all_checks()
+health_checker.start_periodic_checks(interval_seconds=60)
+
+# --- Bot Command Handlers ---
+@bot.message_handler(commands=['health'])
+def handle_health_check(message):
+    """Handles the /health command, providing a system health report."""
+    log_local_bot_event(f"Received /health command from {get_username(message)}")
+    # Run a fresh check before reporting
+    health_checker.run_all_checks()
+    report = health_checker.get_system_status_report()
+    bot.reply_to(message, f"```\n{report}\n```", parse_mode="Markdown")
+
 
 # This will be the new text handler
 @bot.message_handler(commands=['recommendations'])

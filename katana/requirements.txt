@@ -1,3 +1,5 @@
 pyTelegramBotAPI
 openai
 python-dotenv
+networkx
+requests
