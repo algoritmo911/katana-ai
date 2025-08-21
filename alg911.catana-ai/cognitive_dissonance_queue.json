@@ -1,0 +1,24 @@
+[
+  {
+    "id": "dissonance-001",
+    "timestamp": "2025-08-21T14:30:00Z",
+    "summary": "Conflicting data for 'Rome' founding date.",
+    "details": {
+      "node_id": "ent_rome",
+      "property": "founding_date",
+      "conflicting_values": [
+        {
+          "value": "753 BC",
+          "source": "Livy_v1",
+          "confidence": 0.8
+        },
+        {
+          "value": "814 BC",
+          "source": "Timaeus_v3",
+          "confidence": 0.6
+        }
+      ]
+    },
+    "status": "unresolved"
+  }
+]
