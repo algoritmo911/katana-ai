@@ -7,3 +7,4 @@ pandas
 graphviz
 kafka-python
 psycopg2-binary
+redis
