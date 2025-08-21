@@ -2,6 +2,7 @@ import requests
 import threading
 import time
 from katana.diagnostics.service_map import ServiceMap
+from katana.cassandra.observers import hydra_observer, memory_weaver_observer
 
 class HealthChecker:
     def __init__(self, service_map: ServiceMap):
@@ -20,14 +21,31 @@ class HealthChecker:
             self.service_map.graph.nodes[service_name]['status'] = "UNKNOWN"
             return "UNKNOWN"
 
+        start_time = time.time()
         try:
             response = requests.get(url, timeout=5)
+            latency = round((time.time() - start_time) * 1000) # Latency in ms
+
             if response.status_code == 200:
                 status = "OK"
+                # On success, gather metrics from all sources
+                all_metrics = {
+                    "latency": latency,
+                    "error_rate": 0.0, # Success means error rate is 0 for this check
+                }
+                all_metrics.update(hydra_observer.get_infra_metrics(service_name))
+                all_metrics.update(memory_weaver_observer.get_knowledge_graph_metrics(service_name))
+                self.service_map.update_service_metrics(service_name, all_metrics)
             else:
                 status = f"FAILED (HTTP {response.status_code})"
+                # On failure, we can still record latency, but other metrics might be stale
+                self.service_map.update_service_metrics(service_name, {"latency": latency, "error_rate": 1.0})
+
         except requests.RequestException as e:
+            latency = round((time.time() - start_time) * 1000)
             status = f"FAILED ({type(e).__name__})"
+            # On exception, we can still record latency
+            self.service_map.update_service_metrics(service_name, {"latency": latency, "error_rate": 1.0})
 
         self.service_map.graph.nodes[service_name]['status'] = status
         return status
@@ -42,9 +60,10 @@ class HealthChecker:
         report_lines = ["System Health Status:"]
         failed_services = []
 
-        for service, data in self.service_map.graph.nodes(data=True):
+        for service, data in sorted(self.service_map.graph.nodes(data=True)):
             status = data.get('status', 'UNKNOWN')
-            report_lines.append(f"- {service}: {status}")
+            metrics_str = ", ".join(f"{k}={v}" for k, v in data.get('metrics', {}).items())
+            report_lines.append(f"- {service}: {status} [{metrics_str}]")
             if "FAILED" in status:
                 failed_services.append(service)
 

@@ -11,6 +11,7 @@ from katana.core.user_profile import UserProfile # Added for user personalizatio
 from katana.adapters.local_file_adapter import LocalFileAdapter
 from katana.diagnostics.service_map import get_default_service_map
 from katana.diagnostics.health_checker import HealthChecker
+from katana.cassandra.precog_engine import PrecogEngine
 
 # Load environment variables from .env file
 load_dotenv()
@@ -127,14 +128,65 @@ def handle_mind_clearing(command_data, chat_id):
     log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
     # bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
 
-# --- Diagnostics Setup ---
-service_map = get_default_service_map()
-health_checker = HealthChecker(service_map)
+# --- Diagnostics & Cassandra Setup ---
+# The ServiceMap acts as our Digital Twin
+digital_twin = get_default_service_map()
+health_checker = HealthChecker(digital_twin)
+precog_engine = PrecogEngine(digital_twin)
+
 # Run an initial check and start periodic checks
 health_checker.run_all_checks()
 health_checker.start_periodic_checks(interval_seconds=60)
 
+
+def format_pft_for_telegram(pft: dict) -> str:
+    """Formats a Probabilistic Future Tree into a human-readable string."""
+    root = pft.get("root_node", {})
+    children = root.get("children", [])
+
+    if not children:
+        return "🔮 No significant future events predicted. The system appears stable."
+
+    report_lines = ["🔮 Cassandra's Foresight:", "The following future states are considered possible:"]
+
+    for i, node in enumerate(children, 1):
+        ts = datetime.fromisoformat(node['timestamp']).strftime('%Y-%m-%d %H:%M:%S UTC')
+        prob = node['probability'] * 100
+        source = node['prediction_source']
+
+        report_lines.append(f"\n*Prediction {i} (p={prob:.1f}%)* at *{ts}*")
+        report_lines.append(f"  - Source: `{source}`")
+
+        for service, change in node['state_change'].items():
+            status = change.get('status')
+            report_lines.append(f"  - Event: Service `{service}` status will become `{status}`.")
+
+        # Show cascade failures if any
+        for cascade_child in node.get("children", []):
+            cas_prob = cascade_child['probability'] * 100
+            cas_source = cascade_child['prediction_source']
+            cas_service, cas_change = list(cascade_child['state_change'].items())[0]
+            cas_status = cas_change.get('status')
+            report_lines.append(f"    - Subsequent Event (p={cas_prob:.1f}%): `{cas_service}` status will become `{cas_status}`.")
+
+    return "\n".join(report_lines)
+
+
 # --- Bot Command Handlers ---
+@bot.message_handler(commands=['predict'])
+def handle_predict(message):
+    """Handles the /predict command, providing a PFT report."""
+    log_local_bot_event(f"Received /predict command from {get_username(message)}")
+
+    # Run a fresh health check to ensure the digital twin is up-to-date
+    health_checker.run_all_checks()
+
+    pft = precog_engine.generate_pft()
+    report = format_pft_for_telegram(pft)
+
+    bot.reply_to(message, report, parse_mode="Markdown")
+
+
 @bot.message_handler(commands=['health'])
 def handle_health_check(message):
     """Handles the /health command, providing a system health report."""
@@ -142,6 +194,7 @@ def handle_health_check(message):
     # Run a fresh check before reporting
     health_checker.run_all_checks()
     report = health_checker.get_system_status_report()
+    # The report format from health_checker is already pre-formatted with metrics
     bot.reply_to(message, f"```\n{report}\n```", parse_mode="Markdown")
 
 

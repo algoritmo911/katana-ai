@@ -5,7 +5,22 @@ class ServiceMap:
         self.graph = nx.DiGraph()
 
     def add_service(self, service_name, health_check_url):
-        self.graph.add_node(service_name, url=health_check_url, status="UNKNOWN")
+        self.graph.add_node(
+            service_name,
+            url=health_check_url,
+            status="UNKNOWN",
+            metrics={
+                "cpu": 0.0,
+                "memory": 0.0,
+                "latency": 0.0,
+                "error_rate": 0.0,
+            }
+        )
+
+    def update_service_metrics(self, service_name, new_metrics):
+        """Updates the metrics for a given service."""
+        if service_name in self.graph:
+            self.graph.nodes[service_name]['metrics'].update(new_metrics)
 
     def add_dependency(self, service_from, service_to):
         self.graph.add_edge(service_from, service_to)
