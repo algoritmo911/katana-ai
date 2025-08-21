@@ -1,134 +1,172 @@
-# Import the mock service functions
-# We need to adjust the path to import from the parent directory's lib
 import sys
 import os
+import requests # For n8n integration
+import json
+
+# Adjust path to import from the parent directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib import memory, nlp, telegram, admin_notifications
+from schemas import Plan, Command, CommandType
 
 class TaskExecutor:
     """
-    Executes tasks based on a given goal.
+    Executes a plan by sequentially running its commands. It manages the
+    data flow between commands using an execution context.
     """
     def __init__(self):
         """
-        Initializes the TaskExecutor and its dispatch table.
-        The dispatch table maps a goal to a sequence of functions to be executed.
+        Initializes the TaskExecutor and its command registry.
+        The registry maps command names to their handler methods.
         """
-        self.dispatch_table = {
-            'answer_user_question': [
-                self._retrieve_context,
-                self._generate_answer,
-                self._send_user_message
-            ],
-            'notify_admin_about_crash': [
-                self._format_report,
-                self._send_admin_alert
-            ],
-            'notify_admin_about_db_failure': [
-                self._format_report,
-                self._send_admin_alert
-            ],
-            'investigate_performance_issue': [
-                self._format_report,
-                self._send_admin_alert
-            ]
+        self.command_registry = {
+            # Local Python function mappings
+            "memory.retrieve_full_context": self._retrieve_context,
+            "nlp.generate_answer": self._generate_answer,
+            "telegram.send_message": self._send_user_message,
+            "admin_notifications.format_error_report": self._format_report,
+            "admin_notifications.send_admin_notification": self._send_admin_alert,
+
+            # n8n webhook execution mapping
+            "n8n.webhook": self._execute_n8n_webhook
         }
         self.execution_context = {}
 
-    def execute_goal(self, goal: dict):
+    def execute_plan(self, plan: Plan):
         """
-        Executes the highest priority goal.
+        Executes the given plan step by step.
         """
-        goal_type = goal.get('goal')
-        print(f"\n--- EXECUTING GOAL: {goal_type} ---")
-        task_chain = self.dispatch_table.get(goal_type)
+        print(f"\n--- EXECUTING PLAN: {plan.goal} (ID: {plan.plan_id}) ---")
+        self.execution_context = {} # Reset context for each new plan
 
-        if not task_chain:
-            print(f"ERROR: No task chain found for goal: {goal_type}")
-            return False
+        for i, command in enumerate(plan.steps):
+            print(f"Executing Step {i+1}/{len(plan.steps)}: {command.name} ({command.type})")
 
-        # Prime the execution context with the goal's details
-        self.execution_context = {'goal_details': goal.get('details')}
+            # Find the handler method in the registry
+            handler_method = self.command_registry.get(command.name)
 
-        for task_function in task_chain:
-            try:
-                # Each function will read from and write to the context
-                task_function()
-            except Exception as e:
-                print(f"ERROR: Task '{task_function.__name__}' failed for goal '{goal_type}': {e}")
-                # Potentially generate a new, high-priority goal to investigate the failure
+            if not handler_method:
+                print(f"ERROR: No handler method found for command: {command.name}")
+                # Terminate plan execution on failure
                 return False
 
-        print(f"--- GOAL COMPLETE: {goal_type} ---\n")
+            try:
+                # Execute the handler, passing the command's parameters
+                handler_method(command.params)
+            except Exception as e:
+                print(f"ERROR: Task '{command.name}' failed: {e}")
+                # Terminate plan execution on failure
+                return False
+
+        print(f"--- PLAN COMPLETE: {plan.goal} ---\n")
         return True
 
-    # --- Task chain methods ---
-    # These private methods wrap the service calls.
-    # They use self.execution_context to pass data between steps.
+    # --- Command Handler Methods ---
+    # These methods wrap the actual business logic. They use
+    # self.execution_context to manage state between steps.
 
-    def _retrieve_context(self):
-        details = self.execution_context['goal_details']
-        user_id = details.get('user_id')
+    def _retrieve_context(self, params: dict):
+        user_id = params.get('user_id')
+        details = params.get('details')
         if not user_id:
-            raise ValueError("user_id not found in goal details")
+            raise ValueError("user_id not found in command params")
 
         context = memory.retrieve_full_context(user_id, details)
         self.execution_context['full_context'] = context
+        print("  - Context retrieved for user_id:", user_id)
 
-    def _generate_answer(self):
+    def _generate_answer(self, params: dict):
         context = self.execution_context.get('full_context')
         if not context:
             raise ValueError("full_context not found in execution context")
 
         answer = nlp.generate_answer(context)
         self.execution_context['generated_answer'] = answer
+        print("  - Answer generated by NLP model.")
 
-    def _send_user_message(self):
+    def _send_user_message(self, params: dict):
         answer = self.execution_context.get('generated_answer')
-        user_id = self.execution_context['goal_details'].get('user_id')
+        user_id = params.get('user_id')
         if not answer or not user_id:
-            raise ValueError("Answer or user_id missing from execution context")
+            raise ValueError("Answer or user_id missing for sending message")
 
         telegram.send_message(user_id, answer)
+        print("  - Message sent to user_id:", user_id)
 
-    def _format_report(self):
-        details = self.execution_context.get('goal_details')
+    def _format_report(self, params: dict):
+        details = params.get('details')
         if not details:
-            raise ValueError("Goal details not found in execution context")
+            raise ValueError("Goal details not found in command params")
 
         report = admin_notifications.format_error_report(details)
         self.execution_context['admin_report'] = report
+        print("  - Admin report formatted.")
 
-    def _send_admin_alert(self):
+    def _send_admin_alert(self, params: dict):
         report = self.execution_context.get('admin_report')
         if not report:
             raise ValueError("Admin report not found in execution context")
 
         admin_notifications.send_admin_notification(report)
+        print("  - Admin notification sent.")
 
+    def _execute_n8n_webhook(self, params: dict):
+        webhook_url = params.get("webhook_url")
+        raw_payload = params.get("payload", {})
+        if not webhook_url:
+            raise ValueError("webhook_url is required for n8n command")
+
+        # Resolve context variables in the payload
+        resolved_payload = {}
+        for key, value in raw_payload.items():
+            if isinstance(value, str) and value.startswith("context:"):
+                context_key = value.split(":", 1)[1]
+                resolved_value = self.execution_context.get(context_key)
+                if resolved_value is None:
+                    print(f"  - WARNING: Context key '{context_key}' not found in execution context.")
+                resolved_payload[key] = resolved_value
+            else:
+                resolved_payload[key] = value
+
+        print(f"  - Triggering n8n webhook: {webhook_url} with payload: {json.dumps(resolved_payload)}")
+        try:
+            # Using a mock URL for testing. In a real scenario, this would be a live webhook.
+            if "n8n.katana.foo" in webhook_url:
+                print("  - (Mock Execution) Pretending to call webhook.")
+                self.execution_context['n8n_response'] = {"status": "success", "mock": True}
+                return
+
+            response = requests.post(webhook_url, json=resolved_payload, timeout=30)
+            response.raise_for_status()
+            print(f"  - n8n webhook returned status: {response.status_code}")
+            self.execution_context['n8n_response'] = response.json()
+        except requests.RequestException as e:
+            print(f"  - FAILED to trigger n8n webhook {webhook_url}: {e}")
+            raise e
 
 if __name__ == '__main__':
-    # Example usage for testing
+    # Example usage for testing the new plan-driven executor
+    from planner import Planner
+
     executor = TaskExecutor()
+    planner = Planner()
 
     # --- Test Case 1: Answer a user question ---
     print(">>> TEST CASE 1: Answer User Question <<<")
     user_question_goal = {
         'goal': 'answer_user_question',
-        'priority': 0.9,
-        'details': {'id': 2, 'user_id': 'user456', 'last_message': 'I need help with my bill.'},
-        'user_id': 'user456',
-        'source': 'Supabase'
+        'details': {'id': 2, 'user_id': 'user456', 'last_message': 'I need help with my bill.'}
     }
-    executor.execute_goal(user_question_goal)
+    plan_to_execute = planner.create_plan(user_question_goal)
+    if plan_to_execute:
+        executor.execute_plan(plan_to_execute)
 
     # --- Test Case 2: Notify admin about a crash ---
     print("\n>>> TEST CASE 2: Notify Admin of Crash <<<")
     crash_goal = {
         'goal': 'notify_admin_about_crash',
-        'priority': 1.0,
-        'details': {'error_log': '[2023-10-27T12:00:00Z] CRITICAL: Main process crashed with signal 9.'},
-        'source': 'StateMonitor'
+        'details': {'error_log': '[2023-10-27T12:00:00Z] CRITICAL: Main process crashed with signal 9.'}
     }
-    executor.execute_goal(crash_goal)
+    plan_to_execute = planner.create_plan(crash_goal)
+    if plan_to_execute:
+        executor.execute_plan(plan_to_execute)
