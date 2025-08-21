@@ -1,14 +1,5 @@
 # bot/nlp/context.py
 
-def get_initial_context():
-    """Возвращает начальный контекст для нового пользователя."""
-    return {
-        "last_recognized_intent": None, # Основное распознанное намерение из NLP
-        "last_processed_intent": None, # Основное фактически обработанное намерение
-        "entities": {},
-        "history_summary": None,
-    }
-
 def update_context(current_context, nlp_result, processed_intents_info):
     """
     Обновляет контекст на основе результатов NLP-анализа и выполненных действий.

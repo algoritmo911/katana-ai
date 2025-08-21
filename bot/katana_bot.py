@@ -8,6 +8,7 @@ import random # Для случайных ответов
 # Импортируем наши NLP модули
 from bot.nlp import parser as nlp_parser
 from bot.nlp import context as nlp_context
+from bot.dialog_graph import DialogGraph
 
 # Получаем токен из переменной окружения
 API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN', 'YOUR_API_TOKEN')
@@ -33,10 +34,19 @@ def load_user_state():
     if USER_STATE_FILE.exists():
         try:
             with open(USER_STATE_FILE, 'r', encoding='utf-8') as f:
-                user_memory = json.load(f)
-                # Ключи в JSON всегда строки, преобразуем chat_id обратно в int, если это возможно
-                user_memory = {int(k) if k.isdigit() else k: v for k, v in user_memory.items()}
-                log_local_bot_event(f"User state loaded from {USER_STATE_FILE}")
+                loaded_memory = json.load(f)
+                # Восстанавливаем объекты DialogGraph из JSON
+                for chat_id_str, data in loaded_memory.items():
+                    chat_id = int(chat_id_str)
+                    if "dialog_graph" in data:
+                        graph_data = data["dialog_graph"]
+                        user_memory[chat_id] = {
+                            "dialog_graph": DialogGraph.from_json(graph_data, chat_id),
+                            "settings": data.get("settings", {})
+                        }
+                    else: # Для обратной совместимости, если есть старый формат
+                        user_memory[chat_id] = data
+                log_local_bot_event(f"User state loaded and graphs reconstructed from {USER_STATE_FILE}")
         except (json.JSONDecodeError, IOError) as e:
             log_local_bot_event(f"Error loading user state from {USER_STATE_FILE}: {e}. Starting with empty state.")
             user_memory = {}
@@ -47,13 +57,21 @@ def load_user_state():
 def save_user_state():
     """Сохраняет текущее состояние пользователей в файл."""
     global user_memory
+    memory_to_save = {}
+    for chat_id, data in user_memory.items():
+        serializable_data = {
+            "settings": data.get("settings", {})
+        }
+        if "dialog_graph" in data and isinstance(data["dialog_graph"], DialogGraph):
+            serializable_data["dialog_graph"] = data["dialog_graph"].to_json()
+
+        memory_to_save[str(chat_id)] = serializable_data
+
     try:
         with open(USER_STATE_FILE, 'w', encoding='utf-8') as f:
-            # Конвертируем числовые chat_id в строки для совместимости с JSON
-            memory_to_save = {str(k): v for k, v in user_memory.items()}
             json.dump(memory_to_save, f, ensure_ascii=False, indent=4)
             log_local_bot_event(f"User state saved to {USER_STATE_FILE}")
-    except IOError as e:
+    except (IOError, TypeError) as e:
         log_local_bot_event(f"Error saving user state to {USER_STATE_FILE}: {e}")
 
 
@@ -133,11 +151,10 @@ def handle_start_help(message):
     # Инициализация памяти для нового пользователя
     if chat_id not in user_memory:
         user_memory[chat_id] = {
-            "context": nlp_context.get_initial_context(),
-            "history": [],
+            "dialog_graph": DialogGraph(user_id=chat_id),
             "settings": {} # Добавляем placeholder для настроек пользователя
         }
-        log_local_bot_event(f"Initialized new memory structure for chat_id {chat_id} including settings.")
+        log_local_bot_event(f"Initialized new graph-based memory for chat_id {chat_id}.")
 
     bot.reply_to(message, "Привет! Я Katana, ваш умный ассистент. Спросите меня что-нибудь, например:\n"
                           "- Какая погода в Москве?\n"
@@ -156,18 +173,18 @@ def handle_user_chat_message(message):
     # Получаем или инициализируем память для пользователя
     if chat_id not in user_memory:
         user_memory[chat_id] = {
-            "context": nlp_context.get_initial_context(),
-            "history": [],
+            "dialog_graph": DialogGraph(user_id=chat_id),
             "settings": {} # Добавляем placeholder для настроек пользователя
         }
-        log_local_bot_event(f"Initialized new memory structure for chat_id {chat_id} including settings.")
+        log_local_bot_event(f"Initialized new graph-based memory for chat_id {chat_id}.")
 
-    current_session_memory = user_memory[chat_id]
-    # Убедимся, что у существующих пользователей тоже есть поле settings, если оно было добавлено после их создания
-    if "settings" not in current_session_memory:
-        current_session_memory["settings"] = {}
+    # Убедимся, что у существующих пользователей тоже есть поле settings
+    if "settings" not in user_memory[chat_id]:
+        user_memory[chat_id]["settings"] = {}
         log_local_bot_event(f"Added missing 'settings' field to existing user data for chat_id {chat_id}.")
-    current_context = current_session_memory["context"]
+
+    dialog_graph = user_memory[chat_id]["dialog_graph"]
+    current_context = dialog_graph.get_current_context()
 
     # Анализируем текст с помощью NLP
     nlp_result = nlp_parser.analyze_text(user_text, current_context)
@@ -206,13 +223,11 @@ def handle_user_chat_message(message):
     bot.reply_to(message, final_response)
     log_local_bot_event(f"Sent response to {chat_id}: {final_response}")
 
-    # Обновляем контекст и историю
-    current_session_memory["context"] = nlp_context.update_context(current_context, nlp_result, processed_intents_info)
-    current_session_memory["history"].append({"user": user_text, "bot": final_response, "timestamp": datetime.utcnow().isoformat()})
-    # Ограничим историю, чтобы не росла бесконечно (например, последние 20 обменов)
-    current_session_memory["history"] = current_session_memory["history"][-20:]
+    # Обновляем контекст и историю в графе
+    new_context = nlp_context.update_context(current_context, nlp_result, processed_intents_info)
+    dialog_graph.add_message_exchange(user_text, final_response, nlp_result, new_context)
 
-    log_local_bot_event(f"Updated memory for {chat_id}: {json.dumps(current_session_memory, ensure_ascii=False, indent=2)}")
+    log_local_bot_event(f"Updated graph for {chat_id}. Current node: {dialog_graph.current_node_id}")
     save_user_state() # Сохраняем состояние после каждого сообщения
 
 
