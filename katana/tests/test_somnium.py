@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 from katana.neurovault.mock_db import get_driver
 from katana.somnium.incarnator import Incarnator
 from katana.somnium.intervention_actuator import InterventionActuator
+from katana.somnium.reconciler import Reconciler
 from katana.gallifreyan.compiler import Compiler
 from katana.gallifreyan.simulator import QuantumStateSimulator
 
@@ -74,6 +75,59 @@ class TestInterventionActuator(unittest.TestCase):
         # Check post-condition
         final_state = self.simulator.qudits["object_2_state"]["t_0"]
         self.assertEqual(final_state, [("open", 1.0)])
+
+
+class TestReconciler(unittest.TestCase):
+
+    def setUp(self):
+        self.driver = get_driver()
+        self.reconciler = Reconciler(self.driver)
+
+    def test_reconcile_creates_new_timeline(self):
+        """Tests the Reconciler's timeline forking protocol."""
+        # Define a final state for the simulation
+        final_qudit_states = {
+            "object_2_state": {"t_0": [("open", 1.0)]},
+            "object_1_type": {"t_0": [("entangled", 1.0)]}
+        }
+        intervention_log = ["test intervention"]
+
+        # Reconcile this state
+        new_timeline_id = self.reconciler.reconcile("mem-123", final_qudit_states, intervention_log)
+
+        # Verify the results by inspecting the mock database
+        final_graph = self.driver.dump_graph()
+        nodes = final_graph["nodes"]
+        rels = final_graph["relationships"]
+
+        # Check for the new timeline node
+        self.assertIn(new_timeline_id, nodes)
+        self.assertEqual(nodes[new_timeline_id]["labels"], ["Timeline"])
+
+        # Find the new beta node for the door
+        new_door_node_id = None
+        for node_id, node_data in nodes.items():
+            if node_data.get("properties", {}).get("state") == "open":
+                new_door_node_id = node_id
+                break
+        self.assertIsNotNone(new_door_node_id, "Could not find the new beta door node")
+
+        # Check that the new door node BELONGS_TO the new timeline
+        belongs_to_found = any(
+            r["from"] == new_door_node_id and r["to"] == new_timeline_id and r["type"] == "BELONGS_TO"
+            for r in rels
+        )
+        self.assertTrue(belongs_to_found, "BELONGS_TO relationship not found")
+
+        # Check that the new door node DIVERGED_FROM the original
+        diverged_from_found = any(
+            r["from"] == new_door_node_id and r["to"] == "object_2" and r["type"] == "DIVERGED_FROM"
+            for r in rels
+        )
+        self.assertTrue(diverged_from_found, "DIVERGED_FROM relationship not found")
+
+        # Check that the original door node is untouched
+        self.assertEqual(nodes["object_2"]["properties"]["state"], "closed")
 
 
 if __name__ == "__main__":

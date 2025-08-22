@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import copy
 """
 Mock Neurovault Database and Driver.
 
@@ -31,20 +32,39 @@ MOCK_MEMORY_GRAPH = {
 class MockNeurovaultDriver:
     """
     A mock driver that simulates running Cypher queries against the mock graph.
+    It now supports simulated write transactions to test the Reconciler.
     """
     def __init__(self):
-        self._graph = MOCK_MEMORY_GRAPH
+        # Use deepcopy to ensure the base graph isn't modified by tests
+        self._graph = copy.deepcopy(MOCK_MEMORY_GRAPH)
 
     def run_query(self, query: str, memory_id: str):
         """
-        Simulates running a query. For now, it ignores the query text and
-        the memory_id and just returns the entire mock graph.
-        In a real implementation, this would parse the Cypher query and
-        traverse the graph.
+        Simulates running a read query. For now, it just returns the graph.
         """
-        print(f"MockNeurovaultDriver: Running query for memory_id '{memory_id}'...")
-        # A real implementation would return a list of records.
-        # We will just return the raw graph for the Incarnator to process.
+        print(f"MockNeurovaultDriver: Running read query for memory_id '{memory_id}'...")
+        return self._graph
+
+    def run_write_transaction(self, commands: list):
+        """
+        Simulates a write transaction by processing a list of commands.
+        """
+        print(f"MockNeurovaultDriver: Running write transaction with {len(commands)} commands...")
+        for command in commands:
+            action = command.get("action")
+            if action == "CREATE_NODE":
+                node_id = command.get("node_id")
+                if node_id in self._graph["nodes"]:
+                    raise ValueError(f"Node {node_id} already exists.")
+                self._graph["nodes"][node_id] = command.get("data")
+            elif action == "CREATE_RELATIONSHIP":
+                self._graph["relationships"].append(command.get("data"))
+            else:
+                raise ValueError(f"Unknown write action: {action}")
+        print("MockNeurovaultDriver: Write transaction complete.")
+
+    def dump_graph(self):
+        """Returns the current state of the entire graph."""
         return self._graph
 
     def close(self):
