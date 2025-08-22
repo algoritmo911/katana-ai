@@ -1,0 +1,8 @@
+# Previous dependencies
+supabase
+pydantic
+requests
+
+# New dependencies for Protocol Polis
+libp2p
+pycryptodome
