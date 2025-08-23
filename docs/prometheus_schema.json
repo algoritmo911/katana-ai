@@ -39,6 +39,32 @@
       ],
       "rls_enabled": true,
       "comment": "Stores consolidated stories or cases derived from sequences of memory events."
+    },
+    {
+      "name": "oracle_interactions",
+      "columns": [
+        {"name": "id", "type": "uuid", "isPrimaryKey": true, "isIdentity": true, "defaultValue": "gen_random_uuid()"},
+        {"name": "user_id", "type": "text", "isNullable": false, "comment": "Anonymized ID of the user asking the question."},
+        {"name": "question", "type": "text", "isNullable": false},
+        {"name": "answer", "type": "text", "isNullable": true},
+        {"name": "user_feedback", "type": "integer", "isNullable": true, "comment": "e.g., a rating from 1 to 5."},
+        {"name": "timestamp", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Logs the interactions with the Oracle Interface to serve as raw data for the Psyche Profiler."
+    },
+    {
+      "name": "archetype_library",
+      "columns": [
+        {"name": "id", "type": "uuid", "isPrimaryKey": true, "isIdentity": true, "defaultValue": "gen_random_uuid()"},
+        {"name": "name", "type": "text", "isNullable": false, "isUnique": true, "comment": "e.g., 'Archetype-Utilitarian-1'"},
+        {"name": "description", "type": "text", "isNullable": true},
+        {"name": "ethical_school", "type": "text", "isNullable": false, "comment": "e.g., 'Utilitarian', 'Deontological', 'Virtue'"},
+        {"name": "reward_function", "type": "jsonb", "isNullable": false, "comment": "A structured representation of the AI agent's reward function."},
+        {"name": "created_at", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Stores the generated 'Digital Personas' or AI archetypes for use in the Agora Simulator."
     }
   ],
   "notes": [

@@ -118,11 +118,28 @@ async def shutdown_event():
 @app.post("/oracle/query", tags=["Oracle"])
 async def handle_oracle_query(query: OracleQuery):
     """
-    Accepts a complex question and orchestrates a swarm of agents to find an answer.
+    Accepts a complex question, orchestrates a swarm of agents to find an answer,
+    and logs the interaction for future analysis by the Psyche Profiler.
     """
     logger.info(f"Received query for Oracle: '{query.question}' from user: '{query.user_id}'")
     try:
         answer = oracle_instance.query(query.question)
+
+        # Log the interaction for the Psyche Profiler
+        if memory_core.client:
+            interaction_log = {
+                "user_id": query.user_id,
+                "question": query.question,
+                "answer": answer,
+                # "user_feedback" would be collected via a separate mechanism
+            }
+            try:
+                memory_core.client.table("oracle_interactions").insert(interaction_log).execute()
+                logger.info(f"Successfully logged Oracle interaction for user '{query.user_id}'.")
+            except Exception as db_error:
+                # Log the failure but don't fail the request
+                logger.error(f"Failed to log Oracle interaction to database: {db_error}", exc_info=True)
+
         return {"answer": answer}
     except Exception as e:
         logger.error(f"An error occurred while processing the Oracle query: {e}", exc_info=True)
