@@ -10,3 +10,4 @@ redis
 PyYAML
 httpx
 nats-py
+neo4j
