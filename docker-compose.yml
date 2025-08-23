@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  nats:
+    image: nats:latest
+    command: -js
+    ports:
+      - "4222:4222"  # NATS client connections
+      - "8222:8222"  # HTTP monitoring
+
+  questdb:
+    image: questdb/questdb:latest
+    ports:
+      - "9000:9000"  # REST API and web console
+      - "8812:8812"  # Postgres wire protocol
+      - "9009:9009"  # InfluxDB line protocol
+    volumes:
+      - questdb_data:/var/lib/questdb
+
+  neo4j:
+    image: neo4j:latest
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+    volumes:
+      - neo4j_data:/data
+
+volumes:
+  questdb_data:
+  neo4j_data:
