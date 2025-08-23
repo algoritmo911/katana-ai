@@ -38,9 +38,11 @@ class TestGraphMemory(unittest.TestCase):
         self.assertTrue(self.memory.graph.has_edge(event.event_id, 'system'))
         self.assertTrue(self.memory.graph.has_edge(event.event_id, 'error'))
 
-        # Check edge type
-        edge_data = self.memory.graph.get_edge_data(event.event_id, 'system')[0]
-        self.assertEqual(edge_data['type'], 'CONTAINS_ENTITY')
+        # Check edge type and attributes
+        contains_edge_data = self.memory.graph.get_edge_data(event.event_id, 'system')[0]
+        self.assertEqual(contains_edge_data['type'], 'CONTAINS_ENTITY')
+        self.assertIn('timestamp', contains_edge_data)
+        self.assertEqual(contains_edge_data['confidence_score'], event.confidence_score)
 
     def test_add_sequential_events(self):
         """Test that sequential events are correctly linked."""
@@ -52,8 +54,10 @@ class TestGraphMemory(unittest.TestCase):
 
         # Check for the sequential edge
         self.assertTrue(self.memory.graph.has_edge(event1.event_id, event2.event_id))
-        edge_data = self.memory.graph.get_edge_data(event1.event_id, event2.event_id)[0]
-        self.assertEqual(edge_data['type'], 'SEQUENTIAL')
+        seq_edge_data = self.memory.graph.get_edge_data(event1.event_id, event2.event_id)[0]
+        self.assertEqual(seq_edge_data['type'], 'SEQUENTIAL')
+        self.assertIn('timestamp', seq_edge_data)
+        self.assertEqual(seq_edge_data['confidence_score'], 1.0)
 
         # Check that the last_event_id was updated
         self.assertEqual(self.memory.last_event_id, event2.event_id)

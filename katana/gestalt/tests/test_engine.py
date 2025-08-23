@@ -10,6 +10,7 @@ sys.path.insert(0, str(project_root))
 
 from katana.gestalt.engine import GestaltEngine
 from katana.gestalt.events import GestaltEvent
+from katana.gestalt.inquisitor import ValidationStatus
 
 class TestGestaltEngine(unittest.TestCase):
 
@@ -79,6 +80,29 @@ class TestGestaltEngine(unittest.TestCase):
             self.assertEqual(len(engine.sensor_hub.sensors), 1)
             registered_sensor = list(engine.sensor_hub.sensors.values())[0]
             self.assertEqual(registered_sensor, MockFileSensor.return_value)
+
+    def test_suspicious_event_is_discarded(self):
+        """Test that a suspicious event is not added to memory."""
+        with patch('katana.gestalt.engine.Inquisitor') as MockInquisitor, \
+             patch('katana.gestalt.engine.GraphMemory') as MockGraphMemory:
+
+            mock_inquisitor = MockInquisitor.return_value
+            mock_memory = MockGraphMemory.return_value
+
+            # Configure the Inquisitor to return SUSPICIOUS
+            mock_inquisitor.validate.return_value = ValidationStatus.SUSPICIOUS
+
+            engine = GestaltEngine()
+            engine.inquisitor = mock_inquisitor
+            engine.memory = mock_memory
+
+            # Act
+            engine._process_sensor_data("test_sensor", "some contradictory data")
+
+            # Assert
+            mock_inquisitor.validate.assert_called_once()
+            # Check that add_event was NOT called
+            mock_memory.add_event.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()

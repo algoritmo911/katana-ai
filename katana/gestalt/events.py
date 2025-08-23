@@ -20,6 +20,10 @@ class GestaltEvent(BaseModel):
     # It represents the emotional "charge" of the event.
     valence: Optional[float] = Field(None, description="The emotional valence score of the event, from -1.0 (negative) to 1.0 (positive).")
 
+    # The 'confidence_score' represents the system's trust in the event's factuality.
+    # Raw, observed events start at 1.0. Inferred or suspicious events will have lower scores.
+    confidence_score: float = Field(1.0, ge=0.0, le=1.0, description="The system's confidence in this event's factuality (0.0 to 1.0).")
+
     class Config:
         # Pydantic configuration
         # Allow arbitrary types for content, though it will often be a string.

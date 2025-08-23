@@ -6,6 +6,7 @@ from .sensors import SensorHub, FileSensor
 from .emotions import SentimentAnalyzer
 from .events import GestaltEvent
 from .memory import GraphMemory
+from .inquisitor import Inquisitor, ValidationStatus
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class GestaltEngine:
         logger.info("Initializing Gestalt Engine...")
         self.sentiment_analyzer = SentimentAnalyzer()
         self.sensor_hub = SensorHub()
+        self.inquisitor = Inquisitor()
 
         # Define some default keywords for entity extraction.
         # In a real application, this would come from a configuration file.
@@ -68,10 +70,22 @@ class GestaltEngine:
         # 3. Create the final, enriched event
         enriched_event = base_event.model_copy(update={'valence': valence})
 
-        logger.info(f"Processed new event: {enriched_event.event_id} | Source: {enriched_event.source_id} | Valence: {enriched_event.valence:.4f}")
+        # 4. Validate the event with the Inquisitor
+        validation_status = self.inquisitor.validate(
+            enriched_event, self.memory.graph, self.memory.entity_extractor
+        )
 
-        # 4. Store the event in short-term memory
-        self.memory.add_event(enriched_event)
+        if validation_status == ValidationStatus.VALID:
+            logger.info(f"Event {enriched_event.event_id} is VALID. Storing in memory.")
+            # 5. Store the event in graph memory
+            self.memory.add_event(enriched_event)
+        else:
+            # For now, we just log and discard suspicious or invalid events.
+            # A future implementation could move them to a quarantine area.
+            logger.warning(
+                f"Event {enriched_event.event_id} was flagged as {validation_status.name} "
+                "and will be discarded."
+            )
 
     def setup_default_sensors(self, log_file_path: str):
         """

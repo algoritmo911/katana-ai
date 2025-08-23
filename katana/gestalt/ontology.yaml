@@ -1,0 +1,32 @@
+# Katana Gestalt Ontology v1
+# This file defines the valid structure of the knowledge graph.
+# It is used by the Inquisitor to validate new events and relationships.
+
+# Defines the allowed types for nodes in the graph.
+nodes:
+  - type: Event
+    description: "Represents a single, discrete event captured by a sensor."
+  - type: Entity
+    description: "Represents a named entity (e.g., person, place, concept) extracted from an event."
+
+# Defines the allowed types for edges and the node types they can connect.
+edges:
+  - type: SEQUENTIAL
+    description: "A directed link from a preceding event to a succeeding one."
+    source: Event
+    target: Event
+
+  - type: CONTAINS_ENTITY
+    description: "A directed link from an Event to an Entity it mentions."
+    source: Event
+    target: Entity
+
+  - type: SIMILAR_EMOTION
+    description: "An undirected link between two Events with similar emotional valence."
+    source: Event
+    target: Event
+
+  - type: INFERRED
+    description: "A generic link representing a new relationship derived by the Syllogist."
+    source: "*" # Wildcard, can be any node type
+    target: "*" # Wildcard, can be any node type

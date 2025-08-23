@@ -25,21 +25,25 @@ class GraphMemory:
             logger.warning(f"Attempted to add non-GestaltEvent to GraphMemory. Type: {type(event)}. Skipping.")
             return
 
-        # 1. Add the event node
+        # 1. Add the event node with all its data as attributes.
+        # This is the "Temporal Weaver" action: stamping the event with time and confidence.
         event_id = event.event_id
         self.graph.add_node(
             event_id,
             type='Event',
-            timestamp=event.timestamp,
-            source_id=event.source_id,
-            content=event.content,
-            valence=event.valence
+            **event.model_dump()
         )
         logger.debug(f"Added Event node {event_id} to graph.")
 
-        # 2. Add sequential edge
+        # 2. Add sequential edge, now with a timestamp.
         if self.last_event_id:
-            self.graph.add_edge(self.last_event_id, event_id, type='SEQUENTIAL')
+            self.graph.add_edge(
+                self.last_event_id,
+                event_id,
+                type='SEQUENTIAL',
+                timestamp=event.timestamp,
+                confidence_score=1.0 # The sequence itself is a confident fact
+            )
             logger.debug(f"Added SEQUENTIAL edge from {self.last_event_id} to {event_id}.")
         self.last_event_id = event_id
 
@@ -47,13 +51,22 @@ class GraphMemory:
         if isinstance(event.content, str):
             entities = self.entity_extractor.extract_entities(event.content)
             for entity_name in entities:
-                # Add entity node (it's ok if it already exists, networkx handles it)
+                # Add or update the entity node
                 if not self.graph.has_node(entity_name):
-                    self.graph.add_node(entity_name, type='Entity')
+                    self.graph.add_node(entity_name, type='Entity', first_seen=event.timestamp)
                     logger.debug(f"Added new Entity node '{entity_name}' to graph.")
 
+                # Update last_seen timestamp for the entity
+                self.graph.nodes[entity_name]['last_seen'] = event.timestamp
+
                 # Add edge from event to entity
-                self.graph.add_edge(event_id, entity_name, type='CONTAINS_ENTITY')
+                self.graph.add_edge(
+                    event_id,
+                    entity_name,
+                    type='CONTAINS_ENTITY',
+                    timestamp=event.timestamp,
+                    confidence_score=event.confidence_score # The link has same confidence as the event
+                )
                 logger.debug(f"Added CONTAINS_ENTITY edge from {event_id} to '{entity_name}'.")
 
     def get_event(self, event_id):
