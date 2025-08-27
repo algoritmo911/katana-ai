@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil # For robust directory removal
 
 # Assuming bot.py is in the same directory or accessible in PYTHONPATH
-import bot
+from katana_single_app import bot
 import telebot # Import telebot here
 
 class TestBot(unittest.TestCase):
