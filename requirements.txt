@@ -9,3 +9,6 @@ uvicorn[standard]
 python-telegram-bot
 apscheduler
 streamlit
+httpx
+pytest-mock
+pytest-asyncio
