@@ -1,6 +1,6 @@
 import unittest
-from bot.commands.handler import CommandHandler
-from bot.nlp.parser import NLPParser # Used to simulate input to CommandHandler
+from src.katana.commands.handler import CommandHandler
+from src.katana.nlp.parser import NLPParser # Used to simulate input to CommandHandler
 
 class TestCommandHandler(unittest.TestCase):
 

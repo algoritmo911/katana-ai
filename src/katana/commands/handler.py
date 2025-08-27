@@ -1,5 +1,5 @@
 from typing import Callable, Dict, List, Any
-from bot.nlp.parser import NLPParser # For demonstration purposes
+from src.katana.nlp.parser import NLPParser # For demonstration purposes
 
 # Define a type alias for command functions
 CommandFunction = Callable[[List[str]], str] # Takes list of args, returns response string

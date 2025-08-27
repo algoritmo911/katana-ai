@@ -1,5 +1,5 @@
 import unittest
-from bot.nlp.parser import NLPParser
+from src.katana.nlp.parser import NLPParser
 
 class TestNLPParser(unittest.TestCase):
 

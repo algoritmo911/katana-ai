@@ -1,5 +1,5 @@
 import unittest
-from bot.memory.chat_history import ChatHistory
+from src.katana.memory.chat_history import ChatHistory
 
 class TestChatHistory(unittest.TestCase):
 
