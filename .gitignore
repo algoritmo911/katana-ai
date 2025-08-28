@@ -1,0 +1,18 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Log files
+*.log
+
+# Temp files
+jules-scratch/
+
+# Environment variables
+.env
+
+# Katana bot specific
+voice_temp/
+commands/

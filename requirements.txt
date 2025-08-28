@@ -1,3 +1,10 @@
 pyTelegramBotAPI
 openai
 python-dotenv
+pydantic
+pytest
+pytest-asyncio
+fastapi
+uvicorn[standard]
+streamlit
+requests
