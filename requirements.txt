@@ -3,3 +3,4 @@ openai
 python-dotenv
 pytest
 streamlit
+requests

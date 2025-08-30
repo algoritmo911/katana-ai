@@ -1,6 +1,7 @@
 import streamlit as st
 import sys
 import os
+from src.healthcheck.subsystems import check_openai_status, check_supabase_status, check_n8n_status
 
 # Добавляем корень проекта в sys.path, чтобы можно было импортировать katana
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
@@ -34,6 +35,23 @@ def get_katana_response(user_input: str) -> str:
         return f"Произошла ошибка при обработке вашего запроса: {e}"
 
 def main():
+    st.sidebar.title("Дашборд Здоровья Системы")
+
+    # Получаем и отображаем статусы
+    st.sidebar.subheader("Сервисы")
+
+    # OpenAI
+    openai_status, openai_msg = check_openai_status()
+    st.sidebar.metric(label="OpenAI", value=openai_status, delta=openai_msg, delta_color="normal" if openai_status == "ОНЛАЙН" else "inverse")
+
+    # Supabase
+    supabase_status, supabase_msg = check_supabase_status()
+    st.sidebar.metric(label="Supabase", value=supabase_status, delta=supabase_msg, delta_color="normal" if supabase_status == "ОНЛАЙН" else "inverse")
+
+    # n8n
+    n8n_status, n8n_msg = check_n8n_status()
+    st.sidebar.metric(label="n8n", value=n8n_status, delta=n8n_msg, delta_color="normal" if n8n_status == "ОНЛАЙН" else "inverse")
+
     st.title("Katana Chat UI")
     if not katana_agent_available:
         st.warning("KatanaAgent не загружен. Ответы будут ограничены.")
