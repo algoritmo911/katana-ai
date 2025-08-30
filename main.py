@@ -10,6 +10,9 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from katana_bot import KatanaBot
 from logging_config import setup_logging
+from katana.memory_factory.dispatcher import Dispatcher
+from katana.memory_factory.ingestion_pipeline import IngestionPipeline
+from katana.memory_factory.truth_detector import TruthDetector
 
 # Configure logging
 setup_logging(logging.DEBUG)
@@ -21,6 +24,11 @@ START_TIME = time.time()
 
 # Initialize KatanaBot (consider how to manage state if multiple worker processes are used)
 katana_bot_instance = KatanaBot("WebhookKatanaBot")
+
+# --- Memory Factory Instances ---
+ingestion_pipeline_instance = None
+truth_detector_instance = None
+dispatcher_instance = None
 
 # --- Telegram Bot Setup ---
 # It's better to get this from environment variables or a config file
@@ -97,12 +105,23 @@ async def startup_event():
     scheduler.start()
     logger.info("APScheduler started with initial jobs.")
 
+    # 3. Initialize Memory Factory components
+    global ingestion_pipeline_instance, truth_detector_instance, dispatcher_instance
+    logger.info("Initializing Memory Factory components...")
+    ingestion_pipeline_instance = IngestionPipeline()
+    truth_detector_instance = TruthDetector()
+    dispatcher_instance = Dispatcher()
+    logger.info(
+        f"Initialized Memory Factory components: "
+        f"{ingestion_pipeline_instance}, {truth_detector_instance}, {dispatcher_instance}"
+    )
+
     logger.info("FastAPI application startup sequence complete.")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global scheduler, telegram_app
+    global scheduler, telegram_app, ingestion_pipeline_instance
 
     # 1. Shutdown Scheduler
     if scheduler and scheduler.running:
@@ -123,6 +142,11 @@ async def shutdown_event():
         # except Exception as e:
         #     logger.error(f"Error during webhook deletion for {WEBHOOK_URL}: {e}", exc_info=True)
         pass
+
+    # 3. Shutdown Memory Factory components
+    if ingestion_pipeline_instance:
+        logger.info("Stopping Ingestion Pipeline...")
+        ingestion_pipeline_instance.stop()
 
     logger.info("FastAPI application shutdown sequence complete.")
 

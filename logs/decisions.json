@@ -1,8 +1,8 @@
 [
     {
-        "timestamp": "2025-06-28T07:58:11.477250+00:00",
+        "timestamp": "2025-08-30T19:28:29.608214+00:00",
         "symbol": "BTC-USD",
-        "price": 107539.835,
+        "price": 52000.0,
         "decision_type": "observe",
         "confidence": 0.5,
         "reason": "Initial observation in learning mode.",
