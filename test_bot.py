@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil # For robust directory removal
 
 # Assuming bot.py is in the same directory or accessible in PYTHONPATH
-import bot
+from bot import katana_bot as bot
 
 class TestBot(unittest.TestCase):
 
@@ -21,11 +21,11 @@ class TestBot(unittest.TestCase):
         # Mock the bot object and its methods
         self.mock_bot_instance = MagicMock()
         # Patch the bot instance within the 'bot' module
-        self.bot_patcher = patch('bot.bot', self.mock_bot_instance)
+        self.bot_patcher = patch('bot.katana_bot.bot', self.mock_bot_instance)
         self.mock_bot_module_instance = self.bot_patcher.start()
 
         # Mock datetime to control timestamps in filenames
-        self.mock_datetime_patcher = patch('bot.datetime')
+        self.mock_datetime_patcher = patch('bot.katana_bot.datetime')
         self.mock_datetime = self.mock_datetime_patcher.start()
         self.mock_datetime.utcnow.return_value.strftime.return_value = "YYYYMMDD_HHMMSS_ffffff"
 
@@ -110,7 +110,7 @@ class TestBot(unittest.TestCase):
 
     # --- Test Command Routing ---
 
-    @patch('bot.log_local_bot_event')
+    @patch('bot.katana_bot.log_local_bot_event')
     def test_handle_log_event_calls_logger(self, mock_log_local_bot_event_func):
         from bot_components.handlers.log_event_handler import handle_log_event # Updated import path
         command_data = {'type': 'log_event', 'module': 'test', 'args': {'message': 'hello test'}, 'id': 'test001'}
@@ -150,14 +150,14 @@ class TestBot(unittest.TestCase):
 
         # We need to patch handle_log_event because we are testing the reply from handle_message,
         # not the full execution of handle_log_event itself here.
-        with patch('bot.handle_log_event') as mock_actual_handler: # Corrected patch path
+        with patch('bot.katana_bot.handle_log_event') as mock_actual_handler: # Corrected patch path
             bot.handle_message(mock_message)
             # Assert that the mock_actual_handler (the moved handle_log_event) is called with the command_data, chat_id, AND the actual log_local_bot_event from bot.py
             mock_actual_handler.assert_called_once_with(command_data, mock_message.chat.id, bot.log_local_bot_event)
 
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
 
-    @patch('bot.handle_log_event') # Corrected patch path
+    @patch('bot.katana_bot.handle_log_event') # Corrected patch path
     def test_routing_log_event(self, mock_handle_log_event_func):
         command = {"type": "log_event", "module": "logging", "args": {"message": "hello"}, "id": "log001"}
         mock_message = self._create_mock_message(command)
@@ -168,7 +168,7 @@ class TestBot(unittest.TestCase):
         mock_handle_log_event_func.assert_called_once_with(command, mock_message.chat.id, bot.log_local_bot_event)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'log_event' processed (placeholder).")
 
-    @patch('bot.handle_ping') # Patching where it's used in bot.py
+    @patch('bot.katana_bot.handle_ping') # Patching where it's used in bot.py
     def test_routing_ping(self, mock_handle_ping_func):
         command = {"type": "ping", "module": "system", "args": {}, "id": "ping001"}
         mock_message = self._create_mock_message(command)
@@ -181,7 +181,7 @@ class TestBot(unittest.TestCase):
         mock_handle_ping_func.assert_called_once_with(command, mock_message.chat.id, bot.log_local_bot_event)
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "Ping success from mock")
 
-    @patch('bot.handle_mind_clearing')
+    @patch('bot.katana_bot.handle_mind_clearing')
     def test_routing_mind_clearing(self, mock_handle_mind_clearing_func):
         command = {"type": "mind_clearing", "module": "wellness", "args": {"duration": "10m"}, "id": "mind002"}
         mock_message = self._create_mock_message(command)
