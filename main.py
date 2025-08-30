@@ -3,14 +3,18 @@ import json
 import os
 from typing import Dict, Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 import uvicorn
 from pydantic import BaseModel
+from dotenv import load_dotenv
 
 from src.orchestrator.task_orchestrator import TaskOrchestrator
 from src.agents.katana_agent import KatanaAgent
 from src.memory.memory import Memory
 from src.agents.sync_agent import SyncAgent
+
+# Load environment variables from .env file at the start
+load_dotenv()
 
 TASKS_FILE = "tasks.json"
 ROUND_INTERVAL_SECONDS = 30
@@ -32,6 +36,12 @@ class ChatMessage(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+class N8nWebhookPayload(BaseModel):
+    """Defines the expected payload from an n8n webhook."""
+    task: str
+    # Future enhancement: could include priority, metadata, etc.
+
 
 # --- API Endpoints ---
 @app.get("/orchestrator/status", response_model=Dict[str, Any])
@@ -63,6 +73,25 @@ async def chat_with_agent(message: ChatMessage):
         # Log the exception details for debugging
         print(f"Error during chat processing: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred while processing the message.")
+
+
+@app.post("/webhooks/n8n", status_code=202)
+async def receive_n8n_webhook(payload: "N8nWebhookPayload", x_api_key: str = Header(None, alias="X-API-Key")):
+    """
+    Receives a webhook from n8n to create a new task in the orchestrator.
+    Requires a valid API key in the 'X-API-Key' header.
+    """
+    expected_api_key = os.getenv("N8N_API_KEY")
+    if not expected_api_key or x_api_key != expected_api_key:
+        raise HTTPException(status_code=403, detail="Invalid or missing API Key")
+
+    if orchestrator_instance is None:
+        raise HTTPException(status_code=503, detail="Orchestrator not initialized")
+
+    print(f"Received new task from n8n webhook: '{payload.task}'")
+    orchestrator_instance.add_tasks([payload.task])
+
+    return {"message": "Task accepted"}
 
 
 # --- Task Loading ---

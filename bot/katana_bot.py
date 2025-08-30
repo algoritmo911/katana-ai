@@ -303,7 +303,7 @@ def handle_message_impl(message):
             # 5. Запись исходящего сообщения в состояние
             # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text}) # Replaced
             memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": katana_response_text})
-            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}. History length: {len(memory_manager.get_history(chat_id_str))}") # Corrected, log current length from manager
+            logger.info(f"Appended assistant response to history for chat_id {chat_id_str}. New history length is approx: {len(current_history) + 1}") # Corrected, log current length from manager
 
         except Exception as e:
             error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')

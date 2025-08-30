@@ -1,3 +1,4 @@
+import asyncio
 import time
 import json
 import os
@@ -5,11 +6,9 @@ from typing import List, Any, NamedTuple, Dict
 from src.memory.memory import Memory
 from src.agents.sync_agent import SyncAgent
 from src.agents.katana_agent import KatanaAgent
+from src.integrations.n8n_client import N8nClient
+from .models import TaskResult
 
-class TaskResult(NamedTuple):
-    success: bool
-    details: str
-    task_content: str
 
 class TaskOrchestrator:
     def __init__(self, agent: 'KatanaAgent', memory: Memory, sync_agent: SyncAgent, batch_size: int = 3, max_batch: int = 10, metrics_log_file: str = "orchestrator_log.json"):
@@ -22,6 +21,7 @@ class TaskOrchestrator:
         self.task_queue: List[str] = []
         self.metrics_history: List[Dict[str, Any]] = [] # Renamed from self.metrics to avoid confusion with a single metric entry
         self.metrics_log_file = metrics_log_file
+        self.n8n_client = N8nClient()
         self._initialize_metrics_log_file()
 
     def _initialize_metrics_log_file(self):
@@ -88,6 +88,16 @@ class TaskOrchestrator:
         start_time = time.time()
         results: List[TaskResult] = await self.agent.process_tasks(batch_tasks)
         elapsed_time = time.time() - start_time
+
+        # Trigger n8n workflow for each successful task
+        if self.n8n_client.trigger_url:
+            for result in results:
+                if result.success:
+                    payload = {"message": result.details, "original_task": result.task_content}
+                    # We are not awaiting this call to avoid blocking the orchestrator loop
+                    # for n8n to respond. This is a "fire and forget" approach.
+                    # For more robustness, one could use asyncio.create_task()
+                    asyncio.create_task(self.n8n_client.trigger_workflow(payload))
 
         successful_tasks_count = sum(1 for r in results if r.success)
         failed_tasks_count = len(results) - successful_tasks_count
