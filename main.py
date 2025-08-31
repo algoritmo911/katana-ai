@@ -1,7 +1,14 @@
 import logging
 import time
 from datetime import timedelta
-from fastapi import FastAPI, Request, HTTPException
+import json
+from typing import Optional
+
+from fastapi import FastAPI, Header, HTTPException, Request
+from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from telegram import Update as TelegramUpdate
 from telegram.ext import Application
 import uvicorn
@@ -9,10 +16,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from katana_bot import KatanaBot
-from logging_config import setup_logging
+from logging_config import setup_ingestion_backup_logger, setup_logging
 from katana.memory_factory.dispatcher import Dispatcher
 from katana.memory_factory.ingestion_pipeline import IngestionPipeline
 from katana.memory_factory.truth_detector import TruthDetector
+
+# --- Rate Limiter Setup ---
+limiter = Limiter(key_func=get_remote_address)
 
 # Configure logging
 setup_logging(logging.DEBUG)
@@ -20,7 +30,12 @@ logger = logging.getLogger(__name__)
 
 # --- Application Setup ---
 app = FastAPI(title="KatanaBot API", version="0.1.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 START_TIME = time.time()
+# TODO: Move to environment variable or secrets management
+VALID_API_KEY = "your-secret-api-key-here"
 
 # Initialize KatanaBot (consider how to manage state if multiple worker processes are used)
 katana_bot_instance = KatanaBot("WebhookKatanaBot")
@@ -29,6 +44,7 @@ katana_bot_instance = KatanaBot("WebhookKatanaBot")
 ingestion_pipeline_instance = None
 truth_detector_instance = None
 dispatcher_instance = None
+ingestion_backup_logger = None
 
 # --- Telegram Bot Setup ---
 # It's better to get this from environment variables or a config file
@@ -39,6 +55,13 @@ WEBHOOK_URL = (
 
 telegram_app = None  # Will be initialized on startup
 scheduler = None  # Will be initialized on startup
+
+
+# --- Pydantic Models ---
+class IngestData(BaseModel):
+    content: str
+    priority: int = 10
+    source: Optional[str] = None
 
 
 # --- Scheduler Job ---
@@ -106,8 +129,10 @@ async def startup_event():
     logger.info("APScheduler started with initial jobs.")
 
     # 3. Initialize Memory Factory components
-    global ingestion_pipeline_instance, truth_detector_instance, dispatcher_instance
+    global ingestion_pipeline_instance, truth_detector_instance, dispatcher_instance, ingestion_backup_logger
     logger.info("Initializing Memory Factory components...")
+    ingestion_backup_logger = setup_ingestion_backup_logger()
+    logger.info("Ingestion backup logger initialized.")
     ingestion_pipeline_instance = IngestionPipeline()
     truth_detector_instance = TruthDetector()
     dispatcher_instance = Dispatcher()
@@ -115,6 +140,8 @@ async def startup_event():
         f"Initialized Memory Factory components: "
         f"{ingestion_pipeline_instance}, {truth_detector_instance}, {dispatcher_instance}"
     )
+    # Start the ingestion pipeline's worker thread
+    ingestion_pipeline_instance.start()
 
     logger.info("FastAPI application startup sequence complete.")
 
@@ -152,6 +179,45 @@ async def shutdown_event():
 
 
 # --- API Endpoints ---
+@app.post("/ingest")
+@limiter.limit("10/minute")
+async def ingest_data(
+    request: Request,
+    data: IngestData,
+    x_api_key: str = Header(..., alias="X-API-KEY"),
+):
+    """
+    Endpoint to receive data for the Memory Factory.
+    Requires a valid API key and is rate-limited.
+    """
+    # 1. Security: API Key Check
+    if x_api_key != VALID_API_KEY:
+        logger.warning(f"Invalid API key received from IP: {request.client.host}")
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+
+    logger.info(f"Received valid ingest request from IP: {request.client.host}")
+
+    # 2. Backup (Layer 4)
+    try:
+        ingestion_backup_logger.info(data.model_dump_json())
+    except Exception as e:
+        logger.error(f"Failed to write to ingestion backup log: {e}", exc_info=True)
+        # Continue processing even if backup fails, but log it as a critical error.
+
+    # 3. Add to Queue (Layer 3)
+    try:
+        ingestion_pipeline_instance.add_to_queue(
+            data.model_dump(), priority=data.priority
+        )
+    except Exception as e:
+        logger.error(f"Failed to add data to ingestion queue: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Failed to queue data for processing."
+        )
+
+    return {"status": "ok", "message": "Data received and queued for processing."}
+
+
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     if not telegram_app:

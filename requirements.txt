@@ -8,3 +8,4 @@ fastapi
 uvicorn[standard]
 python-telegram-bot
 apscheduler
+slowapi
