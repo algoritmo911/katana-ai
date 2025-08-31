@@ -1,82 +1,22 @@
 import streamlit as st
-import sys
-import os
-from src.healthcheck.subsystems import check_openai_status, check_supabase_status, check_n8n_status
 
-# Добавляем корень проекта в sys.path, чтобы можно было импортировать katana
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
+st.set_page_config(
+    page_title="Katana AI",
+    page_icon="🤖",
+    layout="wide"
+)
 
-try:
-    from katana.self_evolve import SelfEvolver
-    katana_agent_available = True
-    # Инициализируем SelfEvolver один раз, чтобы не создавать его при каждом запросе
-    # st.cache_resource можно использовать для более "правильного" управления ресурсами в Streamlit
-    if 'katana_evolver' not in st.session_state:
-        st.session_state.katana_evolver = SelfEvolver()
-except ImportError as e:
-    katana_agent_available = False
-    st.error(f"Ошибка импорта KatanaAgent (SelfEvolver): {e}. Убедитесь, что модуль katana доступен.")
-    # Определим st.session_state.katana_evolver как None, чтобы избежать ошибок далее
-    st.session_state.katana_evolver = None
+st.title("Добро пожаловать в интерфейс Katana AI")
+st.sidebar.success("Выберите страницу для навигации.")
 
+st.markdown(
+    """
+    **Katana AI** - это ваш ассистент для разработки и анализа.
 
-# Функция для получения ответа от KatanaAgent
-def get_katana_response(user_input: str) -> str:
-    if not katana_agent_available or st.session_state.katana_evolver is None:
-        return "Ошибка: KatanaAgent недоступен."
-    try:
-        # Пока что SelfEvolver.generate_patch синхронный.
-        # Если бы он был асинхронным, или требовал длительного времени,
-        # нужно было бы использовать asyncio.to_thread или другие подходы.
-        response = st.session_state.katana_evolver.generate_patch(user_input)
-        return response
-    except Exception as e:
-        st.error(f"Ошибка при вызове KatanaAgent: {e}")
-        return f"Произошла ошибка при обработке вашего запроса: {e}"
+    ### Что можно сделать:
+    - **Перейти в Чат**: Взаимодействуйте с агентом Katana в реальном времени.
+    - **Проверить Здоровье Системы**: Убедитесь, что все подсистемы функционируют нормально.
 
-def main():
-    st.sidebar.title("Дашборд Здоровья Системы")
-
-    # Получаем и отображаем статусы
-    st.sidebar.subheader("Сервисы")
-
-    # OpenAI
-    openai_status, openai_msg = check_openai_status()
-    st.sidebar.metric(label="OpenAI", value=openai_status, delta=openai_msg, delta_color="normal" if openai_status == "ОНЛАЙН" else "inverse")
-
-    # Supabase
-    supabase_status, supabase_msg = check_supabase_status()
-    st.sidebar.metric(label="Supabase", value=supabase_status, delta=supabase_msg, delta_color="normal" if supabase_status == "ОНЛАЙН" else "inverse")
-
-    # n8n
-    n8n_status, n8n_msg = check_n8n_status()
-    st.sidebar.metric(label="n8n", value=n8n_status, delta=n8n_msg, delta_color="normal" if n8n_status == "ОНЛАЙН" else "inverse")
-
-    st.title("Katana Chat UI")
-    if not katana_agent_available:
-        st.warning("KatanaAgent не загружен. Ответы будут ограничены.")
-
-    # Инициализация истории чата в сессии
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-
-    # Вывод истории сообщений
-    for i, (user_msg, bot_msg) in enumerate(st.session_state.chat_history):
-        st.chat_message("user", key=f"user_{i}").write(user_msg)
-        st.chat_message("assistant", key=f"bot_{i}").write(bot_msg)
-
-    # Ввод сообщения пользователя
-    if user_input := st.chat_input("Напиши сообщение Katana..."):
-        st.session_state.chat_history.append((user_input, "…обрабатываю…"))
-        st.experimental_rerun()
-
-    # Обработка последнего сообщения
-    if st.session_state.chat_history:
-        last_user_msg, last_bot_msg = st.session_state.chat_history[-1]
-        if last_bot_msg == "…обрабатываю…":
-            response = get_katana_response(last_user_msg)
-            st.session_state.chat_history[-1] = (last_user_msg, response)
-            st.experimental_rerun()
-
-if __name__ == "__main__":
-    main()
+    Используйте меню слева для выбора нужного раздела.
+    """
+)
