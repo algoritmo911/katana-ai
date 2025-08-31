@@ -14,6 +14,7 @@ from bot_components.handlers.ping_handler import handle_ping
 from bot_components.handlers.mind_clearing_handler import (
     handle_mind_clearing,
 )
+from bot_components.handlers.genesis_handler import handle_genesis
 
 # TODO: Get API token from environment variable or secrets manager
 API_TOKEN = "123:dummy_token"  # Placeholder for tests
@@ -122,6 +123,9 @@ def _route_command(command_data, message):
             command_data, chat_id, log_local_bot_event
         )
         bot.reply_to(message, reply_message)
+        return True
+    elif command_type == "genesis":
+        handle_genesis(command_data, message, bot)
         return True
     return False
 

@@ -196,6 +196,15 @@ class TestBot(unittest.TestCase):
         # This assertion should still pass as bot.py uses the return value from the handler
         self.mock_bot_module_instance.reply_to.assert_called_with(mock_message, "✅ 'mind_clearing' processed (placeholder).")
 
+    @patch('bot.katana_bot.handle_genesis')
+    def test_routing_genesis(self, mock_handle_genesis_func):
+        command = {"type": "genesis", "module": "factory", "args": {"blueprint": "..."}, "id": "gen001"}
+        mock_message = self._create_mock_message(command)
+
+        bot.handle_message(mock_message)
+
+        mock_handle_genesis_func.assert_called_once_with(command, mock_message, self.mock_bot_module_instance)
+
 
     def test_unknown_command_type_saves_normally(self):
         command = {"type": "unknown_type", "module": "custom_module", "args": {}, "id": "custom003"}
