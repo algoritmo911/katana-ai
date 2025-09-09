@@ -11,3 +11,6 @@ PyYAML
 httpx
 nats-py
 neo4j
+websockets
+psycopg2-binary
+doppler-sdk

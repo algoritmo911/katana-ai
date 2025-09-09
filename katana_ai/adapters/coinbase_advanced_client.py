@@ -115,3 +115,19 @@ class CoinbaseAdvancedClient:
             if e.response.status_code == 500:
                 raise CoinbaseInternalServerError(f"Internal server error: {e.response.text}") from e
             raise CoinbaseAPIError(f"HTTP error: {e.response.text}") from e
+
+    async def place_market_order(self, product_id: str, side: str, size: float):
+        """
+        [SANDBOX-ONLY] Places a mock market order.
+        This is a placeholder for Phase 3 and does not execute real trades.
+        """
+        print(f"[Hephaestus SANDBOX] Mock market order: {side} {size} of {product_id}")
+        # In a real implementation, this would make a POST request to the API.
+        # For now, we just return a mock success response.
+        return {
+            "status": "SUCCESS",
+            "order_id": f"mock-order-{int(time.time())}",
+            "product_id": product_id,
+            "side": side,
+            "size": size
+        }

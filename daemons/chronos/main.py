@@ -1,41 +1,106 @@
 import asyncio
-import nats
-from nats.errors import ConnectionClosedError, TimeoutError, NoServersError
+import json
+import logging
 import time
+import nats
+import websockets
+from pydantic import ValidationError
 
-async def main():
-    """
-    The main function for the Chronos daemon.
-    Connects to NATS and publishes a heartbeat every second.
-    """
-    nc = None
+from .db import get_db_connection, create_tickers_table, insert_ticker_data
+from .models import TickerData
+
+# --- Configuration ---
+LOG_LEVEL = logging.INFO
+COINBASE_WS_URL = "wss://ws-feed.pro.coinbase.com"
+NATS_URL = "nats://localhost:4222"
+PRODUCT_IDS = ["BTC-USD", "ETH-USD"]
+
+# Configure logging
+logging.basicConfig(level=LOG_LEVEL)
+logger = logging.getLogger(__name__)
+
+
+async def coinbase_websocket_handler(nats_client, db_conn):
+    """Handles the WebSocket connection to Coinbase."""
+    subscribe_payload = {
+        "type": "subscribe",
+        "product_ids": PRODUCT_IDS,
+        "channels": ["ticker"],
+    }
     while True:
         try:
-            if nc is None or not nc.is_connected:
-                print("Connecting to NATS...")
-                nc = await nats.connect("nats://localhost:4222")
-                print("Connected to NATS.")
+            async with websockets.connect(COINBASE_WS_URL) as ws:
+                await ws.send(json.dumps(subscribe_payload))
+                logger.info(f"Connected to Coinbase WebSocket and subscribed to {PRODUCT_IDS}.")
 
-            while True:
-                current_time = time.time()
-                await nc.publish("chronos.tick.1s", str(current_time).encode())
-                print(f"Published heartbeat at {current_time}")
-                await asyncio.sleep(1)
+                while True:
+                    message = await ws.recv()
+                    data = json.loads(message)
 
-        except (ConnectionClosedError, TimeoutError, NoServersError) as e:
-            print(f"Connection error: {e}. Reconnecting in 5 seconds...")
-            if nc and not nc.is_closed:
-                await nc.close()
-            nc = None
-            await asyncio.sleep(5)
+                    if data.get("type") == "ticker":
+                        try:
+                            ticker = TickerData(**data)
+
+                            # 1. Insert into DB
+                            insert_ticker_data(db_conn, ticker)
+
+                            # 2. Publish to NATS
+                            subject = f"chronos.market.ticker.{ticker.product_id}"
+                            payload = ticker.model_dump_json().encode()
+                            await nats_client.publish(subject, payload)
+                            logger.debug(f"Processed and published ticker for {ticker.product_id}")
+
+                        except ValidationError as e:
+                            logger.warning(f"Failed to validate ticker data: {e}")
+                        except Exception as e:
+                            logger.error(f"Error processing ticker message: {e}")
+
+        except (websockets.exceptions.ConnectionClosed, ConnectionRefusedError) as e:
+            logger.error(f"Coinbase WebSocket connection error: {e}. Reconnecting in 10 seconds...")
+            await asyncio.sleep(10)
         except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-            if nc and not nc.is_closed:
-                await nc.close()
-            break
+            logger.error(f"An unexpected error occurred in WebSocket handler: {e}")
+            await asyncio.sleep(10)
+
+
+async def heartbeat_publisher(nats_client):
+    """Publishes a heartbeat to NATS every second."""
+    while True:
+        await nats_client.publish("chronos.tick.1s", str(time.time()).encode())
+        await asyncio.sleep(1)
+
+
+async def main():
+    """Main entry point for the Chronos daemon."""
+    nats_client = None
+    db_conn = None
+
+    try:
+        # Connect to services
+        nats_client = await nats.connect(NATS_URL)
+        logger.info("Connected to NATS.")
+
+        db_conn = get_db_connection()
+        create_tickers_table(db_conn)
+
+        # Start background tasks
+        heartbeat_task = asyncio.create_task(heartbeat_publisher(nats_client))
+        websocket_task = asyncio.create_task(coinbase_websocket_handler(nats_client, db_conn))
+
+        logger.info("Chronos daemon started with heartbeat and WebSocket handlers.")
+        await asyncio.gather(heartbeat_task, websocket_task)
+
+    except Exception as e:
+        logger.critical(f"Chronos daemon failed critically: {e}")
+    finally:
+        if nats_client:
+            await nats_client.close()
+        if db_conn:
+            db_conn.close()
+        logger.info("Chronos daemon shut down.")
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Chronos daemon stopped.")
+        logger.info("Chronos daemon stopped by user.")

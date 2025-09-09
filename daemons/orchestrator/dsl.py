@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, model_validator
 from typing import Dict, List, Any, Optional, Literal
 
 # Low-level components of the strategy definition
@@ -20,12 +20,16 @@ class Step(BaseModel):
     condition: Optional[Condition] = None
     actions: Optional[List[Action]] = None
 
-    @root_validator(skip_on_failure=True)
-    def check_exclusive_fields(cls, values):
+    @model_validator(mode='before')
+    @classmethod
+    def check_exclusive_fields(cls, data: Any):
         """Ensures that a step is either a condition or an action, but not both."""
-        if sum(v is not None for v in values.values()) != 1:
+        if not isinstance(data, dict):
+            return data # Let other validators handle non-dict data
+
+        if sum(k in data for k in ['condition', 'actions']) != 1:
             raise ValueError("A Step must contain exactly one of 'condition' or 'actions'.")
-        return values
+        return data
 
 # Mid-level components that define an agent's behavior and state
 class System(BaseModel):

@@ -5,13 +5,15 @@ from fastapi import FastAPI, HTTPException
 from typing import Dict
 
 from daemons.orchestrator.dsl import AgentDefinition
+from daemons.orchestrator.runtime import AgentRuntime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# In-memory storage for agents and NATS client
+# In-memory storage
 agents: Dict[str, AgentDefinition] = {}
+runtimes: Dict[str, AgentRuntime] = {}
 nats_client = None
 
 # --- FastAPI App Setup ---
@@ -34,7 +36,11 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Disconnect from NATS on application shutdown."""
+    """Stop all agent runtimes and disconnect from NATS."""
+    logger.info("Shutting down orchestrator...")
+    for agent_id, runtime in runtimes.items():
+        logger.info(f"Stopping agent {agent_id}...")
+        await runtime.stop()
     if nats_client:
         await nats_client.close()
         logger.info("Disconnected from NATS server.")
@@ -57,18 +63,22 @@ async def conceive_agent(agent_def: AgentDefinition):
     agents[agent_name] = agent_def
 
     # Log the conception
-    logger.info(f"Agent '{agent_name}' has been conceived.")
+    logger.info(f"Agent '{agent_name}' has been conceived. Initializing runtime...")
 
-    # Publish the creation event to NATS
-    if nats_client and nats_client.is_connected:
-        event_subject = "prometheus.events.agent.created"
-        event_payload = agent_def.model_dump_json().encode()
-        await nats_client.publish(event_subject, event_payload)
-        logger.info(f"Published creation event for agent '{agent_name}' to subject '{event_subject}'.")
-    else:
-        logger.error("Cannot publish agent creation event: NATS client not connected.")
-        # Depending on requirements, we might want to raise an error here
+    # Publish the creation event to NATS before starting the agent
+    if not nats_client or not nats_client.is_connected:
+        logger.error("Cannot publish agent creation event or start agent: NATS client not connected.")
         raise HTTPException(status_code=503, detail="NATS service is unavailable.")
+
+    event_subject = "prometheus.events.agent.created"
+    event_payload = agent_def.model_dump_json().encode()
+    await nats_client.publish(event_subject, event_payload)
+    logger.info(f"Published creation event for agent '{agent_name}' to subject '{event_subject}'.")
+
+    # Create and start the agent runtime
+    runtime = AgentRuntime(agent_def, nats_client)
+    await runtime.start()
+    runtimes[agent_name] = runtime
 
     return {"message": f"Agent '{agent_name}' conceived successfully."}
 

@@ -48,3 +48,16 @@ python daemons/chronos/main.py
 ```
 
 This will start the Chronos daemon, which will begin publishing a heartbeat to the NATS server every second.
+
+## System Visualization (Knowledge Graph)
+
+After running the end-to-end test (`daemons/tests/test_first_action.py`), the Mnemosyne daemon will have created a trace of the agent's first thought and action in the Neo4j database.
+
+To visualize this:
+1.  Open your web browser and navigate to the Neo4j Browser: `http://localhost:7474`.
+2.  Connect to the database using the credentials `neo4j` / `password`.
+3.  Run the following Cypher query in the query editor:
+    ```cypher
+    MATCH (n) RETURN n;
+    ```
+4.  This will display all the nodes and relationships created during the test, showing the full chain of events from agent conception to action execution.
