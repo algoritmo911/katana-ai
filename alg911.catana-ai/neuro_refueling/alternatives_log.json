@@ -1,0 +1,32 @@
+{
+  "user_id": "default",
+  "log_entries": [
+    {
+      "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+      "craving_event": "Evening stress",
+      "chosen_alternative": "Meditation_10min",
+      "notes": "Felt better afterwards."
+    },
+    {
+      "timestamp": "2025-06-16T21:00:00Z",
+      "craving_event": "Post-work stress",
+      "chosen_alternative": "Evening Tea",
+      "effect": "Calming",
+      "notes": "Helped to unwind instead of reaching for wine."
+    }
+  ],
+  "alternative_strategies": [
+    {
+      "id": "alt001",
+      "name": "Deep Breathing Exercise",
+      "type": "mental_switch",
+      "description": "5 minutes of focused breathing."
+    },
+    {
+      "id": "alt002",
+      "name": "Walk Outside",
+      "type": "visual_mental_switch",
+      "description": "15 minutes brisk walk."
+    }
+  ]
+}

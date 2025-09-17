@@ -1,0 +1,2 @@
+./n8n_webhook_handler.sh: line 27: uuidgen: command not found
+[PYTHON_IN_HANDLER] INFO: Python script successfully added command cmd_n8n_1750065586_ to /app/alg911.catana-ai/katana.commands.json
