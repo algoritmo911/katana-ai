@@ -1,35 +1,42 @@
-# bot/nlp/context.py
-
-def get_initial_context():
-    """Возвращает начальный контекст для нового пользователя."""
-    return {
-        "last_recognized_intent": None,
-        "last_processed_intent": None,
-        "entities": {},
-        "history": [] # history is now managed in katana_bot.py's user_memory
-    }
-
-def update_context(current_context: dict, nlp_result: dict, processed_intents_info: list) -> dict:
+class DialogueContextManager:
     """
-    Обновляет контекст на основе результатов NLP-анализа и выполненных действий.
-    Основная логика сохранения контекста сущностей теперь находится в parser.py.
+    Управляет состоянием диалога для каждой сессии.
     """
-    new_context = current_context.copy()
+    def get_initial_session(self):
+        """Возвращает начальную структуру сессии."""
+        return {
+            "context": {
+                "last_intent": None,
+                "entities": {},
+            },
+            "history": []
+        }
 
-    # 1. Update last recognized intent
-    if nlp_result.get("intents"):
-        new_context["last_recognized_intent"] = nlp_result["intents"][0]["name"]
+    def update_context(self, current_context: dict, nlp_result: dict) -> dict:
+        """
+        Обновляет контекст диалога на основе нового NLP-результата.
+        Эта функция теперь является центром управления состоянием.
+        """
+        new_context = current_context.copy()
 
-    # 2. Update last processed intent
-    main_processed_intent = next((p["name"] for p in processed_intents_info if p.get("processed")), None)
-    if main_processed_intent:
-        new_context["last_processed_intent"] = main_processed_intent
+        # 1. Обновляем последний интент
+        new_intent = nlp_result.get("intents", [{}])[0].get("name")
+        if new_intent:
+            new_context["last_intent"] = new_intent
 
-    # 3. Update entities from the final nlp_result
-    # The parser has already handled merging entities from the previous context if it was a continuation.
-    if nlp_result.get("entities"):
-        new_context["entities"] = nlp_result["entities"]
-    else:
-        new_context["entities"] = {}
+        # 2. Управляем сущностями на основе состояния диалога
+        raw_nlp_response = nlp_result.get("metadata", {}).get("raw_openai_response", {})
+        dialogue_state = raw_nlp_response.get("dialogue_state")
 
-    return new_context
+        new_entities = nlp_result.get("entities", {})
+
+        if dialogue_state == 'continuation':
+            # Если это продолжение диалога, объединяем сущности.
+            # Новые сущности имеют приоритет над старыми.
+            merged_entities = {**current_context.get("entities", {}), **new_entities}
+            new_context["entities"] = merged_entities
+        else:
+            # Если это новый запрос, полностью заменяем сущности.
+            new_context["entities"] = new_entities
+
+        return new_context

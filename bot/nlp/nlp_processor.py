@@ -2,9 +2,19 @@ import os
 import json
 import openai
 from dotenv import load_dotenv
+import functools
 
 # Загружаем переменные окружения из .env файла
 load_dotenv()
+
+def _load_system_prompt():
+    """Loads the system prompt from an external file."""
+    try:
+        with open(os.path.join(os.path.dirname(__file__), 'system_prompt.md'), 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        print("ERROR: system_prompt.md not found. Using a default fallback prompt.")
+        return "You are a helpful assistant. Respond in JSON."
 
 class NLPError(Exception):
     """Кастомное исключение для ошибок NLP-процессора."""
@@ -13,87 +23,37 @@ class NLPError(Exception):
 class NLPProcessor:
     """
     Класс для обработки текста с использованием внешнего NLP-сервиса (OpenAI).
+    Оптимизирован для удобства тестирования, конфигурации и производительности.
     """
-    def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY")
+    def __init__(self, api_key=None, model=None):
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY не найден в переменных окружения.")
-        self.client = openai.OpenAI(api_key=self.api_key)
+            raise ValueError("OPENAI_API_KEY не найден и не был предоставлен.")
 
-    def process_text(self, text: str, dialogue_history: list[dict] = None) -> dict:
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o")
+        self.client = openai.OpenAI(api_key=self.api_key)
+        self.system_prompt = _load_system_prompt()
+
+    @functools.lru_cache(maxsize=128)
+    def process_text(self, text: str, dialogue_history_json: str = None) -> dict:
         """
         Отправляет текст в OpenAI для анализа и возвращает структурированный JSON.
-
-        :param text: Текст для анализа.
-        :param dialogue_history: Список предыдущих сообщений для контекста.
-        :return: Словарь с результатами анализа.
+        Кэширует результаты для идентичных запросов.
         """
-        system_prompt = """
-        Ты — "Когнитивное Ядро" для ИИ-ассистента "Katana". Твоя задача — глубокий семантический анализ входящих запросов.
-        Возвращай ТОЛЬКО JSON-объект со следующей структурой:
-        {
-          "intent": "...",
-          "entities": [
-            {"text": "...", "type": "document_name"},
-            {"text": "...", "type": "time_range"},
-            {"text": "...", "type": "person"},
-            {"text": "...", "type": "location"},
-            {"text": "...", "type": "organization"},
-            {"text": "...", "type": "date"}
-          ],
-          "keywords": ["...", "..."],
-          "sentiment": "...",
-          "dialogue_state": "..."
-        }
+        dialogue_history = json.loads(dialogue_history_json) if dialogue_history_json else []
 
-        ### Описание полей:
-        1.  **`intent`**: Определи основное намерение пользователя. Варианты:
-            *   `search_documents`: Поиск документов или данных. Пример: "Найди мне данные по Sapiens Coin за прошлую неделю".
-            *   `get_weather`: Запрос погоды.
-            *   `tell_joke`: Просьба рассказать шутку.
-            *   `greeting`: Приветствие.
-            *   `goodbye`: Прощание.
-            *   `get_time`: Запрос времени.
-            *   `recall_information`: Пользователь просит вспомнить что-то из предыдущего контекста. Пример: "О чем мы только что говорили?".
-            *   `clarification`: Ответ пользователя на уточняющий вопрос от бота.
-            *   `fallback_general`: Если намерение неясно.
-
-        2.  **`entities`**: Извлеки именованные сущности.
-            *   `document_name`: Название документа, файла, отчета. Пример: "Sapiens Coin", "отчет по Q3".
-            *   `time_range`: Временной диапазон. Пример: "за прошлую неделю", "вчера", "с 1 по 5 мая".
-            *   `person`: Имя и/или фамилия.
-            *   `location`: Географическое место.
-            *   `organization`: Название компании или организации.
-            *   `date`: Конкретная дата или день.
-
-        3.  **`keywords`**: Извлеки 5-7 ключевых слов или концепций.
-
-        4.  **`sentiment`**: Определи окраску: "positive", "negative", "neutral".
-
-        5.  **`dialogue_state`**: Определи состояние диалога.
-            *   `new_request`: Новый, независимый запрос.
-            *   `continuation`: Продолжение предыдущего запроса. Пример: "А теперь отсортируй по дате".
-            *   `clarification_response`: Ответ на прямой вопрос от бота.
-
-        ### Правила:
-        - Если сущности не найдены, верни пустой список `[]`.
-        - Твой ответ должен быть валидным JSON и ничего кроме него.
-        - Анализируй `dialogue_history` для определения `dialogue_state`. Если `dialogue_history` пуст, то это `new_request`.
-        """
-
-        messages = [{"role": "system", "content": system_prompt}]
+        messages = [{"role": "system", "content": self.system_prompt}]
         if dialogue_history:
             messages.extend(dialogue_history)
         messages.append({"role": "user", "content": text})
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model=self.model,
                 messages=messages,
                 temperature=0,
                 response_format={"type": "json_object"}
             )
-
             response_content = response.choices[0].message.content
             if not response_content:
                 raise NLPError("OpenAI API вернул пустой ответ.")
@@ -114,18 +74,18 @@ if __name__ == '__main__':
         processor = NLPProcessor()
         test_text_1 = "Найди мне данные по Sapiens Coin за прошлую неделю"
         print(f"--- Анализ 1: '{test_text_1}' ---")
-        result_1 = processor.process_text(test_text_1)
+        # Преобразуем историю в JSON-строку для кэширования
+        history_json = json.dumps([
+            {"role": "user", "content": "Предыдущий вопрос"},
+            {"role": "assistant", "content": "Предыдущий ответ"},
+        ])
+        result_1 = processor.process_text(test_text_1, dialogue_history_json=history_json)
         print(json.dumps(result_1, indent=2, ensure_ascii=False))
 
-        # Эмуляция истории для второго запроса
-        history = [
-            {"role": "user", "content": test_text_1},
-            {"role": "assistant", "content": "Вот данные по Sapiens Coin..."},
-        ]
-        test_text_2 = "А теперь отсортируй по дате"
-        print(f"\n--- Анализ 2: '{test_text_2}' (с контекстом) ---")
-        result_2 = processor.process_text(test_text_2, dialogue_history=history)
-        print(json.dumps(result_2, indent=2, ensure_ascii=False))
+        # Повторный вызов с теми же аргументами (должен быть взят из кэша)
+        print("\n--- Повторный анализ (из кэша) ---")
+        result_cached = processor.process_text(test_text_1, dialogue_history_json=history_json)
+        print(json.dumps(result_cached, indent=2, ensure_ascii=False))
 
     except (ValueError, NLPError) as e:
         print(e)
