@@ -133,24 +133,18 @@ async def handle_mind_clearing(command_data, chat_id):
     # await bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
 
 # --- Slash Command Handler ---
-from katana.commands.slash_commands import SLASH_COMMANDS
+from katana.commands.slash_commands import command_registry
 
 async def handle_slash_command(chat_id: int, command: str, args_str: str, original_message: telebot.types.Message):
     """
-    Handles slash commands by looking them up in the SLASH_COMMANDS dictionary
-    and calling the corresponding handler.
+    Handles slash commands by executing them through the command registry.
     """
     log_local_bot_event(f"Handling slash command: '{command}' with args: '{args_str}' for chat_id {chat_id}")
-
-    handler = SLASH_COMMANDS.get(command)
-    if handler:
-        try:
-            await handler(chat_id, args_str, bot, original_message)
-        except Exception as e:
-            log_local_bot_event(f"Error handling slash command '{command}': {e}")
-            await bot.reply_to(original_message, f"An error occurred while processing the command: {e}")
-    else:
-        await bot.reply_to(original_message, f"Unknown command: {command}")
+    try:
+        await command_registry.execute(command, chat_id, args_str, bot, original_message)
+    except Exception as e:
+        log_local_bot_event(f"Error handling slash command '{command}': {e}")
+        await bot.reply_to(original_message, f"An error occurred while processing the command: {e}")
 
 # --- Unified Message Processing ---
 async def process_user_message(chat_id: int, text: str, original_message: telebot.types.Message):
