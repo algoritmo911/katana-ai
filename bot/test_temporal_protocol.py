@@ -1,6 +1,6 @@
 import pytest
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from bot.temporal.models import EventObject
@@ -27,14 +27,14 @@ def test_time_fabric_infers_and_validates_causality(monkeypatch):
         source="jira_ticket",
         event_id="PROJ-123",
         payload={"type": "bug", "summary": "Generator fails on missing template"},
-        timestamp_utc=datetime.utcnow()
+        timestamp_utc=datetime.now(timezone.utc)
     )
 
     event_b = EventObject.create(
         source="github_commit",
         event_id="commit-d4e5f6",
         payload={"author": "Jules", "message": "fix: Added error handling for missing templates", "reference": "PROJ-123"},
-        timestamp_utc=datetime.utcnow() + timedelta(hours=1)
+        timestamp_utc=datetime.now(timezone.utc) + timedelta(hours=1)
     )
 
     # 2. Инициализируем Ткань Времени
