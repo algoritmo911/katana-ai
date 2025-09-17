@@ -3,30 +3,25 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
-import random
-from dotenv import load_dotenv
+import random # Для случайных ответов
 
-# Загружаем переменные окружения в самом начале
-load_dotenv()
-
-# Импортируем наши модули
+# Импортируем наши NLP модули
 from bot.nlp import parser as nlp_parser
 from bot.nlp import context as nlp_context
-from bot import database
 
 # Получаем токен из переменной окружения
-API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN')
-bot = None
-if API_TOKEN and ':' in API_TOKEN:
-    bot = telebot.TeleBot(API_TOKEN)
-else:
-    print("WARNING: Telegram API token not found. Bot instance not created. Running in test mode or without Telegram integration.")
+API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN', 'YOUR_API_TOKEN')
+if not API_TOKEN or ':' not in API_TOKEN:
+    raise ValueError("❌ Invalid or missing Telegram API token. Please set KATANA_TELEGRAM_TOKEN env variable with format '123456:ABCDEF'.")
+
+bot = telebot.TeleBot(API_TOKEN)
 
 # Папка для сохранения JSON-команд (если они еще нужны)
 COMMAND_FILE_DIR = Path('commands')
 COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
 
-# In-memory хранилище user_memory УДАЛЕНО. Теперь все будет в Supabase.
+# In-memory хранилище для контекста и истории пользователей
+user_memory = {}
 
 def log_local_bot_event(message_text):
     """Вывод лога события в консоль."""
@@ -103,45 +98,8 @@ def handle_intent_fallback_clarification_needed(chat_id, entities, current_conte
 
 
 def handle_intent_fallback_after_clarification_fail(chat_id, entities, current_context):
+
     return "Я все еще не понял, какой город вас интересует. Давайте попробуем другую команду?"
-
-def _handle_intent_recall_information(chat_id, nlp_result):
-    """
-    Обрабатывает запрос на извлечение информации из памяти (БД).
-    """
-    keywords = nlp_result.get("metadata", {}).get("keywords", [])
-    if not keywords:
-        return "Я не совсем понял, о чем вы спрашиваете. Можете уточнить?"
-
-    # Ищем релевантные сообщения в истории
-    relevant_messages = database.search_messages_by_keywords(chat_id, keywords)
-
-    if not relevant_messages:
-        return "Хм, я не могу вспомнить, чтобы мы об этом говорили."
-
-    # Очень простая логика ответа: берем последнее релевантное сообщение
-    # и пытаемся извлечь из него ответ на основе сущностей в вопросе.
-    last_relevant_message_meta = relevant_messages[-1].get("metadata", {})
-    question_entities = nlp_result.get("entities", {})
-
-    # Если в вопросе есть "город" или "куда" (что NLP определит как LOC)
-    if "city" in question_entities or "loc" in question_entities:
-        # Ищем сущность LOC в найденном сообщении
-        found_entities = last_relevant_message_meta.get("raw_entities", [])
-        for entity in found_entities:
-            if entity.get("type") == "LOC":
-                return f"Вы планировали что-то в городе {entity.get('text')}."
-
-    # Если в вопросе есть "кто" или "с кем" (PERSON)
-    if "person" in question_entities:
-        found_entities = last_relevant_message_meta.get("raw_entities", [])
-        for entity in found_entities:
-            if entity.get("type") == "PERSON":
-                return f"В планах упоминался(-ась) {entity.get('text')}."
-
-    # Если не удалось найти конкретный ответ, но есть релевантное сообщение
-    return f"Я помню, мы обсуждали это. Вот что вы сказали: \"{relevant_messages[-1].get('user_text')}\""
-
 
 # Маппинг намерений на их обработчики
 INTENT_HANDLERS = {
@@ -151,78 +109,46 @@ INTENT_HANDLERS = {
     "greeting": handle_intent_greeting,
     "goodbye": handle_intent_goodbye,
     "get_time": handle_intent_get_time,
-    "recall_information": _handle_intent_recall_information,
     "clarify_city_for_weather": handle_intent_clarify_city_for_weather,
     "fallback_general": handle_intent_fallback_general, # Изменено с "fallback"
     "fallback_clarification_needed": handle_intent_fallback_clarification_needed, # Новый обработчик
     "fallback_after_clarification_fail": handle_intent_fallback_after_clarification_fail,
 }
 
-if bot:
-    @bot.message_handler(commands=['start', 'help'])
-    def handle_start_help(message):
-        """Ответ на /start и /help"""
-        chat_id = message.chat.id
-        log_local_bot_event(f"{message.text} received from {chat_id}")
+@bot.message_handler(commands=['start', 'help'])
+def handle_start_help(message):
+    """Ответ на /start и /help"""
+    chat_id = message.chat.id
+    log_local_bot_event(f"{message.text} received from {chat_id}")
 
-        # Инициализация памяти больше не нужна, т.к. контекст будет создаваться на лету из БД
+    # Инициализация памяти для нового пользователя
+    if chat_id not in user_memory:
+        user_memory[chat_id] = {
+            "context": nlp_context.get_initial_context(),
+            "history": []
+        }
 
-        bot.reply_to(message, "Привет! Я Katana, ваш умный ассистент. Спросите меня что-нибудь, например:\n"
-                            "- Какая погода в Москве?\n"
-                            "- Расскажи анекдот\n"
-                            "- Который час?\n"
-                            "Я стараюсь понимать несколько команд сразу и помнить наш разговор.")
+    bot.reply_to(message, "Привет! Я Katana, ваш умный ассистент. Спросите меня что-нибудь, например:\n"
+                          "- Какая погода в Москве?\n"
+                          "- Расскажи анекдот\n"
+                          "- Который час?\n"
+                          "Я стараюсь понимать несколько команд сразу и помнить наш разговор.")
 
 # --- Этапы обработки сообщения ---
 
 def _prepare_context(chat_id, user_text):
-    """
-    Подготовка контекста: извлечение истории из БД и построение текущего контекста.
-    Возвращает текущий контекст (не всю историю).
-    """
-    # Извлекаем недавнюю историю, чтобы построить контекст
-    recent_messages = database.get_recent_messages(chat_id, limit=5)
+    """Подготовка контекста: получение или инициализация памяти пользователя."""
+    if chat_id not in user_memory:
+        user_memory[chat_id] = {
+            "context": nlp_context.get_initial_context(),
+            "history": []
+        }
+    return user_memory[chat_id]
 
-    # Если истории нет, возвращаем начальный контекст
-    if not recent_messages:
-        return nlp_context.get_initial_context()
-
-    # Строим простой контекст на основе последнего сообщения в истории
-    # В будущем эту логику можно усложнить, анализируя несколько последних сообщений
-    last_message = recent_messages[-1]
-    last_metadata = last_message.get('metadata', {})
-
-    # Используем нашу функцию из nlp_context для создания контекста из старых данных
-    # Это примерная логика. nlp_context.update_context ожидает nlp_result и processed_intents
-    # Мы можем эмулировать это или создать новую функцию.
-    # Пока что, просто возьмем сущности и последний интент из метаданных.
-
-    reconstructed_context = nlp_context.get_initial_context()
-    if last_metadata:
-        # Предполагаем, что в metadata есть `raw_intent` и `raw_entities`
-        last_intent = last_metadata.get('raw_intent')
-        if last_intent:
-            reconstructed_context['last_recognized_intent'] = last_intent
-
-        # Преобразуем список сущностей в словарь, как ожидает контекст
-        last_entities_list = last_metadata.get('raw_entities', [])
-        reconstructed_entities = {}
-        for entity in last_entities_list:
-            entity_type = entity.get("type", "").lower()
-            if entity_type == "loc":
-                reconstructed_entities["city"] = entity.get("text")
-            else:
-                reconstructed_entities[entity_type] = entity.get("text")
-        reconstructed_context['entities'] = reconstructed_entities
-
-    log_local_bot_event(f"Reconstructed context for {chat_id}: {reconstructed_context}")
-    return reconstructed_context
-
-
-def _perform_nlp_analysis(user_text, current_context):
+def _perform_nlp_analysis(user_text, current_context, history):
     """NLP-анализ текста."""
-    # `current_context` теперь приходит из _prepare_context, который построил его из БД
-    nlp_result = nlp_parser.analyze_text(user_text, current_context)
+    nlp_result = nlp_parser.analyze_text(user_text, current_context, history)
+    # В будущем здесь может быть более сложная логика, включая тематические фреймы
     return nlp_result
 
 def _generate_response(chat_id, nlp_result, current_context):
@@ -274,6 +200,7 @@ def _generate_response(chat_id, nlp_result, current_context):
             elif primary_frame["status"] in ["ready_to_fulfill", "completed_after_clarification"]:
                 target_intent_name = "get_weather"
 
+
             if target_intent_name and target_intent_name not in processed_intent_names_this_turn:
                 handler = INTENT_HANDLERS.get(target_intent_name)
                 if handler:
@@ -296,12 +223,7 @@ def _generate_response(chat_id, nlp_result, current_context):
 
         handler = INTENT_HANDLERS.get(intent_name)
         if handler:
-            if handler is _handle_intent_recall_information:
-                # Этот обработчик имеет другую сигнатуру
-                response_text = handler(chat_id, nlp_result)
-            else:
-                response_text = handler(chat_id, entities_from_nlp, current_context)
-
+            response_text = handler(chat_id, entities_from_nlp, current_context)
             other_intent_responses.append(response_text)
             other_intent_processed_infos.append({
                 "name": intent_name, "processed": True, "response": response_text,
@@ -358,77 +280,149 @@ def _generate_response(chat_id, nlp_result, current_context):
     final_response_string = "\n".join(filter(None, bot_responses)) # filter(None,...) in case a handler returns None
     return final_response_string, processed_intents_info
 
-def _update_state(chat_id, user_text, final_response, nlp_result):
+def _update_state(chat_id, user_text, final_response, session_memory, nlp_result, processed_intents_info):
+    """Обновление состояния: контекст, история, логирование метрик."""
+    current_context = session_memory["context"]
+
+    # Обновляем контекст на основе результатов NLP и обработки
+    session_memory["context"] = nlp_context.update_context(current_context, nlp_result, processed_intents_info)
+
+    # Обновляем историю
+    session_memory["history"].append({
+        "user": user_text,
+        "bot": final_response,
+        "timestamp": datetime.utcnow().isoformat(),
+        "nlp_result": nlp_result, # Сохраняем для возможного анализа и метрик
+        "processed_intents": processed_intents_info # Детали обработки
+    })
+    # Ограничиваем историю
+    session_memory["history"] = session_memory["history"][-20:]
+
+    # --- Логирование метрик осознанности ---
+    # Metric 1: Contextual Linkage
+
+    # Проверяем, были ли сущности из предыдущего контекста использованы текущими обработчиками.
+    # ИЛИ если активный фрейм был продолжен/завершен.
+    contextual_linkage_score = 0
+    prev_context_entities = current_context.get("entities", {})
+
+    # Check if entities from previous context were used in any of the processed intents
+    for p_info in processed_intents_info:
+        if p_info.get("processed") and p_info.get("entities_used"):
+            for entity_key, entity_value in prev_context_entities.items():
+                if entity_key in p_info["entities_used"] and p_info["entities_used"][entity_key] == entity_value:
+                    contextual_linkage_score += 1
+                    break # Count each previous entity usage once across all processed intents
+
+    # Check if an active frame from nlp_result was a continuation of a previous state
+    # (e.g. a weather frame was incomplete and is now being completed or clarified)
+    # This is a simplified check. More sophisticated frame transition tracking would be better.
+    if nlp_result.get("active_frames"):
+        current_frame_name = nlp_result["active_frames"][0]["name"] # Assuming one primary frame for now
+        # A simple heuristic: if the last processed intent was related to this frame's clarification, it's a contextual link.
+        if current_context.get("last_processed_intent") == "clarify_city_for_weather" and \
+           current_frame_name == "weather_inquiry_frame" and \
+           any(p_info["name"] == "get_weather" for p_info in processed_intents_info):
+            contextual_linkage_score += 1 # Bonus for frame continuation
+
+    # Metric 2: Understanding Depth
+    primary_intent_name = None
+    primary_intent_confidence = 0.0
+    if processed_intents_info: # Use processed intents to determine primary
+        # Find first non-fallback processed intent if possible
+        first_real_intent_info = next((p for p in processed_intents_info if p.get("processed") and not p.get("is_final_fallback") and not p.get("name", "").startswith("fallback_")), None)
+        if first_real_intent_info:
+            primary_intent_name = first_real_intent_info["name"]
+            # Try to get confidence from original nlp_result for this intent
+            original_intent_data = next((i for i in nlp_result.get("intents", []) if i["name"] == primary_intent_name), None)
+            if original_intent_data:
+                primary_intent_confidence = original_intent_data.get("confidence", 0.0)
+        elif processed_intents_info[0].get("processed"): # If only fallback was processed
+            primary_intent_name = processed_intents_info[0]["name"]
+            original_intent_data = next((i for i in nlp_result.get("intents", []) if i["name"] == primary_intent_name), None)
+            if original_intent_data:
+                 primary_intent_confidence = original_intent_data.get("confidence", 1.0) # Default to 1.0 for fallbacks from parser
+
+    used_fallback_type = nlp_result.get("fallback_type") # From parser
+    is_final_fallback_handler_used = any(p.get("is_final_fallback") for p in processed_intents_info)
+
+    # Log metrics
+    metrics_log = {
+        "chat_id": chat_id,
+        "contextual_linkage_score": contextual_linkage_score,
+        "primary_intent_name": primary_intent_name,
+        "primary_intent_confidence": f"{primary_intent_confidence:.2f}",
+        "used_fallback_type": used_fallback_type, # Fallback type identified by parser
+        "is_final_fallback_handler_used": is_final_fallback_handler_used, # If _generate_response used its own fallback
+        "active_frames_count": len(nlp_result.get("active_frames", []))
+    }
+    log_local_bot_event(f"KATANA_METRICS: {json.dumps(metrics_log)}")
+    log_local_bot_event(f"Updated memory for {chat_id}: {json.dumps(session_memory, ensure_ascii=False, indent=2, default=str)}")
+
+@bot.message_handler(func=lambda message: message.content_type == 'text')
+def handle_user_chat_message(message):
     """
-    Обновление состояния: сохранение сообщения и его метаданных в Supabase.
+    Обработчик текстовых сообщений от пользователя с использованием NLP.
+    Разбит на этапы: подготовка контекста -> NLP-анализ -> генерация ответа -> сохранение состояния.
     """
-    # Создаем копию метаданных, чтобы избежать циклических ссылок
-    metadata_to_save = nlp_result.get("metadata", {}).copy()
+    chat_id = message.chat.id
+    user_text = message.text
+    log_local_bot_event(f"Received text from {chat_id}: {user_text}")
 
-    # Создаем копию всего nlp_result, чтобы не изменять оригинал
-    clean_nlp_result = nlp_result.copy()
-    # Удаляем из копии ключ 'metadata', чтобы избежать цикла при сериализации
-    clean_nlp_result.pop('metadata', None)
-
-    # Добавляем очищенный результат в метаданные для сохранения
-    metadata_to_save['full_nlp_result'] = clean_nlp_result
-
-    database.save_message(
-        chat_id=chat_id,
-        user_text=user_text,
-        bot_response=final_response,
-        metadata=metadata_to_save
-    )
-    # Логируем только после успешного сохранения
-    log_local_bot_event(f"State saved to DB for chat_id {chat_id}.")
-
-
-def process_message_logic(chat_id, user_text):
-    """
-    Основная логика обработки сообщения, вынесенная для тестирования.
-    Возвращает финальный ответ бота.
-    """
-    log_local_bot_event(f"Processing text for {chat_id}: {user_text}")
-
-    # 1. Подготовка контекста из БД
-    current_context = _prepare_context(chat_id, user_text)
+    # 1. Подготовка контекста
+    session_memory = _prepare_context(chat_id, user_text)
+    current_context = session_memory["context"]
+    history = session_memory["history"]
 
     # 2. NLP-анализ
-    nlp_result = _perform_nlp_analysis(user_text, current_context)
+    # Передаем текст, текущий контекст и историю для более глубокого анализа
+    nlp_result = _perform_nlp_analysis(user_text, current_context, history)
     log_local_bot_event(f"NLP result for {chat_id}: {json.dumps(nlp_result, ensure_ascii=False, indent=2, default=str)}")
 
     # 3. Генерация ответа
+    # current_context здесь - это контекст *до* обработки текущего сообщения.
     final_response_str, processed_intents_info = _generate_response(chat_id, nlp_result, current_context)
 
-    # 4. Обновление состояния (сохранение в БД)
-    _update_state(chat_id, user_text, final_response_str, nlp_result)
+    # Отправка ответа пользователю
+    if final_response_str: # Убедимся, что есть что отправлять
+        bot.reply_to(message, final_response_str)
+        log_local_bot_event(f"Sent response to {chat_id}: {final_response_str}")
+    else:
+        log_local_bot_event(f"Warning: No response generated for {chat_id} with text '{user_text}'")
+        # Можно отправить стандартный fallback, если _generate_response вернул пустую строку,
+        # но по идее, _generate_response всегда должен что-то возвращать (хотя бы fallback).
 
-    return final_response_str
+    # 4. Обновление состояния (контекст, история, метрики)
+    # session_memory передается для модификации напрямую.
+    # nlp_result и processed_intents_info нужны для обновления контекста и истории.
+    _update_state(chat_id, user_text, final_response_str, session_memory, nlp_result, processed_intents_info)
+
+    # 5. Формирование и логирование "Объекта Намерения" для Роутера Агентов
+    intent_object = _create_intent_object(nlp_result)
+    log_local_bot_event(f"FINAL INTENT OBJECT: {json.dumps(intent_object, ensure_ascii=False, indent=2)}")
 
 
-if bot:
-    @bot.message_handler(func=lambda message: message.content_type == 'text')
-    def handle_user_chat_message(message):
-        """
-        Обработчик текстовых сообщений от пользователя.
-        Вызывает основную логику и отправляет ответ.
-        """
-        chat_id = message.chat.id
-        user_text = message.text
+def _create_intent_object(nlp_result: dict) -> dict:
+    """
+    Формирует финальный JSON-объект для передачи в "Роутер Агентов".
+    """
+    intent = nlp_result.get("intents", [{}])[0].get("name", "unknown")
+    entities = nlp_result.get("entities", {})
 
-        final_response_str = process_message_logic(chat_id, user_text)
+    # Извлекаем dialogue_state из метаданных, куда его положил NLPProcessor
+    dialogue_state = nlp_result.get("metadata", {}).get("raw_openai_response", {}).get("dialogue_state", "unknown")
 
-        # Отправка ответа пользователю
-        if final_response_str:
-            bot.reply_to(message, final_response_str)
-            log_local_bot_event(f"Sent response to {chat_id}: {final_response_str}")
-        else:
-            log_local_bot_event(f"Warning: No response generated for {chat_id} with text '{user_text}'")
+    return {
+        "intent": intent,
+        "entities": entities,
+        "dialogue_state": dialogue_state
+    }
 
 
 # --- Старая логика обработки JSON-команд (пока оставим, но она не будет вызываться обычными текстовыми сообщениями) ---
 # Чтобы ее вызвать, можно сделать отдельный message_handler или изменить текущий, чтобы он проверял, является ли text валидным JSON
 # Например, можно добавить команду /process_json <JSON_PAYLOAD>
+
 
 def handle_json_command_message(message):
     """Обработчик для явных JSON-команд (если потребуется)."""
