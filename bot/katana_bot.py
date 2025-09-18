@@ -142,27 +142,33 @@ API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
-if API_TOKEN and ':' in API_TOKEN:
-    logger.info("✅ KATANA_TELEGRAM_TOKEN loaded successfully.")
-else:
-    logger.error("❌ Invalid or missing Telegram API token. Please set KATANA_TELEGRAM_TOKEN env variable with format '123456:ABCDEF'.")
-    raise ValueError("❌ Invalid or missing Telegram API token. Please set KATANA_TELEGRAM_TOKEN env variable with format '123456:ABCDEF'.")
-
-if ANTHROPIC_API_KEY:
-    logger.info("✅ ANTHROPIC_API_KEY loaded successfully.")
-else:
-    logger.warning("⚠️ ANTHROPIC_API_KEY not found. Some features might be unavailable.")
-
-if OPENAI_API_KEY:
-    logger.info("✅ OPENAI_API_KEY loaded successfully.")
-else:
-    logger.warning("⚠️ OPENAI_API_KEY not found. Some features might be unavailable.")
-
-bot = telebot.TeleBot(API_TOKEN)
-
-# Папка для сохранения команд
+bot: Optional[telebot.TeleBot] = None
 COMMAND_FILE_DIR = Path('commands')
-COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
+
+def create_bot():
+    """Creates, configures, and returns a TeleBot instance."""
+    API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN')
+    if not (API_TOKEN and ':' in API_TOKEN):
+        logger.error("❌ Invalid or missing Telegram API token.")
+        raise ValueError("Invalid or missing Telegram API token.")
+
+    logger.info("✅ KATANA_TELEGRAM_TOKEN loaded.")
+
+    # Log presence of other keys
+    if os.getenv('ANTHROPIC_API_KEY'):
+        logger.info("✅ ANTHROPIC_API_KEY loaded.")
+    else:
+        logger.warning("⚠️ ANTHROPIC_API_KEY not found.")
+
+    if os.getenv('OPENAI_API_KEY'):
+        logger.info("✅ OPENAI_API_KEY loaded.")
+    else:
+        logger.warning("⚠️ OPENAI_API_KEY not found.")
+
+    new_bot = telebot.TeleBot(API_TOKEN)
+    COMMAND_FILE_DIR.mkdir(parents=True, exist_ok=True)
+    register_handlers(new_bot)
+    return new_bot
 
 # def log_local_bot_event(message): # Эта функция больше не нужна, используем logger напрямую
 #     """Логирование события бота."""
@@ -176,13 +182,13 @@ def handle_mind_clearing(command_data, chat_id_str: str): # chat_id is now strin
     """Обработка команды 'mind_clearing' (заглушка)."""
     logger.info(f"handle_mind_clearing called for chat_id {chat_id_str} with data: {command_data}")
 
-def handle_message_impl(message):
+def handle_message_impl(message, bot_instance):
     """
     Реализация полного цикла обработки сообщения:
     - Приём и логирование входящих сообщений.
     - Формирование контекста из MemoryManager.
     - Вызов get_katana_response с правильной историей.
-    - Отправка ответа через bot.reply_to.
+    - Отправка ответа через bot_instance.reply_to.
     - Запись в MemoryManager как входящего, так и исходящего сообщения.
     - Обработка и логирование ошибок с понятными русскими сообщениями пользователю.
     """
@@ -231,7 +237,9 @@ def handle_message_impl(message):
         pass # Не JSON, значит, обычное сообщение
 
     # Добавляем сообщение пользователя в историю
-    current_history.append({"role": MESSAGE_ROLE_USER, "content": user_message_text})
+    user_message_to_store = {"role": MESSAGE_ROLE_USER, "content": user_message_text}
+    memory_manager.add_message_to_history(chat_id_str, user_message_to_store)
+    current_history.append(user_message_to_store)
 
     if is_json_command and command_data:
         command_type = command_data.get("type")
@@ -240,7 +248,7 @@ def handle_message_impl(message):
         if command_type == "log_event":
             handle_log_event(command_data, chat_id_str) # Corrected
             bot_response_text = "✅ 'log_event' обработан (заглушка)."
-            bot.reply_to(message, bot_response_text)
+            bot_instance.reply_to(message, bot_response_text)
             logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}") # Corrected
             # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced by memory_manager call
             memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
@@ -251,7 +259,7 @@ def handle_message_impl(message):
             memory_manager.clear_history(chat_id_str)
             logger.info(f"Mind clearing for chat_id {chat_id_str}. History reset.") # Corrected
             bot_response_text = "✅ Контекст диалога очищен. Начинаем с чистого листа."
-            bot.reply_to(message, bot_response_text)
+            bot_instance.reply_to(message, bot_response_text)
             logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}") # Corrected
             # Добавляем ответ ассистента как первое сообщение после очистки
             # katana_states[chat_id_str].append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced
@@ -270,7 +278,7 @@ def handle_message_impl(message):
                 json.dump(command_data, f, ensure_ascii=False, indent=2)
 
             bot_response_text = f"✅ Команда принята и сохранена как `{command_file_path}`."
-            bot.reply_to(message, bot_response_text)
+            bot_instance.reply_to(message, bot_response_text)
             logger.info(f"Replied to chat_id {chat_id_str}: {bot_response_text}") # Corrected
             # current_history.append({"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text}) # Replaced
             memory_manager.add_message_to_history(chat_id_str, {"role": MESSAGE_ROLE_ASSISTANT, "content": bot_response_text})
@@ -288,7 +296,7 @@ def handle_message_impl(message):
             logger.info(f"Katana response for chat_id {chat_id_str}: {katana_response_text}") # Corrected
 
             # 4. Отправка ответа через bot.reply_to
-            bot.reply_to(message, katana_response_text)
+            bot_instance.reply_to(message, katana_response_text)
             logger.info(f"Replied to chat_id {chat_id_str}: {katana_response_text}") # Corrected
 
             # 5. Запись исходящего сообщения в состояние
@@ -305,53 +313,47 @@ def handle_message_impl(message):
                 "Команда уже уведомлена и разбирается в проблеме. "
                 f"Пожалуйста, попробуйте позже. (Код ошибки: {error_id})"
             )
-            bot.reply_to(message, user_error_message)
+            bot_instance.reply_to(message, user_error_message)
             logger.info(f"Replied to chat_id {chat_id_str} with error message: {user_error_message}") # Corrected
             # Важно: не добавляем ошибочный ответ ассистента в историю,
             # но сообщение пользователя там уже есть.
 
 
-@bot.message_handler(commands=['start'])
-def handle_start(message):
-    """Ответ на /start"""
-    chat_id_str = str(message.chat.id)
-    response_text = "Привет! Я — Katana. Готов к диалогу или JSON-команде."
-    bot.reply_to(message, response_text)
-    logger.info(f"Replied to chat_id {chat_id_str}: {response_text}")
-    logger.info(f"/start received from {chat_id_str}")
+def register_handlers(bot_instance):
+    """Registers all message handlers to the bot instance."""
 
-    # For /start, we might want to clear any existing short-term history
-    # or simply add the welcome message. Current behavior of just adding is fine.
-    # If we wanted to ensure a clean slate on /start:
-    # memory_manager.clear_history(chat_id_str)
+    @bot_instance.message_handler(commands=['start'])
+    def handle_start(message):
+        # This function now uses the 'bot_instance' passed to register_handlers
+        chat_id_str = str(message.chat.id)
+        response_text = "Привет! Я — Katana. Готов к диалогу или JSON-команде."
+        bot_instance.reply_to(message, response_text)
+        logger.info(f"Replied to chat_id {chat_id_str}: {response_text}")
+        logger.info(f"/start received from {chat_id_str}")
+        memory_manager.add_message_to_history(
+            chat_id_str,
+            {"role": MESSAGE_ROLE_ASSISTANT, "content": response_text}
+        )
+        logger.info(f"Welcome message added to history for chat_id {chat_id_str} via MemoryManager.")
 
-    # Add the assistant's welcome message to the history.
-    memory_manager.add_message_to_history(
-        chat_id_str,
-        {"role": MESSAGE_ROLE_ASSISTANT, "content": response_text}
-    )
-    logger.info(f"Welcome message added to history for chat_id {chat_id_str} via MemoryManager.")
-
-
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
-    """Главный обработчик входящих сообщений."""
-    logger.info(f"Received message from chat_id {message.chat.id} (user: {message.from_user.username}): {message.text}")
-    try:
-        handle_message_impl(message)
-    except Exception as e:
-        error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
-        logger.error(f"[ErrorID: {error_id}] Unhandled exception in handle_message for chat_id {message.chat.id}: {e}", exc_info=True)
-        # Уведомляем пользователя об общей ошибке, если это возможно и еще не было сделано
+    @bot_instance.message_handler(func=lambda message: True)
+    def handle_message(message):
+        # This function also uses the 'bot_instance' from the closure
+        logger.info(f"Received message from chat_id {message.chat.id} (user: {message.from_user.username}): {message.text}")
         try:
-            user_error_message = (
-                "😔 Произошла неожиданная ошибка. Мы уже занимаемся этим. "
-                f"Попробуйте ваш запрос немного позже. (Код ошибки: {error_id})"
-            )
-            bot.reply_to(message, user_error_message)
-            logger.info(f"Replied to chat_id {message.chat.id} with unhandled error message: {user_error_message}")
-        except Exception as ex_reply:
-            logger.error(f"[ErrorID: {error_id}] Failed to send error reply to user {message.chat.id}: {ex_reply}", exc_info=True)
+            handle_message_impl(message, bot_instance) # Pass bot_instance here
+        except Exception as e:
+            error_id = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S_%f')
+            logger.error(f"[ErrorID: {error_id}] Unhandled exception in handle_message for chat_id {message.chat.id}: {e}", exc_info=True)
+            try:
+                user_error_message = (
+                    "😔 Произошла неожиданная ошибка. Мы уже занимаемся этим. "
+                    f"Попробуйте ваш запрос немного позже. (Код ошибки: {error_id})"
+                )
+                bot_instance.reply_to(message, user_error_message)
+                logger.info(f"Replied to chat_id {message.chat.id} with unhandled error message: {user_error_message}")
+            except Exception as ex_reply:
+                logger.error(f"[ErrorID: {error_id}] Failed to send error reply to user {message.chat.id}: {ex_reply}", exc_info=True)
 
 if __name__ == '__main__':
     # This configuration will be applied only if katana_bot.py is run directly.
@@ -366,10 +368,11 @@ if __name__ == '__main__':
 
     logger.info("Bot starting directly from katana_bot.py...")
     init_dependencies() # Initialize dependencies including MemoryManager
+    bot = create_bot()
     start_heartbeat_thread()  # Start heartbeat when run directly
     try:
-        # bot.polling() # Old call
-        bot.polling(none_stop=True) # New call with none_stop=True
+        logger.info("Starting bot polling...")
+        bot.polling(none_stop=True)
         logger.info("Bot polling started (this message might not be reached if polling is truly endless).")
         # In none_stop=True mode, polling() is a blocking call and won't complete on its own.
         # "Bot stopped." logging will only be reached if the bot process is interrupted externally (Ctrl+C, kill).

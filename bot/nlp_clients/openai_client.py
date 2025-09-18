@@ -38,7 +38,7 @@ class OpenAIClient:
     A basic client for interacting with a simulated OpenAI API.
     This is primarily a scaffold for future development and for defining error structures.
     """
-    def __init__(self, api_key: str = "dummy_openai_key"):
+    def __init__(self, api_key: str):
         if not api_key:
             raise OpenAIAuthenticationError(user_message="OpenAI API key is missing.")
         self.api_key = api_key

@@ -38,7 +38,7 @@ class AnthropicClient:
     A basic client for interacting with a simulated Anthropic API.
     This is intended for demonstrating error handling.
     """
-    def __init__(self, api_key: str = "dummy_anthropic_key"):
+    def __init__(self, api_key: str):
         if not api_key:
             raise AnthropicAuthenticationError(user_message="Anthropic API key is missing.")
         self.api_key = api_key
