@@ -3,7 +3,8 @@ import json
 import os
 from typing import Dict, Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import uvicorn
 
 from src.orchestrator.task_orchestrator import TaskOrchestrator
@@ -20,6 +21,25 @@ app = FastAPI(title="Julius Task Orchestrator API")
 # Not ideal for global state, but simple for this example.
 # A better approach for larger apps might involve dependency injection or app state.
 orchestrator_instance: TaskOrchestrator = None
+
+
+class NewTaskPayload(BaseModel):
+    task: str
+
+@app.post("/n8n/new-task", response_model=Dict[str, str])
+async def receive_new_task(payload: NewTaskPayload):
+    """
+    Receives a new task from an n8n webhook and adds it to the orchestrator's queue.
+    """
+    if orchestrator_instance is None:
+        raise HTTPException(status_code=503, detail="Orchestrator not initialized")
+
+    if not payload.task:
+        raise HTTPException(status_code=400, detail="Task cannot be empty")
+
+    orchestrator_instance.add_tasks([payload.task])
+    print(f"Received new task from n8n: {payload.task}")
+    return {"status": "Task added successfully"}
 
 
 @app.get("/orchestrator/status", response_model=Dict[str, Any])
