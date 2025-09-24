@@ -2,6 +2,7 @@ print("Starting web/app.py")
 import streamlit as st
 import sys
 import os
+import json
 
 print("Imports successful")
 
@@ -22,6 +23,10 @@ print("Agent imports successful")
 # Page configuration
 st.set_page_config(page_title="Katana Interface", page_icon="⚔️", layout="centered")
 
+# Initialize theme
+if "theme" not in st.session_state:
+    st.session_state.theme = "Dark"
+
 # Custom CSS for theming
 st.markdown(f"""
     <style>
@@ -30,28 +35,28 @@ st.markdown(f"""
             background-size: cover;
             background-repeat: no-repeat;
             background-attachment: fixed;
-            background-color: {"#FFFFFF" if theme == "Light" else "#121212"};
-            color: {"#000000" if theme == "Light" else "#FFFFFF"};
+            background-color: {"#FFFFFF" if st.session_state.theme == "Light" else "#121212"};
+            color: {"#000000" if st.session_state.theme == "Light" else "#FFFFFF"};
         }}
         .stApp {{
-            background-color: {"#FFFFFF" if theme == "Light" else "#121212"};
+            background-color: {"#FFFFFF" if st.session_state.theme == "Light" else "#121212"};
         }}
         .stTextInput > div > div > input, .stTextArea > div > div > textarea {{
-            background-color: {"#F0F2F6" if theme == "Light" else "#333333"} !important;
-            color: {"#000000" if theme == "Light" else "#FFFFFF"} !important;
-            border: 1px solid {"#E0E0E0" if theme == "Light" else "#4f4f4f"} !important;
+            background-color: {"#F0F2F6" if st.session_state.theme == "Light" else "#333333"} !important;
+            color: {"#000000" if st.session_state.theme == "Light" else "#FFFFFF"} !important;
+            border: 1px solid {"#E0E0E0" if st.session_state.theme == "Light" else "#4f4f4f"} !important;
         }}
         .stButton > button {{
-            background-color: {"#F0F2F6" if theme == "Light" else "#4a4a4a"};
-            color: {"#000000" if theme == "Light" else "#FFFFFF"};
-            border: 1px solid {"#E0E0E0" if theme == "Light" else "#5f5f5f"};
+            background-color: {"#F0F2F6" if st.session_state.theme == "Light" else "#4a4a4a"};
+            color: {"#000000" if st.session_state.theme == "Light" else "#FFFFFF"};
+            border: 1px solid {"#E0E0E0" if st.session_state.theme == "Light" else "#5f5f5f"};
         }}
         [data-testid="chat-message-container"] {{
-            background-color: {"#F0F2F6" if theme == "Light" else "#2a2a2a"};
+            background-color: {"#F0F2F6" if st.session_state.theme == "Light" else "#2a2a2a"};
             border-radius: 8px;
             padding: 10px;
             margin-bottom: 10px;
-            border: 1px solid {"#E0E0E0" if theme == "Light" else "#383838"};
+            border: 1px solid {"#E0E0E0" if st.session_state.theme == "Light" else "#383838"};
         }}
     </style>
 """, unsafe_allow_html=True)
@@ -89,7 +94,7 @@ else:
     # Sidebar for agent selection and theme toggle
     st.sidebar.image("https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.freepik.com%2Ffree-photos-vectors%2Fkatana-logo&psig=AOvVaw1g-p-Z-x3Ea-j3Y-jQ_7aU&ust=1722174092001000&source=images&cd=vfe&ved=0CBEQjRxqFwoTCIjR-f-jv4cDFQAAAAAdAAAAABAE", width=100)
     st.sidebar.title("Controls")
-    theme = st.sidebar.selectbox("Choose a theme:", ["Dark", "Light"])
+    st.session_state.theme = st.sidebar.selectbox("Choose a theme:", ["Dark", "Light"], index=["Dark", "Light"].index(st.session_state.theme))
     agent_name = st.sidebar.selectbox(
         "Choose your agent:",
         st.session_state.agent_router.list_agents()
@@ -120,3 +125,22 @@ else:
     for message in st.session_state.history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
+    # Display tasks
+    st.subheader("Generated Tasks")
+    try:
+        # Correct path assuming the script is run from the project root
+        tasks_file_path = os.path.join(os.path.dirname(__file__), '..', 'tasks.json')
+        with open(tasks_file_path, 'r', encoding='utf-8') as f:
+            tasks = json.load(f)
+
+        if tasks:
+            for task in tasks:
+                formatted_task = f"algoritmo911/katana-ai - feature/katana-web-interface - {task}"
+                st.info(formatted_task)
+        else:
+            st.warning("No tasks found in `tasks.json`.")
+    except FileNotFoundError:
+        st.error("`tasks.json` not found. Please make sure the file exists in the project root directory.")
+    except json.JSONDecodeError:
+        st.error("Error decoding `tasks.json`. Please check the file format.")
