@@ -2,6 +2,37 @@
 
 Thank you for your interest in contributing! We welcome all contributions, from bug fixes to new features.
 
+# Политика ветвления
+
+## Общие правила
+1. Канонические ветки:
+   - `main` — production-ready код
+   - `dev` — интеграционная ветка
+   - `feature/*` — активная разработка фич (каждая фича — отдельная ветка)
+
+2. Именование веток:
+   - `feature/<описание>-<issue>` (напр. `feature/supabase-memory-core-123`)
+   - Не используем суффиксы `-1`, `-2`, `-copy` и т.п. — они запрещены и автоматически архивируются.
+
+3. Рабочий процесс:
+   - Перед созданием PR — выполнить `git fetch && git rebase origin/<target>` (или merge policy по договорённости).
+   - PR должен иметь чёткое описание, ссылку на issue и прохождение CI.
+
+4. Удаление веток:
+   - После merge ветка удаляется на origin.
+   - Если по каким-то причинам ветку нужно сохранить — переносим в `archive/<branch>`.
+
+5. Запреты:
+   - Не пушим сгенерированные артефакты в репозиторий.
+   - Не создаём одноразовых дубликатов веток с `-1/-2`.
+
+## Автоматизация (рекомендация)
+- Включить GitHub Action / GitLab CI job, который:
+  - помечает ветки с `-1`, `-2` и создаёт issue/PR на ревью;
+  - блокирует прямое создание веток с запрещёнными суффиксами.
+
+---
+
 ## Getting Started
 
 1.  **Fork the repository:** Click the "Fork" button on the top right of the repository page. This will create a copy of the repository in your GitHub account.
