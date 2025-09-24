@@ -106,6 +106,56 @@ async def handle_mind_clearing(command_data, chat_id):
     log_local_bot_event(f"Successfully processed 'mind_clearing' for chat_id {chat_id}. Args: {json.dumps(command_data.get('args'))}")
     # await bot.reply_to(message, "✅ 'mind_clearing' received (placeholder).") # TODO: Add reply mechanism
 
+# --- NEW: Decoupled Core Logic for External Apps ---
+async def get_core_response(text: str) -> str:
+    """
+    Processes user text and returns a string response.
+    This function is decoupled from Telegram and provides a simple, non-streaming interface.
+    """
+    log_local_bot_event(f"Core processing for text: '{text[:100]}...'")
+
+    # 1. Attempt to interpret as a natural language command
+    nlp_command = interpret(text)
+    if nlp_command:
+        log_to_file(f'[NLU_CORE] "{text}" → "{nlp_command}"')
+        output = await run_katana_command(nlp_command)
+        return f"🧠 Understood. Executing:\n`{nlp_command}`\n\n{output}"
+
+    # 2. If not an NLP command, try to parse as JSON
+    try:
+        command_data = json.loads(text)
+        # Basic validation
+        if "type" in command_data and "module" in command_data:
+            log_local_bot_event(f"Core processing: Valid JSON command received.")
+            # This is a simplified path for non-Telegram clients.
+            # It doesn't save the file like the Telegram handler.
+            return f"✅ JSON command received and acknowledged (type: {command_data.get('type')})."
+        else:
+            return "⚠️ Invalid JSON command received (missing 'type' or 'module')."
+    except json.JSONDecodeError:
+        # 3. Not NLP, not JSON -> Fallback to GPT (non-streaming)
+        log_local_bot_event(f"Core processing: Not NLP or JSON. Falling back to GPT.")
+
+        if not OPENAI_API_KEY:
+            return "⚠️ GPT functionality is not configured."
+
+        full_response = ""
+        cancellation_event = asyncio.Event()
+        chat_id_placeholder = 0  # Placeholder, as it's used for logging inside the function
+
+        try:
+            # Aggregate the streamed response into a single string
+            async for chunk in get_gpt_streamed_response(text, chat_id_placeholder, cancellation_event):
+                full_response += chunk
+
+            if not full_response.strip():
+                log_local_bot_event(f"Core GPT returned an empty or whitespace response.")
+                return "I received an empty response from the AI. Please try again."
+            return full_response
+        except Exception as e:
+            log_local_bot_event(f"Core GPT Error: {e}")
+            return f"🤖 An error occurred while communicating with the AI: {e}"
+
 # --- Unified Message Processing ---
 async def process_user_message(chat_id: int, text: str, original_message: telebot.types.Message):
     """
