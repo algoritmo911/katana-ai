@@ -4,11 +4,27 @@ import os
 from pathlib import Path
 from datetime import datetime
 import subprocess # Added for run_katana_command
+import threading
+from flask import Flask, jsonify
 from katana.nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
 from katana.core.user_profile import UserProfile # Added for user personalization
 from katana.adapters.local_file_adapter import LocalFileAdapter
+
+# --- Health Check Web Server ---
+health_app = Flask(__name__)
+
+@health_app.route('/healthcheck')
+def health_check():
+    """Endpoint for health checks."""
+    return jsonify({"status": "ok"})
+
+def run_health_check_server():
+    """Runs the Flask app in a separate thread."""
+    # Using a production-ready WSGI server like gunicorn or waitress is better
+    # for real applications, but this is fine for a simple health check.
+    health_app.run(host='0.0.0.0', port=8080)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -416,6 +432,14 @@ def handle_voice_message(message):
 
 
 if __name__ == '__main__':
+    log_local_bot_event("Starting health check server on a background thread.")
+    health_thread = threading.Thread(target=run_health_check_server, daemon=True)
+    health_thread.start()
+
     log_local_bot_event("Bot starting...")
-    bot.polling()
-    log_local_bot_event("Bot stopped.")
+    try:
+        bot.polling()
+    except Exception as e:
+        log_local_bot_event(f"Bot polling failed: {e}")
+    finally:
+        log_local_bot_event("Bot stopped.")
