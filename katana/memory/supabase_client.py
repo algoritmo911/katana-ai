@@ -145,6 +145,164 @@ class SupabaseMemoryClient:
             logger.error(f"Unexpected error storing memory file: {e}", exc_info=True)
             return None
 
+    # -----------------------------------------------------------------
+    # Coder CRUD operations
+    # -----------------------------------------------------------------
+    def add_coder(self, username: str) -> Optional[Dict[str, Any]]:
+        """Adds a new coder to the 'coders' table."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot add coder.")
+            return None
+        try:
+            response = self.client.table("coders").insert({"username": username}).execute()
+            return self._handle_response(response, "add_coder")
+        except Exception as e:
+            logger.error(f"Unexpected error adding coder: {e}", exc_info=True)
+            return None
+
+    def get_coder_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a coder by their username."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot get coder.")
+            return None
+        try:
+            response = self.client.table("coders").select("*").eq("username", username).execute()
+            return self._handle_response(response, "get_coder_by_username")
+        except Exception as e:
+            logger.error(f"Unexpected error getting coder by username: {e}", exc_info=True)
+            return None
+
+    def get_coder_by_id(self, coder_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a coder by their ID."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot get coder.")
+            return None
+        try:
+            response = self.client.table("coders").select("*").eq("id", coder_id).execute()
+            return self._handle_response(response, "get_coder_by_id")
+        except Exception as e:
+            logger.error(f"Unexpected error getting coder by id: {e}", exc_info=True)
+            return None
+
+    def get_all_coders(self) -> Optional[List[Dict[str, Any]]]:
+        """Retrieves all coders."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot get all coders.")
+            return None
+        try:
+            response = self.client.table("coders").select("*").execute()
+            return self._handle_response(response, "get_all_coders")
+        except Exception as e:
+            logger.error(f"Unexpected error getting all coders: {e}", exc_info=True)
+            return None
+
+    def update_coder(self, coder_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Updates a coder's information."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot update coder.")
+            return None
+        try:
+            response = self.client.table("coders").update(updates).eq("id", coder_id).execute()
+            return self._handle_response(response, "update_coder")
+        except Exception as e:
+            logger.error(f"Unexpected error updating coder: {e}", exc_info=True)
+            return None
+
+    def delete_coder(self, coder_id: str) -> Optional[Dict[str, Any]]:
+        """Deletes a coder by their ID."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot delete coder.")
+            return None
+        try:
+            response = self.client.table("coders").delete().eq("id", coder_id).execute()
+            return self._handle_response(response, "delete_coder")
+        except Exception as e:
+            logger.error(f"Unexpected error deleting coder: {e}", exc_info=True)
+            return None
+
+    # -----------------------------------------------------------------
+    # Task CRUD operations
+    # -----------------------------------------------------------------
+    def add_task(
+        self, title: str, description: Optional[str] = None, coder_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Adds a new task to the 'tasks' table."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot add task.")
+            return None
+        try:
+            task = {"title": title, "description": description, "coder_id": coder_id}
+            response = self.client.table("tasks").insert(task).execute()
+            return self._handle_response(response, "add_task")
+        except Exception as e:
+            logger.error(f"Unexpected error adding task: {e}", exc_info=True)
+            return None
+
+    def get_task_by_id(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a task by its ID."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot get task.")
+            return None
+        try:
+            response = self.client.table("tasks").select("*").eq("id", task_id).execute()
+            return self._handle_response(response, "get_task_by_id")
+        except Exception as e:
+            logger.error(f"Unexpected error getting task by id: {e}", exc_info=True)
+            return None
+
+    def get_all_tasks(self) -> Optional[List[Dict[str, Any]]]:
+        """Retrieves all tasks."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot get all tasks.")
+            return None
+        try:
+            response = self.client.table("tasks").select("*").execute()
+            return self._handle_response(response, "get_all_tasks")
+        except Exception as e:
+            logger.error(f"Unexpected error getting all tasks: {e}", exc_info=True)
+            return None
+
+    def get_tasks_by_coder(self, coder_id: str) -> Optional[List[Dict[str, Any]]]:
+        """Retrieves all tasks assigned to a specific coder."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot get tasks.")
+            return None
+        try:
+            response = self.client.table("tasks").select("*").eq("coder_id", coder_id).execute()
+            return self._handle_response(response, "get_tasks_by_coder")
+        except Exception as e:
+            logger.error(f"Unexpected error getting tasks by coder: {e}", exc_info=True)
+            return None
+
+    def update_task(self, task_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Updates a task's information."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot update task.")
+            return None
+        try:
+            response = self.client.table("tasks").update(updates).eq("id", task_id).execute()
+            return self._handle_response(response, "update_task")
+        except Exception as e:
+            logger.error(f"Unexpected error updating task: {e}", exc_info=True)
+            return None
+
+    def delete_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Deletes a task by its ID."""
+        if not self.client:
+            logger.error("Supabase client not initialized. Cannot delete task.")
+            return None
+        try:
+            response = self.client.table("tasks").delete().eq("id", task_id).execute()
+            return self._handle_response(response, "delete_task")
+        except Exception as e:
+            logger.error(f"Unexpected error deleting task: {e}", exc_info=True)
+            return None
+
+    def assign_task_to_coder(self, task_id: str, coder_id: str) -> Optional[Dict[str, Any]]:
+        """Assigns a task to a coder."""
+        return self.update_task(task_id, {"coder_id": coder_id})
+
+
 # Example usage (for testing purposes, remove later)
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

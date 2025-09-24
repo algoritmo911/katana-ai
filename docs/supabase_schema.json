@@ -57,6 +57,29 @@
       ],
       "rls_enabled": true,
       "comment": "Tracks emotional, cognitive, or session-related events."
+    },
+    {
+      "name": "coders",
+      "columns": [
+        {"name": "id", "type": "uuid", "isPrimaryKey": true, "isIdentity": true, "defaultValue": "uuid_generate_v4()"},
+        {"name": "username", "type": "text", "isNullable": false, "isUnique": true},
+        {"name": "created_at", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Stores information about coders or developers."
+    },
+    {
+      "name": "tasks",
+      "columns": [
+        {"name": "id", "type": "uuid", "isPrimaryKey": true, "isIdentity": true, "defaultValue": "uuid_generate_v4()"},
+        {"name": "title", "type": "text", "isNullable": false},
+        {"name": "description", "type": "text", "isNullable": true},
+        {"name": "status", "type": "text", "isNullable": false, "defaultValue": "'todo'", "comment": "e.g., 'todo', 'in_progress', 'done'"},
+        {"name": "coder_id", "type": "uuid", "isNullable": true, "foreignKey": {"table": "coders", "column": "id"}},
+        {"name": "created_at", "type": "timestamptz", "isNullable": false, "defaultValue": "now()"}
+      ],
+      "rls_enabled": true,
+      "comment": "Stores tasks for the backlog."
     }
   ],
   "views": [
