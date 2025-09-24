@@ -2,9 +2,9 @@ name: Katana Bot CI
 
 on:
   push:
-    branches: [ "dev", "main" ] # Or your primary development/main branches
+    branches: [ "dev" ] # Pushes to dev run tests
   pull_request:
-    branches: [ "dev", "main" ]
+    branches: [ "main", "dev" ] # PRs to main and dev run tests
 
 jobs:
   lint-and-test:

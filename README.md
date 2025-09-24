@@ -14,6 +14,14 @@ Katana is a Telegram bot designed for flexible interaction and command processin
 -   `run_bot_locally.py`: Script to run the bot locally.
 -   `.env.example`: Example file for environment variable configuration.
 
+## Branching Strategy
+
+This project uses a Gitflow-inspired branching model to ensure stability and a clear separation between development and production code.
+
+-   **`dev` branch**: This is the primary development branch. All new features and bugfixes should be merged into `dev`. It is considered the "single source of truth" for the upcoming release and should always be stable enough to be deployed to a staging environment. Continuous integration (CI) tests are run on every push to `dev`.
+
+-   **`main` branch**: This branch represents the production-ready code. It is updated only by merging the `dev` branch into it after `dev` has been thoroughly tested. Direct pushes to `main` are disabled. A pull request from `dev` to `main` signifies a new release.
+
 ## Running Locally
 
 To run the Katana bot on your local machine, follow these steps:

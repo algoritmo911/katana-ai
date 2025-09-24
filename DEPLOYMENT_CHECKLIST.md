@@ -1,5 +1,9 @@
 # Katana Bot Deployment Checklist
 
+> **Note on Branches**
+> -   **Production Environment**: Always deploy from the `main` branch. This branch contains the latest stable, tested, and production-ready code.
+> -   **Staging/Testing Environment**: Use the `dev` branch for deployments to a staging or testing server. This allows you to verify new features and fixes in a live-like environment before they are released to production.
+
 This checklist provides a step-by-step guide for deploying the Katana Telegram Bot to a new Linux server environment.
 
 ## 1. Server Preparation
