@@ -1,144 +1,130 @@
-import asyncio
-import json
 import os
-from typing import Dict, Any
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from supabase import create_client, Client
+import telebot
 
-from fastapi import FastAPI
-import uvicorn
+# Load environment variables from .env file
+load_dotenv()
 
-from src.orchestrator.task_orchestrator import TaskOrchestrator
-from src.agents.julius_agent import JuliusAgent
+# --- Configuration ---
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-TASKS_FILE = "tasks.json"
-ROUND_INTERVAL_SECONDS = 30
-ORCHESTRATOR_LOG_FILE = "orchestrator_log.json" # Centralize log file name
+# --- Initialize clients ---
+app = FastAPI(title="Swarm Dispatcher API")
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    print("Successfully connected to Supabase.")
+except Exception as e:
+    print(f"Error connecting to Supabase: {e}")
+    supabase = None
 
-# --- FastAPI App Setup ---
-app = FastAPI(title="Julius Task Orchestrator API")
+try:
+    bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
+    print("Telegram bot initialized.")
+except Exception as e:
+    print(f"Error initializing Telegram bot: {e}")
+    bot = None
 
-# This will be populated when the main application starts
-# Not ideal for global state, but simple for this example.
-# A better approach for larger apps might involve dependency injection or app state.
-orchestrator_instance: TaskOrchestrator = None
+# --- Pydantic Models ---
+class TaskCreate(BaseModel):
+    task_description: str
+    repo_url: str
 
-
-@app.get("/orchestrator/status", response_model=Dict[str, Any])
-async def get_orchestrator_status():
+# --- API Endpoint ---
+@app.post("/create_task")
+def create_task(task: TaskCreate):
     """
-    Provides the current status of the TaskOrchestrator,
-    including current batch size, task queue length, and metrics for the last 10 rounds.
+    Receives a task, saves it to Supabase, assigns the first available coder,
+    and sends a notification via Telegram.
     """
-    if orchestrator_instance is None:
-        return {"error": "Orchestrator not initialized"}
-    return orchestrator_instance.get_status()
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Supabase client not initialized.")
+    if not bot:
+        raise HTTPException(status_code=500, detail="Telegram bot not initialized.")
 
-# --- Task Loading ---
-def load_tasks_from_json(file_path: str) -> list[str]:
-    """Loads a list of tasks from a JSON file."""
-    if not os.path.exists(file_path):
-        print(f"Warning: Tasks file not found at {file_path}. Starting with an empty task queue.")
-        return []
+    # 1. Insert the task into the 'tasks' table
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if isinstance(data, list) and all(isinstance(item, str) for item in data):
-                return data
-            else:
-                print(f"Warning: Tasks file {file_path} does not contain a list of strings. Starting with an empty task queue.")
-                return []
-    except json.JSONDecodeError:
-        print(f"Warning: Error decoding JSON from {file_path}. Starting with an empty task queue.")
-        return []
+        print(f"Inserting task: {task.task_description}")
+        task_data = {
+            'description': task.task_description,
+            'repo_url': task.repo_url,
+            'status': 'new'
+        }
+        insert_res = supabase.table('tasks').insert(task_data).execute()
+
+        if not insert_res.data:
+            raise HTTPException(status_code=500, detail="Failed to insert task into Supabase.")
+
+        new_task_id = insert_res.data[0]['id']
+        print(f"Task created with ID: {new_task_id}")
+
     except Exception as e:
-        print(f"Warning: An unexpected error occurred while loading tasks: {e}. Starting with an empty task queue.")
-        return []
+        print(f"Error inserting task: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error during task insertion: {e}")
 
-# --- Orchestrator Loop ---
-async def run_orchestrator_loop(orchestrator: TaskOrchestrator):
-    """The main loop for the task orchestrator."""
-    global orchestrator_instance
-    orchestrator_instance = orchestrator # Make instance available to FastAPI endpoint
+    # 2. Fetch the first coder from the 'coders' table
+    try:
+        print("Fetching first available coder...")
+        coder_res = supabase.table('coders').select('id, telegram_id').limit(1).execute()
 
-    print("Initializing Julius Task Orchestration System...")
-    # 3. Load initial tasks
-    initial_tasks = load_tasks_from_json(TASKS_FILE)
-    if initial_tasks:
-        orchestrator.add_tasks(initial_tasks)
-        print(f"Loaded {len(initial_tasks)} tasks into the orchestrator.")
+        if not coder_res.data:
+            print("No coders found in the database.")
+            # Task is created but unassigned. This is acceptable for the MVP.
+            return {"message": "Task created but no available coders to assign.", "task_id": new_task_id}
+
+        assigned_coder = coder_res.data[0]
+        coder_id = assigned_coder['id']
+        coder_telegram_id = assigned_coder.get('telegram_id') # Use .get for safety
+        print(f"Found coder. ID: {coder_id}, Telegram ID: {coder_telegram_id}")
+
+    except Exception as e:
+        print(f"Error fetching coder: {e}")
+        # Task is created but assignment failed.
+        raise HTTPException(status_code=500, detail=f"Database error during coder fetching: {e}")
+
+    # 3. Assign the coder to the task
+    try:
+        print(f"Assigning coder {coder_id} to task {new_task_id}...")
+        update_res = supabase.table('tasks').update({'coder_id': coder_id}).eq('id', new_task_id).execute()
+
+        if not update_res.data:
+             # Log the error but don't fail the request, notification is best-effort
+            print(f"Warning: Failed to update task {new_task_id} with coder_id {coder_id}.")
+
+    except Exception as e:
+        # Log the error but proceed to notification if possible
+        print(f"Warning: Database error during task assignment: {e}")
+
+    # 4. Send a notification to the coder via Telegram
+    if coder_telegram_id:
+        try:
+            message = (
+                f"Назначена задача #{new_task_id}: {task.task_description}.\n"
+                f"Репозиторий: {task.repo_url}"
+            )
+            print(f"Sending Telegram message to {coder_telegram_id}...")
+            bot.send_message(coder_telegram_id, message)
+            print("Telegram message sent.")
+        except Exception as e:
+            # If Telegram fails, the core task is still done. Log it.
+            print(f"Warning: Failed to send Telegram notification to {coder_telegram_id}: {e}")
     else:
-        print("No initial tasks loaded. Add tasks to tasks.json or use an API if available.")
-
-    try:
-        round_number = 1
-        while True:
-            if not orchestrator.task_queue:
-                print(f"No tasks in queue. Waiting for {ROUND_INTERVAL_SECONDS} seconds or new tasks...")
-                await asyncio.sleep(ROUND_INTERVAL_SECONDS)
-                continue
-
-            print(f"\n--- Starting Orchestrator Round {round_number} ---")
-            await orchestrator.run_round()
-            print(f"--- Finished Orchestrator Round {round_number} ---")
-
-            round_number += 1
-            print(f"Waiting {ROUND_INTERVAL_SECONDS} seconds for the next round...")
-            await asyncio.sleep(ROUND_INTERVAL_SECONDS)
-
-    except asyncio.CancelledError:
-        print("\nOrchestrator loop cancelled.")
-    except KeyboardInterrupt: # Should be caught by main, but good to have robustness
-        print("\nOrchestrator loop interrupted by KeyboardInterrupt.")
-    finally:
-        print("Orchestrator loop stopped.")
+        print(f"Warning: Coder {coder_id} has no telegram_id. Cannot send notification.")
 
 
-# --- Main Application Setup ---
-async def main_async_app():
-    # 1. Initialize Agent
-    julius_agent = JuliusAgent()
-
-    # 2. Initialize TaskOrchestrator
-    # Pass the log file name defined globally
-    local_orchestrator = TaskOrchestrator(
-        agent=julius_agent,
-        batch_size=3,
-        max_batch=10,
-        metrics_log_file=ORCHESTRATOR_LOG_FILE
-    )
-
-    # Configure Uvicorn server
-    # Note: Uvicorn's `run` is blocking, so we use `Server.serve()` for async context
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
-    server = uvicorn.Server(config)
-
-    # Run orchestrator loop and FastAPI server concurrently
-    orchestrator_task = asyncio.create_task(run_orchestrator_loop(local_orchestrator))
-    fastapi_task = asyncio.create_task(server.serve())
-
-    print("FastAPI server starting on http://0.0.0.0:8000")
-    print("Orchestrator starting its loop.")
-
-    try:
-        # await orchestrator_task # If we await only one, the other might not shutdown gracefully on KeyboardInterrupt
-        # await fastapi_task
-        done, pending = await asyncio.wait(
-            [orchestrator_task, fastapi_task],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-
-        for task in pending:
-            task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True) # Ensure cancellations are processed
-
-    except KeyboardInterrupt:
-        print("\nShutting down application (main_async_app)...")
-        # Cancel tasks explicitly on KeyboardInterrupt
-        orchestrator_task.cancel()
-        fastapi_task.cancel() # Uvicorn server might need more graceful shutdown
-        await asyncio.gather(orchestrator_task, fastapi_task, return_exceptions=True)
-    finally:
-        print("Application shutdown complete.")
-
+    return {
+        "message": "Task created and assigned successfully.",
+        "task_id": new_task_id,
+        "assigned_coder_id": coder_id
+    }
 
 if __name__ == "__main__":
-    asyncio.run(main_async_app())
+    import uvicorn
+    # This will run the FastAPI app on http://127.0.0.1:8000
+    # The .env file must be present in the same directory.
+    print("Starting Swarm Dispatcher API...")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

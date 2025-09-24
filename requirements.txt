@@ -1,10 +1,8 @@
-pytest
-pytest-asyncio
-pytest-mock
-pyTelegramBotAPI
-python-dotenv
-flake8
 fastapi
 uvicorn[standard]
-redis
-PyYAML
+pydantic
+supabase
+streamlit
+python-dotenv
+pyTelegramBotAPI
+pandas
