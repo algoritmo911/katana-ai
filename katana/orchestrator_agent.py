@@ -100,12 +100,18 @@ class OrchestratorAgent:
         enqueued_tasks: List[Task] = []
         for task_info in sub_tasks_to_dispatch:
             try:
-                task_obj = await self.task_queue_service.add_task(
-                    name=task_info["name"],
-                    payload=task_info["payload"],
-                    priority=1,  # Default priority for sub-tasks
-                )
-                enqueued_tasks.append(task_obj)
+                # The executor function is looked up by name on the worker side.
+                # Here we just need to know the name of the function to call.
+                # This is a bit of a hack, as we are not passing the function itself.
+                # A better approach would be to have a registry of functions on the orchestrator side.
+                task_function = self.task_queue_service.task_executors.get(task_info["name"])
+                if task_function:
+                    task_obj = await self.task_queue_service.add_task_to_queue(
+                        task_function, **task_info["payload"]
+                    )
+                    enqueued_tasks.append(task_obj)
+                else:
+                    logger.error(f"Executor for task '{task_info['name']}' not found.")
             except Exception as e:
                 logger.error(
                     f"Failed to enqueue sub-task '{task_info['name']}': {e}",

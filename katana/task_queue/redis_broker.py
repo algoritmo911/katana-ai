@@ -31,21 +31,37 @@ class RedisBroker(AbstractBroker):
 
     def _serialize_task(self, task: Task) -> str:
         """Serializes a Task object to a JSON string."""
+        # Special handling for pickled data
+        if "task_data" in task.payload and isinstance(task.payload["task_data"], bytes):
+            # dill output is bytes, which is not directly JSON serializable.
+            # We will store it as a base64 encoded string.
+            import base64
+            payload = task.payload.copy()
+            payload["task_data"] = base64.b64encode(payload["task_data"]).decode('ascii')
+        else:
+            payload = task.payload
+
         d = {
             "id": str(task.id),
             "name": task.name,
-            "payload": task.payload,
+            "payload": payload,
             "priority": task.priority,
             "scheduled_at": task.scheduled_at.isoformat(),
             "created_at": task.created_at.isoformat(),
             "status": task.status.name,
-            "result": task.result,  # Add result to serialization
+            "result": task.result,
         }
         return json.dumps(d)
 
     def _deserialize_task(self, task_data: str) -> Task:
         """Deserializes a JSON string to a Task object."""
         d = json.loads(task_data)
+
+        # Special handling for pickled data
+        if "task_data" in d["payload"]:
+            import base64
+            d["payload"]["task_data"] = base64.b64decode(d["payload"]["task_data"])
+
         return Task(
             id=uuid.UUID(d["id"]),
             name=d["name"],
@@ -54,7 +70,7 @@ class RedisBroker(AbstractBroker):
             scheduled_at=datetime.fromisoformat(d["scheduled_at"]),
             created_at=datetime.fromisoformat(d["created_at"]),
             status=TaskStatus[d["status"]],
-            result=d.get("result"),  # Get result from deserialization
+            result=d.get("result"),
         )
 
     async def enqueue(self, task: Task) -> None:

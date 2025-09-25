@@ -4,12 +4,12 @@ from unittest.mock import patch, MagicMock
 from katana_agent import (
     KatanaAgent,
     setup_logging as agent_setup_logging,
-)  # To avoid conflict
+)
 
 
 class TestKatanaAgentLogging(unittest.TestCase):
 
-    @patch("katana_agent.logger")  # Patch the logger instance in katana_agent module
+    @patch("katana_agent.logger")
     def test_agent_initialization_logging(self, mock_logger):
         """Test logging during KatanaAgent initialization."""
         agent = KatanaAgent(name="TestAgent")
@@ -22,7 +22,6 @@ class TestKatanaAgentLogging(unittest.TestCase):
         """Test logging for perform_action method."""
         agent = KatanaAgent(name="ActionLogger")
 
-        # Successful action
         agent.perform_action("test action")
         mock_logger.debug.assert_any_call(
             "Agent '%s' attempting to perform action: %s", "ActionLogger", "test action"
@@ -33,7 +32,6 @@ class TestKatanaAgentLogging(unittest.TestCase):
             "test action",
         )
 
-        # Failed action (empty description)
         agent.perform_action("")
         mock_logger.debug.assert_any_call(
             "Agent '%s' attempting to perform action: %s", "ActionLogger", ""
@@ -54,7 +52,4 @@ class TestKatanaAgentLogging(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # It's good practice to ensure logging is configured once globally for tests if needed,
-    # or ensure individual test setups handle it.
-    # Here, we are mocking, so actual log output is not the primary concern for these unit tests.
     unittest.main()

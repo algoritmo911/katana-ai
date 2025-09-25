@@ -10,25 +10,21 @@ def setup_logging(log_level=logging.INFO):
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR)
 
-    logger = logging.getLogger("katana")  # Get a specific logger instance
+    logger = logging.getLogger("katana")
     logger.setLevel(log_level)
 
-    # Prevent adding multiple handlers if called multiple times
     if logger.hasHandlers():
         logger.handlers.clear()
 
-    # Formatter
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
-    # File Handler
     fh = logging.FileHandler(LOG_FILE)
     fh.setLevel(log_level)
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
-    # Console Handler
     ch = logging.StreamHandler()
     ch.setLevel(log_level)
     ch.setFormatter(formatter)
@@ -39,7 +35,6 @@ def setup_logging(log_level=logging.INFO):
 
 
 if __name__ == "__main__":
-    # Example usage:
     setup_logging(logging.DEBUG)
     main_logger = logging.getLogger("katana")
     main_logger.debug("This is a debug message from logging_config.")

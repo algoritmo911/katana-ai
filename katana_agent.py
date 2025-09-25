@@ -1,17 +1,12 @@
 import logging
 from logging_config import setup_logging
 
-# It's good practice to get a logger specific to the module
-logger = logging.getLogger("katana.agent")  # Child logger of 'katana'
+logger = logging.getLogger("katana.agent")
 
 
 class KatanaAgent:
     def __init__(self, name="DefaultAgent"):
         self.name = name
-        # Assuming setup_logging() might have been called elsewhere globally,
-        # or you ensure it's called before agent instantiation.
-        # For robustness, an agent could also ensure logging is set up.
-        # setup_logging() # Or get a pre-configured logger
         logger.info("KatanaAgent '%s' initialized.", self.name)
 
     def perform_action(self, action_description):
@@ -36,9 +31,8 @@ class KatanaAgent:
 
 
 if __name__ == "__main__":
-    # Ensure logging is set up before using the agent if not done globally
-    setup_logging(logging.DEBUG)  # Setup main 'katana' logger, which agent is child of
+    setup_logging(logging.DEBUG)
     agent = KatanaAgent("PrimaryAgent")
     agent.perform_action("Scout area")
-    agent.perform_action("")  # Test error case
+    agent.perform_action("")
     agent.report_status()

@@ -9,6 +9,8 @@ uvicorn[standard]
 python-telegram-bot
 apscheduler
 redis[hiredis]
+dill
+asgi-lifespan
 
 # Testing dependencies
 pytest-asyncio # Required for async pytest fixtures and tests

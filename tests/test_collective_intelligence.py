@@ -25,18 +25,15 @@ async def redis_broker() -> RedisBroker:
 # --- Mock Worker Executors ---
 
 
-async def mock_web_search_executor(task: Task):
-    query = task.payload.get("query", "")
+async def mock_web_search_executor(query: str):
     return f"Mock web results for '{query}'"
 
 
-async def mock_financial_data_executor(task: Task):
-    company = task.payload.get("company", "N/A")
+async def mock_financial_data_executor(company: str, report: str):
     return f"Mock financial report for {company}"
 
 
-async def mock_predictive_analysis_executor(task: Task):
-    target = task.payload.get("target", "N/A")
+async def mock_predictive_analysis_executor(data_sources: list, target: str):
     return f"Mock prediction for {target}"
 
 
@@ -44,11 +41,6 @@ async def mock_predictive_analysis_executor(task: Task):
 async def test_e2e_orchestrator_and_workers(redis_broker: RedisBroker):
     """
     Tests the full end-to-end cycle of the collective intelligence system.
-    1. An orchestrator receives a complex query.
-    2. It decomposes the query and dispatches sub-tasks.
-    3. Worker executors (mocked) pick up these tasks.
-    4. The workers complete the tasks and return results.
-    5. The orchestrator collects the results and synthesizes a final report.
     """
     # 1. Setup the environment
     task_executors = {
@@ -71,8 +63,6 @@ async def test_e2e_orchestrator_and_workers(redis_broker: RedisBroker):
     complex_query = "Проанализируй новости о Nvidia, собери финансовые отчеты и сделай прогноз по акциям."
 
     # 4. Handle the query with the orchestrator
-    # This will enqueue tasks, which the background workers will process.
-    # The method will then wait for the results and return the final report.
     final_report = await orchestrator.handle_complex_query(complex_query)
 
     # 5. Assert the final report is correct
@@ -82,12 +72,9 @@ async def test_e2e_orchestrator_and_workers(redis_broker: RedisBroker):
     assert "Mock prediction for NVDA stock price next week" in final_report
 
     # 6. Graceful shutdown
-    # This is important to stop the worker loops.
     await task_queue_service.shutdown()
 
-    # Give a moment for tasks to finish cancellation
     await asyncio.sleep(0.2)
 
-    # Check that all worker tasks have finished
     for task in worker_tasks:
         assert task.done() is True

@@ -2,13 +2,10 @@ import unittest
 from unittest.mock import patch, MagicMock
 import logging
 import os
-import requests  # Required for requests.exceptions.HTTPError etc.
+import requests
 
-# Assuming katana.exchange.coinbase_api can be imported.
-# This might require PYTHONPATH adjustments (e.g., export PYTHONPATH=.) when running tests.
 from katana.exchange.coinbase_api import get_spot_price, COINBASE_LOG_FILE, LOG_DIR
 
-# Ensure the logs directory exists for testing if logs are written
 if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
 
@@ -16,18 +13,12 @@ if not os.path.exists(LOG_DIR):
 class TestCoinbaseAPI(unittest.TestCase):
 
     def setUp(self):
-        # Clear log file before each test to ensure clean state for log content checks
         if os.path.exists(COINBASE_LOG_FILE):
             os.remove(COINBASE_LOG_FILE)
 
-        # It's good practice to also ensure the logger is clean or reconfigured if needed,
-        # but for this scope, clearing the file is the primary concern for content checks.
-        # Re-adding handler to the logger to ensure it's active for the test,
-        # especially if other tests might clear handlers.
         self.logger = logging.getLogger("KatanaCoinbaseAPI")
-        self.logger.setLevel(logging.INFO)  # Ensure level is set for tests
+        self.logger.setLevel(logging.INFO)
 
-        # Remove existing handlers to avoid duplicate logs if tests run multiple times in same session
         for handler in self.logger.handlers[:]:
             self.logger.removeHandler(handler)
             handler.close()
@@ -41,11 +32,6 @@ class TestCoinbaseAPI(unittest.TestCase):
         self.logger.addHandler(self.file_handler)
 
     def tearDown(self):
-        # Clean up log file after tests
-        if os.path.exists(COINBASE_LOG_FILE):
-            # os.remove(COINBASE_LOG_FILE) # Comment out to inspect logs after test run
-            pass
-        # Close and remove handler to avoid issues with subsequent tests or file locks
         if self.file_handler:
             self.logger.removeHandler(self.file_handler)
             self.file_handler.close()
@@ -127,7 +113,7 @@ class TestCoinbaseAPI(unittest.TestCase):
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "data": {"currency": "USD"}
-        }  # Missing 'amount'
+        }
         mock_get.return_value = mock_response
 
         price = get_spot_price("BTC-USD")
@@ -159,5 +145,3 @@ class TestCoinbaseAPI(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-# Added import requests - I missed this in the prompt.
