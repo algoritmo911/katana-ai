@@ -46,32 +46,15 @@ class KatanaBot:
         args = parts[1:]
         response_message = ""
 
-        if command == "!price":
-            if len(args) == 1:
-                pair = args[0].upper()  # e.g., btc-usd -> BTC-USD
-                logger.info(f"Attempting to fetch price for pair: {pair} via command.")
-                price = get_spot_price(pair)
-                if price is not None:
-                    response_message = f"{self.name}: Current price for {pair}: {price} (currency from pair)"
-                    logger.info(
-                        f"Successfully generated price message for {pair}: {price}"
-                    )
-                else:
-                    response_message = f"{self.name}: Could not fetch price for {pair}. See server logs for details."
-                    logger.warning(f"Failed to fetch price for {pair} via command.")
-            else:
-                error_msg = "!price command requires one argument (the trading pair). Usage: !price BTC-USD"
-                logger.warning(error_msg)
-                response_message = f"{self.name}: {error_msg}"
-        elif command == "!greet":
+        if command == "!greet":
             greeting_message = self.GREETING()
             response_message = f"{self.name}: {greeting_message}"
             logger.info("Executed !greet command.")
         else:
             unknown_cmd_msg = (
-                f"Unknown command '{command}'. Try !price BTC-USD or !greet."
+                f"Unknown command '{command}'. Try !greet. For prices, use !price <PAIR> (e.g., !price BTC-USD)."
             )
-            logger.warning(f"Unknown command received: {command}")
+            logger.warning(f"Unknown command received by synchronous handler: {command}")
             response_message = f"{self.name}: {unknown_cmd_msg}"
 
         return response_message

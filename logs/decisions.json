@@ -7,5 +7,14 @@
         "confidence": 0.5,
         "reason": "Initial observation in learning mode.",
         "mode": "learning"
+    },
+    {
+        "timestamp": "2025-09-18T05:45:45.190709+00:00",
+        "symbol": "BTC-USD",
+        "price": 117246.205,
+        "decision_type": "observe",
+        "confidence": 0.5,
+        "reason": "Initial observation in learning mode.",
+        "mode": "learning"
     }
 ]

@@ -9,6 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import asyncio  # Added for task queue management
 
+from katana.exchange.coinbase_api import get_spot_price
 from katana_bot import KatanaBot
 from logging_config import setup_logging
 
@@ -110,26 +111,47 @@ async def startup_event():
     # 3. Initialize Task Queue Service
     global task_queue_service, task_queue_worker_tasks
 
-    # Define example task executors for the queue
-    async def example_task_executor(task: "Task"):  # Forward reference Task
-        logger.info(
-            f"TASK_QUEUE: Executing example task '{task.name}' (ID: {task.id}) with payload: {task.payload}"
-        )
-        await asyncio.sleep(task.payload.get("duration", 1))  # Simulate work
-        if "force_fail" in task.payload:
-            raise ValueError(f"TASK_QUEUE: Task {task.id} failed as requested.")
-        logger.info(f"TASK_QUEUE: Finished example task '{task.name}' (ID: {task.id})")
+    # --- Task Queue Executors ---
+    async def price_task_executor(task: "Task"):
+        """
+        Task executor to fetch a spot price and send it back to a Telegram chat.
+        """
+        chat_id = task.payload.get("chat_id")
+        pair = task.payload.get("pair")
+        if not chat_id or not pair:
+            logger.error(
+                f"Task {task.id} is missing 'chat_id' or 'pair' in its payload."
+            )
+            return  # Or raise an exception to mark the task as failed
 
-    async def another_task_executor(task: "Task"):
-        logger.info(
-            f"TASK_QUEUE: Executing another task '{task.name}' (ID: {task.id}) - {task.payload.get('message', '')}"
-        )
-        await asyncio.sleep(0.5)
-        logger.info(f"TASK_QUEUE: Finished another task '{task.name}' (ID: {task.id})")
+        logger.info(f"Executing price task for pair '{pair}' for chat_id {chat_id}")
+        price = get_spot_price(pair)  # This is a blocking I/O call
+        if price is not None:
+            response_message = (
+                f"KatanaBot: Current price for {pair}: {price} (currency from pair)"
+            )
+        else:
+            response_message = (
+                f"KatanaBot: Could not fetch price for {pair}. See server logs for details."
+            )
+
+        if telegram_app:
+            try:
+                await telegram_app.bot.send_message(
+                    chat_id=chat_id, text=response_message
+                )
+                logger.info(f"Successfully sent price update to chat_id {chat_id}")
+            except Exception as e:
+                logger.error(
+                    f"Failed to send message to chat_id {chat_id}: {e}", exc_info=True
+                )
+        else:
+            logger.warning(
+                f"Telegram app not available, cannot send price update for task {task.id}"
+            )
 
     task_executors = {
-        "log_payload_task": example_task_executor,
-        "quick_message_task": another_task_executor,
+        "get_price_and_reply": price_task_executor,
     }
     # Initialize broker and service
     # These will be accessible globally for adding tasks from other parts of the app if needed
@@ -147,19 +169,6 @@ async def startup_event():
     )
     logger.info(f"TaskQueueService started with {num_task_workers} worker(s).")
 
-    # Example: Add a startup task to the queue
-    try:
-        await task_queue_service.add_task(
-            name="quick_message_task",
-            payload={
-                "message": "System startup message from task queue!",
-                "info": "This task was added during app startup.",
-            },
-            priority=5,  # Lower priority for startup messages
-        )
-        logger.info("Example startup task added to the queue.")
-    except Exception as e:
-        logger.error(f"Failed to add startup task to queue: {e}", exc_info=True)
 
     logger.info("FastAPI application startup sequence complete.")
 
@@ -247,23 +256,56 @@ async def telegram_webhook(request: Request):
 
             logger.info(f"Handling command '{command_text}' for chat_id {chat_id}")
 
-            # Call KatanaBot's handle_command, which now returns a response string
-            response_text = katana_bot_instance.handle_command(command_text)
+            # --- Command Routing ---
+            command_parts = command_text.strip().lower().split()
+            command = command_parts[0] if command_parts else ""
 
-            if response_text:
-                logger.info(f"Sending response to chat_id {chat_id}: {response_text}")
-                await telegram_app.bot.send_message(chat_id=chat_id, text=response_text)
+            # Route to task queue for slow commands, handle fast commands directly
+            if command == "!price":
+                if len(command_parts) == 2 and task_queue_service:
+                    pair = command_parts[1].upper()
+                    # Enqueue the task
+                    await task_queue_service.add_task(
+                        name="get_price_and_reply",
+                        payload={"chat_id": chat_id, "pair": pair},
+                        priority=2,  # Normal priority
+                    )
+                    # Send immediate feedback to the user
+                    await telegram_app.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"Request for price of {pair} received. I'm on it!",
+                    )
+                    return {
+                        "status": "ok",
+                        "message": f"Task enqueued for !price command for {pair}",
+                    }
+                else:
+                    # Handle incorrect usage of !price command
+                    await telegram_app.bot.send_message(
+                        chat_id=chat_id,
+                        text="Usage: !price <TRADING-PAIR> (e.g., !price BTC-USD)",
+                    )
+                    return {
+                        "status": "error",
+                        "message": "Invalid !price command format.",
+                    }
             else:
-                logger.warning(
-                    f"No response generated by handle_command for input: {command_text}"
-                )
-                # Optionally send a default acknowledgement or error message
-                await telegram_app.bot.send_message(
-                    chat_id=chat_id,
-                    text="Command processed, but no specific reply was generated.",
-                )
-
-            return {"status": "ok", "message": "Command processed and response sent"}
+                # Handle other commands synchronously
+                response_text = katana_bot_instance.handle_command(command_text)
+                if response_text:
+                    await telegram_app.bot.send_message(
+                        chat_id=chat_id, text=response_text
+                    )
+                else:
+                    # Optional: handle cases where no response is generated
+                    await telegram_app.bot.send_message(
+                        chat_id=chat_id,
+                        text="Command processed, but no specific reply was generated.",
+                    )
+                return {
+                    "status": "ok",
+                    "message": "Synchronous command processed and response sent",
+                }
         elif tg_update.message:  # Message received but no text (e.g. photo, sticker)
             logger.info(
                 f"Received non-text message from chat_id {tg_update.message.chat_id}. Type: {tg_update.message.chat.type if tg_update.message.chat else 'Unknown'}"
