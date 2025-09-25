@@ -1,10 +1,9 @@
+import React from 'react';
 import './App.css';
 import CommandSender from './components/CommandSender/CommandSender';
 import KatanaStatus from './components/KatanaStatus/KatanaStatus';
 import LogViewer from './components/LogViewer/LogViewer';
-
-// Placeholder components - these will be created in later steps
-// For now, create dummy functional components here or import them if they exist with basic placeholders.
+import { CommandProvider } from './context/CommandContext';
 
 function App() {
   return (
@@ -13,14 +12,22 @@ function App() {
         <h1 className="text-4xl font-bold text-center">Katana Dashboard</h1>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <CommandSender />
-        <KatanaStatus />
-        <LogViewer /> {/* This will span 2 columns on medium screens and up if it's the only item in its row, or take full width on small screens */}
-      </div>
+      <main className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="md:col-span-1">
+          <KatanaStatus />
+        </div>
+        <div className="md:col-span-1">
+          <CommandProvider>
+            <CommandSender />
+          </CommandProvider>
+        </div>
+        <div className="md:col-span-2">
+          <LogViewer />
+        </div>
+      </main>
 
-      <footer className="mt-12 text-center text-sm text-gray-400">
-        <p>Katana Control Interface</p>
+      <footer className="text-center text-gray-500 mt-8">
+        <p>&copy; 2025 Katana AI. All rights reserved.</p>
       </footer>
     </div>
   );
