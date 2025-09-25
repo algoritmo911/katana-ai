@@ -25,5 +25,59 @@
         "confidence": 0.5,
         "reason": "Initial observation in learning mode.",
         "mode": "learning"
+    },
+    {
+        "timestamp": "2025-08-30T17:01:47.213696+00:00",
+        "symbol": "BTC-USD",
+        "price": 30000,
+        "decision_type": "observe",
+        "confidence": 0.5,
+        "reason": "Initial observation in learning mode.",
+        "mode": "learning"
+    },
+    {
+        "timestamp": "2025-08-30T17:02:44.246777+00:00",
+        "symbol": "BTC-USD",
+        "price": 30000,
+        "decision_type": "observe",
+        "confidence": 0.5,
+        "reason": "Initial observation in learning mode.",
+        "mode": "learning"
+    },
+    {
+        "timestamp": "2025-08-30T17:04:29.092509+00:00",
+        "symbol": "BTC-USD",
+        "price": 30000,
+        "decision_type": "observe",
+        "confidence": 0.5,
+        "reason": "Initial observation in learning mode.",
+        "mode": "learning"
+    },
+    {
+        "timestamp": "2025-08-30T17:05:20.807547+00:00",
+        "symbol": "BTC-USD",
+        "price": 30000,
+        "decision_type": "observe",
+        "confidence": 0.5,
+        "reason": "Initial observation in learning mode.",
+        "mode": "learning"
+    },
+    {
+        "timestamp": "2025-08-30T17:06:36.578603+00:00",
+        "symbol": "BTC-USD",
+        "price": 30000,
+        "decision_type": "observe",
+        "confidence": 0.5,
+        "reason": "Initial observation in learning mode.",
+        "mode": "learning"
+    },
+    {
+        "timestamp": "2025-08-30T17:07:02.368087+00:00",
+        "symbol": "BTC-USD",
+        "price": 30000,
+        "decision_type": "observe",
+        "confidence": 0.5,
+        "reason": "Initial observation in learning mode.",
+        "mode": "learning"
     }
 ]

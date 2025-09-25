@@ -7,7 +7,7 @@ from katana_agent import (
 )  # To avoid conflict
 
 
-class TestKatanaAgentLogging(unittest.TestCase):
+class KatanaAgentLoggingTests(unittest.TestCase):
 
     @patch("katana_agent.logger")  # Patch the logger instance in katana_agent module
     def test_agent_initialization_logging(self, mock_logger):

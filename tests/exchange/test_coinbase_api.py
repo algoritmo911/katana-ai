@@ -13,7 +13,7 @@ if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
 
 
-class TestCoinbaseAPI(unittest.TestCase):
+class CoinbaseAPITests(unittest.TestCase):
 
     def setUp(self):
         # Clear log file before each test to ensure clean state for log content checks

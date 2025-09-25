@@ -3,7 +3,7 @@ import json
 from katana.bots.psy_bot_template import PsyBot
 
 
-class PsyBotTestSuite(unittest.TestCase):
+class PsyBotTests(unittest.TestCase):
 
     def test_psy_bot_creation(self):
         bot = PsyBot()
