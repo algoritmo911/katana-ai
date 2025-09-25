@@ -4,6 +4,8 @@ from pathlib import Path
 from katana.utils.logging_config import (
     setup_logger,
 )
+# Import the command loading and registration functions
+from katana.bot.commands import load_commands, get_all_commands
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -52,25 +54,9 @@ else:
 
 
 # --- Bot Command Handlers ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sends a welcome message when the /start command is issued."""
-    user_id = (
-        update.effective_user.id if update.effective_user else "UnknownUser"
-    )
-    logger.debug(
-        f"Entering start function for user_id: {user_id}",
-        extra={"user_id": user_id},
-    )
-    logger.info(
-        "Received /start command", extra={"user_id": user_id}
-    )  # Removed unnecessary f-string
-    await update.message.reply_text(
-        "⚔️ Katana (AI Chat Mode) is online. Send me a message and I'll try to respond using OpenAI."
-    )
-    logger.debug(
-        f"Exiting start function for user_id: {user_id}",
-        extra={"user_id": user_id},
-    )
+# The command handlers are now loaded dynamically.
+# The 'start' command has been moved to katana/bot/commands/start.py
+# The 'help' command has been added in katana/bot/commands/help.py
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -202,10 +188,25 @@ def main():
 
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    application.add_handler(CommandHandler("start", start))
+    # --- Command and Message Handler Registration ---
+    # 1. Load all command modules from the `commands` directory.
+    #    This populates the command_registry.
+    load_commands()
+
+    # 2. Retrieve the dictionary of registered commands.
+    all_commands = get_all_commands()
+    logger.info(f"Registering {len(all_commands)} commands: {list(all_commands.keys())}")
+
+    # 3. Register each command with the application.
+    for command_name, command_handler in all_commands.items():
+        application.add_handler(CommandHandler(command_name, command_handler))
+        logger.debug(f"Command '/{command_name}' handler registered.")
+
+    # 4. Register the message handler for non-command messages.
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
     )
+    logger.info("Default message handler registered.")
 
     logger.info(
         "Katana Telegram Bot (AI Chat Mode) is running. Press Ctrl-C to stop."

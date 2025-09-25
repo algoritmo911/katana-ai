@@ -1,1 +1,3 @@
-colorlog>=6.0.0,<7.0.0  # Using a version range for stability
+colorlog>=6.0.0,<7.0.0
+python-telegram-bot
+openai>=1.0.0
