@@ -111,6 +111,19 @@ class TestTelegramBotHandlers(unittest.IsolatedAsyncioTestCase):
 
     @patch('telegram_bot.nlp_module.recognize_intent')
     @patch('telegram_bot.katana_agent.execute_command')
+    async def test_handle_message_get_status_intent(self, mock_execute_katana, mock_recognize_intent):
+        self.update.message.text = "what is the status"
+        mock_recognize_intent.return_value = ("get_status", {})
+        mock_execute_katana.return_value = "Katana: All systems nominal."
+
+        await telegram_bot.handle_message(self.update, self.context)
+
+        mock_recognize_intent.assert_called_once_with("what is the status")
+        mock_execute_katana.assert_called_once_with("get_status", {})
+        self.update.message.reply_text.assert_called_once_with("Katana: All systems nominal.")
+
+    @patch('telegram_bot.nlp_module.recognize_intent')
+    @patch('telegram_bot.katana_agent.execute_command')
     async def test_handle_message_run_command_intent(self, mock_execute_katana, mock_recognize_intent):
         # This tests if /run command text makes it through general message handler
         # if not caught by CommandHandler (e.g. if CommandHandler for /run was removed)

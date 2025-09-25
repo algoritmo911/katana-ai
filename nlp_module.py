@@ -33,6 +33,11 @@ def recognize_intent(message: str) -> tuple[str | None, dict]:
         logger.info("Intent 'get_uptime' recognized")
         return "get_uptime", {}
 
+    # Rule for "status"
+    if "status" in message_lower:
+        logger.info("Intent 'get_status' recognized")
+        return "get_status", {}
+
     # Rule for "greet" or "hello" or "hi"
     # Making it more robust to variations
     greet_pattern = r"(greet|hello|hi)(?:\s+(?:me|to))?(?:\s+([a-zA-Z\s]+))?"

@@ -76,6 +76,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 response_message = "Please specify a command to run with /run. Usage: /run <command>"
         elif intent == "get_uptime":
             response_message = katana_agent.execute_command("uptime", params)
+        elif intent == "get_status":
+            response_message = katana_agent.execute_command("get_status", params)
         elif intent == "greet_user":
             response_message = katana_agent.execute_command("greet_user", params)
         elif intent is None:

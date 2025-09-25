@@ -25,10 +25,14 @@ def execute_command(command: str, params: dict = None) -> str:
         # Real implementation might use this for a personalized Katana interaction
         logger.info(f"Executed 'greet_user' command for '{name}' (simulated).")
         return f"Hello, {name}! Welcome to the Katana interface (simulated)."
-    elif command.startswith("run_specific_tool"): # Example for a command that might come from /run
-        tool_name = command.split(" ", 1)[1] if len(command.split(" ", 1)) > 1 else "unknown_tool"
-        logger.info(f"Executed 'run_specific_tool' for tool '{tool_name}' (simulated).")
-        return f"Simulated execution of Katana tool: '{tool_name}'. Output: Success."
+    elif command == "get_status":
+        logger.info("Executed 'get_status' command successfully (simulated).")
+        return "Katana system status: All systems nominal (simulated)."
+    elif command.startswith("run"): # Generic command handler for /run
+        # Extracts the text after "run "
+        action = command.split(" ", 1)[1] if len(command.split(" ", 1)) > 1 else "nothing"
+        logger.info(f"Executed generic 'run' command for action: '{action}' (simulated).")
+        return f"Simulated execution of action '{action}' on Katana. Result: OK."
     else:
         logger.warning(f"Unknown command for Katana: '{command}'")
         return f"Error: Katana does not recognize the command '{command}' (simulated)."
