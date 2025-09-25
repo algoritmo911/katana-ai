@@ -4,3 +4,4 @@ python-dotenv
 pytest
 pytest-asyncio
 redis
+supabase

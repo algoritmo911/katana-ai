@@ -3,12 +3,13 @@ import asyncio # For asyncio operations
 import json
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 import subprocess # Added for run_katana_command
 from nlp_mapper import interpret # Added for NLP
 import openai # Added for Whisper API
 from dotenv import load_dotenv # Added for loading .env file
 from katana_memory.memory_api import MemoryManager # Added for Katana Memory
+import distiller # For conversation distillation
 
 # Load environment variables from .env file
 load_dotenv()
@@ -36,8 +37,71 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 TELEGRAM_LOG_FILE = LOG_DIR / 'telegram.log'
 
 # Dictionary to store active GPT streaming tasks and their cancellation events
-# Key: chat_id, Value: tuple(asyncio.Task, asyncio.Event, telegram_message_id_being_edited)
 active_gpt_streams = {}
+
+# --- Mnemosyne Protocol: Long-Term Memory ---
+# Global state for tracking user activity for the distiller
+user_last_message_time = {}
+active_chat_ids = set()
+DISTILLATION_INACTIVITY_THRESHOLD = timedelta(minutes=15)
+DISTILLATION_CHECK_INTERVAL_SECONDS = 300 # 5 minutes
+
+async def conversation_distillation_worker():
+    """
+    A background worker that periodically checks for inactive conversations
+    and triggers the distillation process to store them in long-term memory.
+    """
+    log_local_bot_event("Mnemosyne Protocol: Conversation distillation worker started.")
+    while True:
+        await asyncio.sleep(DISTILLATION_CHECK_INTERVAL_SECONDS)
+        log_local_bot_event("[DISTILLER WORKER] Running periodic check for inactive conversations.")
+
+        now = datetime.utcnow()
+        # Iterate over a copy of the set as we might modify it
+        inactive_chats = {
+            chat_id for chat_id in active_chat_ids
+            if now - user_last_message_time.get(chat_id, now) > DISTILLATION_INACTIVITY_THRESHOLD
+        }
+
+        for chat_id in inactive_chats:
+            log_local_bot_event(f"[DISTILLER WORKER] Chat {chat_id} is inactive. Starting distillation process.")
+
+            try:
+                # 1. Recall conversation from short-term memory
+                conversation_history = await memory_manager.recall(chat_id)
+                if not conversation_history or len(conversation_history.splitlines()) < 2: # Don't distill single-line chats
+                    log_local_bot_event(f"[DISTILLER WORKER] Conversation for {chat_id} is too short or empty. Clearing memory without distillation.")
+                    await memory_manager.forget(chat_id)
+                    # Remove from activity tracking
+                    active_chat_ids.remove(chat_id)
+                    if chat_id in user_last_message_time:
+                        del user_last_message_time[chat_id]
+                    continue
+
+                # 2. Distill and embed the conversation
+                distillation_result = await distiller.distill_and_embed_conversation(conversation_history)
+
+                if distillation_result:
+                    summary, embedding = distillation_result
+                    # 3. Store in long-term memory (Neurovault)
+                    metadata = {"chat_id": chat_id, "distilled_at": now.isoformat()}
+                    await memory_manager.store_long_term(summary, embedding, metadata)
+                    log_local_bot_event(f"[DISTILLER WORKER] Successfully stored distilled memory for chat {chat_id}.")
+                else:
+                    log_local_bot_event(f"[DISTILLER WORKER] Distillation failed or returned no result for chat {chat_id}. Memory will not be stored.")
+
+                # 4. Forget the short-term memory to prevent reprocessing
+                await memory_manager.forget(chat_id)
+                log_local_bot_event(f"[DISTILLER WORKER] Cleared short-term memory for chat {chat_id}.")
+
+                # 5. Remove from activity tracking
+                active_chat_ids.remove(chat_id)
+                if chat_id in user_last_message_time:
+                    del user_last_message_time[chat_id]
+                log_local_bot_event(f"[DISTILLER WORKER] Finished processing for chat {chat_id}.")
+
+            except Exception as e:
+                log_local_bot_event(f"[DISTILLER WORKER] Error processing chat {chat_id}: {e}")
 
 def log_to_file(message, filename=TELEGRAM_LOG_FILE):
     """Appends a message to the specified log file."""
@@ -121,6 +185,10 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
     Handles NLP, JSON commands, or falls back to GPT.
     """
     log_local_bot_event(f"Processing user message for chat {chat_id}: '{text[:100]}...'")
+
+    # Mnemosyne Protocol: Update activity trackers
+    user_last_message_time[chat_id] = datetime.utcnow()
+    active_chat_ids.add(chat_id)
 
     # Remember the user's message
     # We store the new message before retrieving history to include it in the current context if immediately needed.
@@ -221,32 +289,45 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
 
     except json.JSONDecodeError:
         # Not NLP, not JSON -> Fallback to GPT
-        log_local_bot_event(f"Text from {chat_id} ('{text[:50]}...') is not NLP or JSON. Attempting GPT stream.")
+        log_local_bot_event(f"Text from {chat_id} ('{text[:50]}...') is not NLP or JSON. Attempting GPT stream with long-term memory recall.")
 
-        # --- Start of new task management for GPT streaming ---
+        # --- Mnemosyne Protocol: Recall relevant memories ---
+        long_term_context = ""
+        try:
+            # 1. Create an embedding for the user's current message
+            query_embedding = await _get_embedding(text)
+            if query_embedding:
+                # 2. Find related memories
+                related_memories = await memory_manager.recall_long_term(query_embedding)
+                if related_memories:
+                    # 3. Format memories for the prompt
+                    formatted_memories = [f"- {mem['content']} (similarity: {mem['similarity']:.2f})" for mem in related_memories]
+                    long_term_context = "\n".join(formatted_memories)
+                    log_local_bot_event(f"Found {len(related_memories)} relevant long-term memories for chat {chat_id}.")
+        except Exception as e:
+            log_local_bot_event(f"Error during long-term memory recall for chat {chat_id}: {e}")
+        # --- End of Recall ---
+
         if chat_id in active_gpt_streams:
             old_task, old_cancel_event, old_msg_id = active_gpt_streams[chat_id]
             log_local_bot_event(f"log_event({chat_id}, \"gpt_interrupt_request\", \"New message received, attempting to cancel previous stream for message {old_msg_id}.\")")
             old_cancel_event.set()
             try:
-                await asyncio.wait_for(old_task, timeout=2.0) # Wait for old task to finish/cancel
-                log_local_bot_event(f"log_event({chat_id}, \"gpt_previous_stream_cancelled\", \"Previous stream task for message {old_msg_id} completed/cancelled.\")")
+                await asyncio.wait_for(old_task, timeout=2.0)
             except asyncio.TimeoutError:
                 log_local_bot_event(f"log_event({chat_id}, \"gpt_previous_stream_timeout\", \"Timeout waiting for previous stream task for message {old_msg_id} to cancel.\")")
-            # Removal from active_gpt_streams is handled by the task itself in its finally block
 
-        # Define the coroutine that will handle the actual streaming for this new request
-        async def _handle_gpt_streaming_for_chat(current_text, current_chat_id, current_original_message, current_cancellation_event):
+        async def _handle_gpt_streaming_for_chat(current_text, current_chat_id, current_original_message, current_cancellation_event, long_term_context_str=""):
             sent_message_id = None
             full_response_message = ""
             try:
                 await bot.send_chat_action(current_chat_id, 'typing')
 
-                async for chunk in get_gpt_streamed_response(current_text, current_chat_id, current_cancellation_event):
-                    if current_cancellation_event.is_set(): # Double check, get_gpt_streamed_response should also handle this
+                # Pass the long-term context to the response generator
+                async for chunk in get_gpt_streamed_response(current_text, current_chat_id, current_cancellation_event, long_term_context=long_term_context_str):
+                    if current_cancellation_event.is_set():
                         log_local_bot_event(f"log_event({current_chat_id}, \"gpt_streaming_loop_cancelled\", \"Cancellation detected in process_user_message loop.\")")
                         break
-
                     full_response_message += chunk
                     if not sent_message_id:
                         try:
@@ -319,11 +400,11 @@ async def process_user_message(chat_id: int, text: str, original_message: telebo
 
         # Create and store the new task
         new_cancellation_event = asyncio.Event()
-        # Pass the original_message to the handler for reply context
+        # Pass the long-term context to the handler
         gpt_task = asyncio.create_task(
-            _handle_gpt_streaming_for_chat(text, chat_id, original_message, new_cancellation_event)
+            _handle_gpt_streaming_for_chat(text, chat_id, original_message, new_cancellation_event, long_term_context_str=long_term_context)
         )
-        active_gpt_streams[chat_id] = (gpt_task, new_cancellation_event, None) # Initially no message_id to edit
+        active_gpt_streams[chat_id] = (gpt_task, new_cancellation_event, None)
         log_local_bot_event(f"log_event({chat_id}, \"gpt_new_stream_task_created\", \"New GPT stream task started.\")")
         # Note: We don't await gpt_task here, it runs in the background.
         return
@@ -457,10 +538,27 @@ async def handle_voice_message(message):
 
         await loop.run_in_executor(None, _check_and_delete_temp_file)
 
+# --- Embedding Helper ---
+async def _get_embedding(text: str, model="text-embedding-ada-002"):
+    """Helper function to create an embedding for a given text."""
+    if not OPENAI_API_KEY:
+        return None
+    try:
+        # Use asyncio.to_thread for the blocking OpenAI SDK call
+        response = await asyncio.to_thread(
+            openai.Embedding.create,
+            input=[text],
+            model=model
+        )
+        return response['data'][0]['embedding']
+    except Exception as e:
+        log_local_bot_event(f"Error creating embedding: {e}")
+        return None
+
 # --- GPT Streaming ---
-async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_event: asyncio.Event):
+async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_event: asyncio.Event, long_term_context: str = ""):
     """
-    Gets a streamed response from OpenAI GPT asynchronously.
+    Gets a streamed response from OpenAI GPT asynchronously, including long-term context.
     Yields chunks of text as they are received.
     Stops if cancellation_event is set.
     """
@@ -469,50 +567,42 @@ async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_e
         yield "⚠️ GPT functionality is not configured on the server."
         return
 
-    # Retrieve conversation history for context
-    history_prompt = ""
+    # 1. Retrieve short-term conversation history
+    short_term_history = ""
     try:
-        retrieved_history = await memory_manager.recall(chat_id)
-        if retrieved_history:
-            history_prompt = f"Previous conversation:\n{retrieved_history}\n\n----\n\n"
-            log_local_bot_event(f"Retrieved history for chat {chat_id} for GPT context.")
-        else:
-            log_local_bot_event(f"No history found for chat {chat_id} for GPT context.")
+        recalled_history = await memory_manager.recall(chat_id)
+        if recalled_history:
+            short_term_history = f"PREVIOUS CONVERSATION (Short-Term):\n{recalled_history}\n\n---\n"
+            log_local_bot_event(f"Retrieved short-term history for chat {chat_id} for GPT context.")
     except Exception as e:
-        log_local_bot_event(f"Error retrieving history for chat {chat_id}: {e}")
+        log_local_bot_event(f"Error retrieving short-term history for chat {chat_id}: {e}")
 
-    full_user_prompt = f"{history_prompt}User's current message: {user_text}"
+    # 2. Construct the final prompt with all context
+    system_prompt = "You are a helpful assistant. Use the provided context to inform your answers."
 
-    log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_start\", \"User text (with history): {full_user_prompt[:200].replace('\"', 'QUOTE').replace('\n', '\\n')}...\")")
+    context_prompt_part = ""
+    if long_term_context:
+        context_prompt_part += f"RELEVANT MEMORIES (Long-Term):\n{long_term_context}\n\n---\n"
+
+    full_user_prompt = f"{context_prompt_part}{short_term_history}CURRENT USER MESSAGE: {user_text}"
+
+    log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_start\", \"User text (with context): {full_user_prompt[:300].replace('\"', 'QUOTE').replace('\n', '\\n')}...\")")
     try:
         import functools
         loop = asyncio.get_event_loop()
 
-        if cancellation_event.is_set(): # Check before even making the API call
+        if cancellation_event.is_set():
             log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_before_start\", \"Cancellation event set before API call.\")")
             return
 
         def _create_openai_stream():
-            # Note: Storing assistant responses back to memory will be handled after generation.
-            # Here we only use the history for context.
             messages_for_gpt = [
-                {"role": "system", "content": "You are a helpful assistant."}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": full_user_prompt}
             ]
-            if retrieved_history: # Simple history injection; could be more sophisticated
-                 # For now, let's just put history as part of the user message or a preceding user message.
-                 # A better way would be to parse `retrieved_history` into alternating user/assistant messages.
-                 # For simplicity, we'll prepend it to the current user message.
-                 # This might not be ideal for long histories.
-                 # Let's refine this: if history exists, treat it as a prefix to the user's message.
-                 # Or, better, construct a sequence of messages if Redis stores them in a structured way.
-                 # Given RedisCache stores a single string, we'll prepend it for now.
-                 # The `full_user_prompt` already combines history and current message.
-                 pass # `full_user_prompt` is used below
-
-            messages_for_gpt.append({"role": "user", "content": full_user_prompt})
 
             return openai.ChatCompletion.create(
-                model="gpt-3.5-turbo", # Or your preferred model
+                model="gpt-3.5-turbo",
                 messages=messages_for_gpt,
                 stream=True
             )
@@ -520,26 +610,6 @@ async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_e
         stream_iterator = await loop.run_in_executor(None, _create_openai_stream)
 
         _SENTINEL = object()
-        while True:
-            if cancellation_event.is_set():
-                log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_pre_chunk_fetch\", \"Cancellation event set before fetching next chunk.\")")
-                break
-
-            chunk_item = await loop.run_in_executor(None, next, stream_iterator, _SENTINEL)
-
-            if cancellation_event.is_set(): # Check again immediately after the blocking call returns
-                log_local_bot_event(f"log_event({chat_id}, \"gpt_generation_cancelled_post_chunk_fetch\", \"Cancellation event set after fetching chunk.\")")
-                break
-
-            if chunk_item is _SENTINEL:
-                break
-
-            content = chunk_item.choices[0].get("delta", {}).get("content")
-            if content:
-                log_content = content[:50].replace('\n', '\\n').replace('"', 'QUOTE')
-                log_local_bot_event(f"log_event({chat_id}, \"gpt_chunk_received\", \"{log_content}...\")")
-                yield content
-
         full_gpt_response = ""
         while True:
             if cancellation_event.is_set():
@@ -596,16 +666,26 @@ async def get_gpt_streamed_response(user_text: str, chat_id: int, cancellation_e
 
 
 if __name__ == '__main__':
-    # asyncio.run(main()) # This was the correct way from previous step
-    # Re-ensure main() is called correctly
     async def main_runner():
         log_local_bot_event("Bot starting...")
+
+        # Start the Mnemosyne Protocol worker
+        distillation_task = asyncio.create_task(conversation_distillation_worker())
+
         try:
             await bot.polling(non_stop=True, request_timeout=30)
         except Exception as e:
             log_local_bot_event(f"Bot polling error: {e}")
         finally:
             log_local_bot_event("Bot stopping...")
+
+            # Gracefully shut down the distillation worker
+            distillation_task.cancel()
+            try:
+                await distillation_task
+            except asyncio.CancelledError:
+                log_local_bot_event("Distillation worker cancelled successfully.")
+
             if memory_manager:
                 try:
                     log_local_bot_event("Closing MemoryManager connections...")
@@ -613,5 +693,7 @@ if __name__ == '__main__':
                     log_local_bot_event("MemoryManager connections closed.")
                 except Exception as e_mem:
                     log_local_bot_event(f"Error closing MemoryManager connections: {e_mem}")
+
             log_local_bot_event("Bot stopped.")
+
     asyncio.run(main_runner())
