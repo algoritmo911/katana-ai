@@ -5,9 +5,10 @@ from pathlib import Path
 from datetime import datetime
 import random # Для случайных ответов
 
-# Импортируем наши NLP модули
+# Импортируем наши NLP модули и ядро команд
 from bot.nlp import parser as nlp_parser
 from bot.nlp import context as nlp_context
+from bot import commands as command_core
 
 # Получаем токен из переменной окружения
 API_TOKEN = os.getenv('KATANA_TELEGRAM_TOKEN', 'YOUR_API_TOKEN')
@@ -26,93 +27,6 @@ user_memory = {}
 def log_local_bot_event(message_text):
     """Вывод лога события в консоль."""
     print(f"[BOT EVENT] {datetime.utcnow().isoformat()}: {message_text}")
-
-# --- Заглушки для обработки намерений ---
-def handle_intent_get_weather(chat_id, entities, current_context):
-    city = entities.get("city")
-    if city:
-        return f"☀️ Погода в городе {city} отличная! (но это не точно)"
-    else:
-        # Это состояние должно было быть обработано в nlp_parser для создания clarify_city_for_weather
-        return "Хм, кажется, я должен был спросить город, но что-то пошло не так."
-
-def handle_intent_tell_joke(chat_id, entities, current_context):
-    jokes = [
-        "Колобок повесился.",
-        "Почему программисты предпочитают темную тему? Потому что свет притягивает баги!",
-        "Заходит улитка в бар..."
-    ]
-    return random.choice(jokes)
-
-def handle_intent_get_fact(chat_id, entities, current_context):
-    facts = [
-        "Медведи могут лазить по деревьям.",
-        "Самый долгий полет курицы — 13 секунд.",
-        "У улитки около 25 000 зубов."
-    ]
-    return random.choice(facts)
-
-def handle_intent_greeting(chat_id, entities, current_context):
-    return random.choice(["Привет!", "Здравствуйте!", "Рад вас снова видеть!"])
-
-def handle_intent_goodbye(chat_id, entities, current_context):
-    return random.choice(["Пока!", "До свидания!", "Надеюсь, скоро увидимся."])
-
-def handle_intent_get_time(chat_id, entities, current_context):
-    now = datetime.now()
-    return f"Текущее время: {now.strftime('%H:%M:%S')}."
-
-def handle_intent_clarify_city_for_weather(chat_id, entities, current_context):
-    return "Для какого города вы хотите узнать погоду?"
-
-def handle_intent_fallback(chat_id, entities, current_context):
-    options = [
-        "Я не совсем понял, что вы имеете в виду. Можете переформулировать?",
-        "Хм, я пока не умею на это отвечать. Попробуйте что-нибудь другое.",
-        "Извините, я не распознал вашу команду."
-    ]
-    return random.choice(options)
-
-def handle_intent_fallback_general(chat_id, entities, current_context):
-    """Обработчик для общего fallback."""
-    options = [
-        "Я не совсем понял, что вы имеете в виду. Можете переформулировать?",
-        "Хм, я пока не умею на это отвечать. Попробуйте что-нибудь другое.",
-        "Извините, я не распознал вашу команду. Может, попробуем что-то из этого: погода, факт, анекдот?"
-    ]
-    return random.choice(options)
-
-def handle_intent_fallback_clarification_needed(chat_id, entities, current_context):
-    """Обработчик для fallback, когда нужны уточнения."""
-    # entities в nlp_result могут помочь дать более конкретный ответ
-    recognized_entities_parts = []
-    if entities.get("city"):
-        recognized_entities_parts.append(f"город {entities['city']}")
-    # Можно добавить другие сущности по мере их появления
-
-    if recognized_entities_parts:
-        return f"Я понял, что речь идет о {', '.join(recognized_entities_parts)}, но не совсем ясно, что вы хотите. Можете уточнить?"
-    else:
-        # Если сущностей нет, но этот fallback вызван, это странно, но дадим общий ответ.
-        return "Мне кажется, я уловил часть информации, но не могу понять запрос целиком. Пожалуйста, уточните."
-
-
-def handle_intent_fallback_after_clarification_fail(chat_id, entities, current_context):
-    return "Я все еще не понял, какой город вас интересует. Давайте попробуем другую команду?"
-
-# Маппинг намерений на их обработчики
-INTENT_HANDLERS = {
-    "get_weather": handle_intent_get_weather,
-    "tell_joke": handle_intent_tell_joke,
-    "get_fact": handle_intent_get_fact,
-    "greeting": handle_intent_greeting,
-    "goodbye": handle_intent_goodbye,
-    "get_time": handle_intent_get_time,
-    "clarify_city_for_weather": handle_intent_clarify_city_for_weather,
-    "fallback_general": handle_intent_fallback_general, # Изменено с "fallback"
-    "fallback_clarification_needed": handle_intent_fallback_clarification_needed, # Новый обработчик
-    "fallback_after_clarification_fail": handle_intent_fallback_after_clarification_fail,
-}
 
 @bot.message_handler(commands=['start', 'help'])
 def handle_start_help(message):
@@ -174,7 +88,7 @@ def _generate_response(chat_id, nlp_result, current_context):
 
     greeting_intent_data = next((item for item in mutable_intents_list if item["name"] == "greeting"), None)
     if greeting_intent_data:
-        handler = INTENT_HANDLERS.get("greeting")
+        handler = command_core.get_handler("greeting")
         if handler:
             greeting_response_text = handler(chat_id, entities_from_nlp, current_context)
             greeting_processed_info = {
@@ -200,7 +114,7 @@ def _generate_response(chat_id, nlp_result, current_context):
                 target_intent_name = "get_weather"
 
             if target_intent_name and target_intent_name not in processed_intent_names_this_turn:
-                handler = INTENT_HANDLERS.get(target_intent_name)
+                handler = command_core.get_handler(target_intent_name)
                 if handler:
                     response_text = handler(chat_id, entities_from_nlp, current_context)
                     frame_responses.append(response_text)
@@ -219,7 +133,7 @@ def _generate_response(chat_id, nlp_result, current_context):
         if intent_name in processed_intent_names_this_turn: # Skip if handled by frame
             continue
 
-        handler = INTENT_HANDLERS.get(intent_name)
+        handler = command_core.get_handler(intent_name)
         if handler:
             response_text = handler(chat_id, entities_from_nlp, current_context)
             other_intent_responses.append(response_text)
@@ -258,7 +172,7 @@ def _generate_response(chat_id, nlp_result, current_context):
             elif nlp_result["fallback_type"] == "clarification_failed":
                  fallback_intent_name_to_use = "fallback_after_clarification_fail"
 
-        final_fallback_handler = INTENT_HANDLERS.get(fallback_intent_name_to_use)
+        final_fallback_handler = command_core.get_handler(fallback_intent_name_to_use)
         if final_fallback_handler:
             fallback_response_text = final_fallback_handler(chat_id, entities_from_nlp, current_context)
             bot_responses.append(fallback_response_text)

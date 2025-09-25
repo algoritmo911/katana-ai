@@ -4,34 +4,53 @@ import re
 # Простой список известных городов (можно расширить или использовать внешнюю библиотеку)
 KNOWN_CITIES = ["москва", "питер", "санкт-петербург", "новосибирск", "екатеринбург", "казань", "нижний новгород", "челябинск", "омск", "самара", "ростов-на-дону", "уфа", "красноярск", "пермь", "воронеж", "волгоград", "лондон"] # Добавил Лондон для теста
 
+# Структура для определения намерений
+INTENT_TRIGGERS = {
+    "get_weather": {
+        "keywords": ["погод", "прогноз"],
+        "confidence": 0.9
+    },
+    "tell_joke": {
+        "keywords": ["анекдот", "шутк", "рассмеши"],
+        "confidence": 0.9
+    },
+    "get_fact": {
+        "keywords": ["факт", "знаешь ли ты"],
+        "confidence": 0.8
+    },
+    "greeting": {
+        "keywords": ["привет", "здравствуй", "добрый день", "доброе утро", "добрый вечер"],
+        "confidence": 0.95
+    },
+    "goodbye": {
+        "keywords": ["пока", "до свидания", "всего доброго"],
+        "confidence": 0.95
+    },
+    "get_time": {
+        "keywords": ["который час", "сколько времени"],
+        "confidence": 0.9
+    }
+}
+
 def analyze_text(text, current_context):
     """
     Анализирует текст пользователя, определяет намерения и извлекает сущности.
-    Это базовая реализация с использованием ключевых слов и регулярных выражений.
+    Использует структурированные триггеры для определения намерений.
     """
     text_lower = text.lower()
     intents = []
     entities = {}
 
-    # --- Распознавание намерений (очень упрощенно) ---
-    if "погод" in text_lower or "прогноз" in text_lower:
-        intents.append({"name": "get_weather", "confidence": 0.9})
-    if "анекдот" in text_lower or "шутк" in text_lower or "рассмеши" in text_lower:
-        intents.append({"name": "tell_joke", "confidence": 0.9})
-    if "факт" in text_lower or "знаешь ли ты" in text_lower:
-        intents.append({"name": "get_fact", "confidence": 0.8})
-    if any(greet in text_lower for greet in ["привет", "здравствуй", "добрый день", "доброе утро", "добрый вечер"]):
-        intents.append({"name": "greeting", "confidence": 0.95})
-    if any(bye in text_lower for bye in ["пока", "до свидания", "всего доброго"]):
-        intents.append({"name": "goodbye", "confidence": 0.95})
-    if "который час" in text_lower or "сколько времени" in text_lower:
-        intents.append({"name": "get_time", "confidence": 0.9})
+    # --- Распознавание намерений ---
+    for intent, triggers in INTENT_TRIGGERS.items():
+        if any(keyword in text_lower for keyword in triggers["keywords"]):
+            intents.append({"name": intent, "confidence": triggers["confidence"]})
 
 
     # --- Извлечение сущностей (улучшенное) ---
     # Города (для погоды)
     # Ищем явное указание города с предлогами или известные города без предлогов.
-    city_pattern_preposition = r"(?:в|во|городе)\s+([А-Яа-яЁёГорода-]+)"
+    city_pattern_preposition = r"(?:в|во)\s+(?:городе\s+)?([А-Яа-яЁё-]+)"
     city_matches_preposition = re.finditer(city_pattern_preposition, text, re.IGNORECASE)
 
     found_cities = []
