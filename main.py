@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from supabase import create_client, Client
 import telebot
+from strategist import decide_coder # Import the new strategist function
 
 # Load environment variables from .env file
 load_dotenv()
@@ -66,25 +67,22 @@ def create_task(task: TaskCreate):
         print(f"Error inserting task: {e}")
         raise HTTPException(status_code=500, detail=f"Database error during task insertion: {e}")
 
-    # 2. Fetch the first coder from the 'coders' table
+    # 2. Let the strategist decide which coder to assign
+    coder_id = decide_coder(supabase)
+
+    if not coder_id:
+        print("Strategist could not decide on a coder. Task will be unassigned.")
+        return {"message": "Task created but no available coders to assign.", "task_id": new_task_id}
+
+    print(f"Strategist has chosen Coder ID: {coder_id}")
+
+    # Fetch the chosen coder's details for notification
     try:
-        print("Fetching first available coder...")
-        coder_res = supabase.table('coders').select('id, telegram_id').limit(1).execute()
-
-        if not coder_res.data:
-            print("No coders found in the database.")
-            # Task is created but unassigned. This is acceptable for the MVP.
-            return {"message": "Task created but no available coders to assign.", "task_id": new_task_id}
-
-        assigned_coder = coder_res.data[0]
-        coder_id = assigned_coder['id']
-        coder_telegram_id = assigned_coder.get('telegram_id') # Use .get for safety
-        print(f"Found coder. ID: {coder_id}, Telegram ID: {coder_telegram_id}")
-
+        coder_details_res = supabase.table('coders').select('telegram_id').eq('id', coder_id).single().execute()
+        coder_telegram_id = coder_details_res.data.get('telegram_id') if coder_details_res.data else None
     except Exception as e:
-        print(f"Error fetching coder: {e}")
-        # Task is created but assignment failed.
-        raise HTTPException(status_code=500, detail=f"Database error during coder fetching: {e}")
+        print(f"Warning: Could not fetch details for coder {coder_id}. {e}")
+        coder_telegram_id = None
 
     # 3. Assign the coder to the task
     try:
