@@ -1,42 +1,24 @@
 class DialogueContextManager:
     """
-    Управляет состоянием диалога для каждой сессии.
+    Manages the dialogue context, including entity merging for follow-up questions.
     """
     def get_initial_session(self):
-        """Возвращает начальную структуру сессии."""
-        return {
-            "context": {
-                "last_intent": None,
-                "entities": {},
-            },
-            "history": []
-        }
+        """Returns the initial structure for a new session."""
+        return {"context": {"entities": {}}, "history": []}
 
     def update_context(self, current_context: dict, nlp_result: dict) -> dict:
         """
-        Обновляет контекст диалога на основе нового NLP-результата.
-        Эта функция теперь является центром управления состоянием.
+        Updates the context based on the latest NLP analysis.
+        This is where the logic for dialogue continuation lives.
         """
-        new_context = current_context.copy()
-
-        # 1. Обновляем последний интент
-        new_intent = nlp_result.get("intents", [{}])[0].get("name")
-        if new_intent:
-            new_context["last_intent"] = new_intent
-
-        # 2. Управляем сущностями на основе состояния диалога
-        raw_nlp_response = nlp_result.get("metadata", {}).get("raw_openai_response", {})
-        dialogue_state = raw_nlp_response.get("dialogue_state")
-
+        dialogue_state = nlp_result.get("metadata", {}).get("raw_openai_response", {}).get("dialogue_state", "new_request")
         new_entities = nlp_result.get("entities", {})
 
-        if dialogue_state == 'continuation':
-            # Если это продолжение диалога, объединяем сущности.
-            # Новые сущности имеют приоритет над старыми.
-            merged_entities = {**current_context.get("entities", {}), **new_entities}
-            new_context["entities"] = merged_entities
+        if dialogue_state == "continuation":
+            # Merge new entities into the existing context
+            updated_entities = current_context.get("entities", {}).copy()
+            updated_entities.update(new_entities)
+            return {"entities": updated_entities}
         else:
-            # Если это новый запрос, полностью заменяем сущности.
-            new_context["entities"] = new_entities
-
-        return new_context
+            # It's a new request, so we start with a fresh entity context
+            return {"entities": new_entities}

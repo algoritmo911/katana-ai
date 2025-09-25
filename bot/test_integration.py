@@ -8,7 +8,7 @@ load_dotenv()
 
 # Убедимся, что мы в правильной директории для импорта
 from bot import database
-from bot.katana_bot import KatanaBot
+from bot.katana_bot import process_message_logic
 
 # Пропускаем тесты, если не заданы ключи API, чтобы не падать в CI/CD
 # Эти маркеры требуют наличия pytest.ini с описанием маркеров
@@ -33,7 +33,7 @@ class TestSemanticUnderstanding:
         print(f"Очистка БД для chat_id: {TEST_CHAT_ID}")
         database.delete_messages_for_chat(TEST_CHAT_ID)
 
-    def test_full_conversation_flow(self):
+    def test_full_conversation_flow(self, monkeypatch):
         """
         Полный интеграционный тест:
         1. Пользователь сообщает о планах.
@@ -41,35 +41,36 @@ class TestSemanticUnderstanding:
         3. Пользователь задает вопрос о своих планах.
         4. Проверяем, что бот отвечает на основе сохраненной информации.
         """
-        # Создаем экземпляр бота для теста
-        bot = KatanaBot(chat_id=TEST_CHAT_ID)
+        # Временно устанавливаем переменные окружения для этого теста
+        monkeypatch.setenv("OPENAI_API_KEY", "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")
+        monkeypatch.setenv("SUPABASE_KEY", "sb_secret_wtRSbhoCKkW53FAn2UzFpg_ED78K1LU")
+        monkeypatch.setenv("SUPABASE_URL", "https://pmcaojgdrszvujvwzxrc.supabase.co")
 
         # --- Шаг 1: Пользователь сообщает о планах ---
         initial_statement = "Планирую на следующей неделе деловую поездку в Берлин, нужно будет встретиться с Ангелой Меркель."
 
         # Обрабатываем первое сообщение
-        response1 = bot.process_chat_message(initial_statement)
+        response1 = process_message_logic(TEST_CHAT_ID, initial_statement)
 
         # Даем небольшую паузу, чтобы данные успели записаться в БД
-        time.sleep(5) # Увеличим паузу для надежности
+        time.sleep(2)
 
         # --- Шаг 2: Проверка состояния в БД ---
         history = database.get_recent_messages(TEST_CHAT_ID, limit=1)
         assert len(history) == 1, "Сообщение не было сохранено в БД"
 
         saved_message = history[0]
-        # В новой структуре метаданные хранятся в поле `metadata`, а не `raw_intent`
-        metadata = saved_message.get("metadata", {}).get("nlp_metadata", {})
+        metadata = saved_message.get("metadata", {})
 
-        assert metadata, "Метаданные NLP отсутствуют в сохраненном сообщении"
+        assert metadata, "Метаданные отсутствуют в сохраненном сообщении"
 
         # Проверяем намерение
-        intent = metadata.get("intent", "").lower()
-        assert "plan" in intent, f"Ожидался интент 'plan', но получен '{intent}'"
+        raw_intent = metadata.get("raw_intent", "").lower()
+        assert "планирование" in raw_intent or "постановка задачи" in raw_intent, f"Ожидался интент 'планирование', но получен '{raw_intent}'"
 
         # Проверяем сущности
-        entities = metadata.get("entities", [])
-        entity_texts = {entity.get("text").lower() for entity in entities}
+        raw_entities = metadata.get("raw_entities", [])
+        entity_texts = {entity.get("text").lower() for entity in raw_entities}
 
         assert "берлин" in entity_texts, "Сущность 'Берлин' не найдена в метаданных"
         assert "ангелой меркель" in entity_texts, "Сущность 'Ангела Меркель' не найдена в метаданных"
@@ -78,8 +79,12 @@ class TestSemanticUnderstanding:
         follow_up_question = "В какой город я собирался на следующей неделе?"
 
         # Обрабатываем второе сообщение
-        response2 = bot.process_chat_message(follow_up_question)
+        response2 = process_message_logic(TEST_CHAT_ID, follow_up_question)
 
         # --- Шаг 4: Проверка ответа бота ---
+        # TODO: Это утверждение должно измениться, когда будет реализована логика извлечения из памяти.
+        # Пока что мы ожидаем, что бот не поймет и вернет fallback.
+        # Когда логика будет готова, здесь будет `assert "берлин" in response2.lower()`
+
         print(f"Получен ответ на второй вопрос: {response2}")
         assert "берлин" in response2.lower(), f"Ожидалось, что в ответе будет 'Берлин', но получен ответ: '{response2}'"

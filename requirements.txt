@@ -1,24 +1,10 @@
-# Telegram Bot
 pyTelegramBotAPI
-
-# OpenAI & NLP
-openai
-scikit-learn
-networkx
-
-# Database & Cloud
 supabase
-
-# API Gateway
-fastapi
-uvicorn[standard]
-pydantic
-python-jose[cryptography]
-
-# Utilities
+openai
 python-dotenv
 beautifulsoup4
-loguru
+scikit-learn
+networkx
 
 # Testing
 pytest
