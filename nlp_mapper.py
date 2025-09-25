@@ -5,37 +5,41 @@ import os
 USE_LLM_NLP = os.environ.get('USE_LLM_NLP', 'false').lower() == 'true'
 
 def basic_interpret(text: str) -> str | None:
-    """Basic keyword-based text interpretation."""
-    original_text = text # Keep original for potential raw command execution
+    """
+    More structured keyword-based text interpretation.
+    Maps keywords to commands for better scalability and maintainability.
+    """
+    original_text = text
     text = text.lower()
 
-    # Handle /run <command> syntax
-    if text.startswith("/run "):
-        command_part = original_text[5:].strip() # Extract command after "/run "
-        # If the extracted command is simple and known, map it.
-        # Otherwise, return the raw command_part to be executed directly.
-        # This allows for flexibility, e.g., /run custom_script.sh arg1
-        if command_part.lower() == "uptime":
-            return "uptime"
-        if command_part.lower() == "df -h":
-            return "df -h"
-        if command_part.lower() == "ls -al":
-            return "ls -al"
-        # Add more known /run commands if needed, or just return command_part
-        if command_part: # Ensure it's not empty
-            return command_part # Execute arbitrary command
-        else:
-            return None # Or some error/help message for "/run " with no command
+    # Command mapping
+    # Maps a command to a list of keywords.
+    COMMANDS = {
+        "df -h": ["место", "диск", "filesystem"],
+        "uptime": ["работает", "аптайм", "uptime"],
+        "top -n1 | head -5": ["загрузка", "cpu", "процессор", "load"],
+        "ls -al": ["папки", "файлы", "список", "ls", "files", "list"],
+    }
 
-    # Existing keyword-based interpretation
-    if "место" in text or "диск" in text:
-        return "df -h"
-    if "работает" in text or "аптайм" in text:
-        return "uptime"
-    if "загрузка" in text or "cpu" in text or "процессор" in text: # Added "процессор"
-        return "top -n1 | head -5"
-    if "папки" in text or "файлы" in text or "список" in text: # Added "список"
-        return "ls -al"
+    # Handle /run <command> syntax for direct execution
+    if text.startswith("/run "):
+        command_part = original_text[5:].strip()
+        if not command_part:
+            return None  # No command provided after /run
+
+        # Normalize known commands
+        for command in COMMANDS.keys():
+            if command_part.lower() == command:
+                return command
+
+        # Fallback to executing the arbitrary command
+        return command_part
+
+    # NLP-like keyword matching
+    for command, keywords in COMMANDS.items():
+        if any(keyword in text for keyword in keywords):
+            return command
+
     return None
 
 def llm_interpret(text: str) -> str | None:
