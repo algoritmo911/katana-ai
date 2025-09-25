@@ -1,11 +1,15 @@
 import argparse
 from katana.self_heal import diagnostics, patch_applicator
 from katana.self_heal.orchestrator import SelfHealOrchestrator
+from katana.self_heal.health_check import run_health_check
 
 def main():
     """CLI for the self-healing module."""
     parser = argparse.ArgumentParser(description="Katana Self-Healing Module")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # Health Check command
+    subparsers.add_parser("health-check", help="Run a health check of external dependencies")
 
     # Diagnostics command
     diag_parser = subparsers.add_parser("diagnose", help="Run diagnostics")
@@ -26,7 +30,10 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "diagnose":
+    if args.command == "health-check":
+        run_health_check()
+
+    elif args.command == "diagnose":
         if args.log_file:
             anomalies, message = diagnostics.analyze_logs(args.log_file)
             print(message)
