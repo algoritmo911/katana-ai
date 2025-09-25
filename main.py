@@ -1,7 +1,7 @@
 import asyncio
 import json
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -23,22 +23,35 @@ app = FastAPI(title="Julius Task Orchestrator API")
 orchestrator_instance: TaskOrchestrator = None
 
 
-class NewTaskPayload(BaseModel):
-    task: str
+class TaskPayload(BaseModel):
+    title: str
+    details: str
+    priority: Optional[str] = "medium"
+
+class N8nWebhookPayload(BaseModel):
+    task_source: str
+    task_id: str
+    task_payload: TaskPayload
 
 @app.post("/n8n/new-task", response_model=Dict[str, str])
-async def receive_new_task(payload: NewTaskPayload):
+async def receive_new_task(payload: N8nWebhookPayload):
     """
-    Receives a new task from an n8n webhook and adds it to the orchestrator's queue.
+    Receives a new task from an n8n webhook, parses it, and adds it to the orchestrator's queue.
     """
     if orchestrator_instance is None:
         raise HTTPException(status_code=503, detail="Orchestrator not initialized")
 
-    if not payload.task:
-        raise HTTPException(status_code=400, detail="Task cannot be empty")
+    # Parse the incoming payload and format it into a detailed task string.
+    p = payload.task_payload
+    task_string = (
+        f"Задача от {payload.task_source} (ID: {payload.task_id}) "
+        f"[Приоритет: {p.priority.upper()}]: {p.title}. "
+        f"Детали: {p.details}"
+    )
 
-    orchestrator_instance.add_tasks([payload.task])
-    print(f"Received new task from n8n: {payload.task}")
+    orchestrator_instance.add_tasks([task_string])
+    print(f"Received and formatted task from n8n (ID: {payload.task_id}): \"{task_string}\"")
+
     return {"status": "Task added successfully"}
 
 
